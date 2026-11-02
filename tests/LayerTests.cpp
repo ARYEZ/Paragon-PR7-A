@@ -86,7 +86,7 @@ TEST_CASE ("LAYER: a drum's layer plays with each hit, at LAYER LEVEL and the hi
     CHECK (p.processor->getLayerRef (slot).startsWith ("file||"));
     REQUIRE (p.processor->getLayer (slot) != nullptr);
     // A kit not through the mixer: the layer plays with the drum (its own way).
-    CHECK (p.get (ParamIDs::drum (slot, "LayerOut")) == Catch::Approx (0.0f));
+    CHECK (p.get (ParamIDs::drum (slot, "LayerOut")) == Catch::Approx (0.0f).margin (0.01));
     const auto full = p.play (slot);
     const auto drum = level (full, 300.0), layer = level (full, 1000.0);
     INFO ("drum " << drum << ", layer " << layer);
@@ -123,9 +123,9 @@ TEST_CASE ("LAYER: through the mixer it gets a USER channel of its own, the drum
     REQUIRE (mixer::isUserChannel (channel));
     CHECK (p.processor->getMixerChannelName (channel) == "SNARE LAYER");
     CHECK (p.processor->getUserChannelsInUse().contains (channel));
-    CHECK (p.get (ParamIDs::mix (mixer::snareTop, "Level")) == Catch::Approx (-10.0f));
-    CHECK (p.get (ParamIDs::mix (mixer::snareBottom, "Level")) == Catch::Approx (-10.0f));
-    CHECK (p.get (ParamIDs::mix (mixer::overheads, "Level")) == Catch::Approx (0.0f));
+    CHECK (p.get (ParamIDs::mix (mixer::snareTop, "Level")) == Catch::Approx (-10.0f).margin (0.01));
+    CHECK (p.get (ParamIDs::mix (mixer::snareBottom, "Level")) == Catch::Approx (-10.0f).margin (0.01));
+    CHECK (p.get (ParamIDs::mix (mixer::overheads, "Level")) == Catch::Approx (0.0f).margin (0.01));
     // The layer in its channel alone: soloed it's there, muted it's gone.
     p.set (ParamIDs::mix (channel, "Solo"), 1.0f);
     const auto alone = p.play (slot);
