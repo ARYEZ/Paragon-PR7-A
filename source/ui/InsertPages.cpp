@@ -179,6 +179,8 @@ GlitchPreview::GlitchPreview (ParagonX1AudioProcessor& p, int b) : processor (p)
 
 void GlitchPreview::timerCallback()
 {
+    if (! isShowing())   // 0.30.0: a hidden page's timer does nothing
+        return;
     const auto s = processor.getInsertGlitchSettings (bus);
     const auto key = juce::String ((int) s.mode) + ":" + juce::String ((int) s.sync) + ":" + juce::String (s.lengthMs) + ":" + juce::String (s.division)
                    + ":" + juce::String (s.density) + ":" + juce::String (s.pitch) + ":" + juce::String (s.chaos) + ":" + juce::String (s.mix)
@@ -332,6 +334,8 @@ bool InsertEffectPage::shows (const ParamControl& control) const
 
 void InsertEffectPage::timerCallback()
 {
+    if (! isShowing())   // 0.30.0: a hidden page's timer does nothing
+        return;
     juce::String key;
     for (auto& c : controls)
         key << (shows (*c) ? "1" : "0");
@@ -459,6 +463,8 @@ void InsertBusStrip::setBus (int b)
 
 void InsertBusStrip::timerCallback()
 {
+    if (! isShowing())   // 0.30.0: a hidden page's timer does nothing
+        return;
     for (int i = 0; i < ParamIDs::numDrums; ++i)
     {
         const auto routed = juce::roundToInt (processor.getParameters().getRawParameterValue (ParamIDs::drum (i, "Insert"))->load()) == bus + 1;

@@ -150,8 +150,10 @@ namespace grooves
                         break;
                     }
             }
+            cacheEntries (known);
             std::lock_guard<std::mutex> guard (lock);
             entries = std::move (known);
+            packsKnown = false;
         }
     }
 
@@ -335,6 +337,8 @@ namespace grooves
         std::set<juce::String> seen;
         std::vector<juce::File> packs;
         std::lock_guard<std::mutex> guard (lock);
+        if (packsKnown)
+            return knownPacks;   // 0.30.0: worked out once each time the grooves are listed
         for (const auto& e : entries)
         {
             if (! e.file.getFullPathName().containsIgnoreCase ("mididb"))
@@ -347,6 +351,8 @@ namespace grooves
                 packs.push_back (f);
         }
         std::sort (packs.begin(), packs.end(), [] (const juce::File& a, const juce::File& b) { return a.getFileName().compareNatural (b.getFileName()) < 0; });
+        knownPacks = packs;
+        packsKnown = true;
         return packs;
     }
 
@@ -455,9 +461,11 @@ namespace grooves
                         break;
                     }
             }
+            cacheEntries (known);
             {
                 std::lock_guard<std::mutex> guard (lock);
                 entries = std::move (known);
+                packsKnown = false;
             }
             indexLoaded = true;
             sendChangeMessage();
@@ -555,9 +563,11 @@ namespace grooves
             }
             return;
         }
+        cacheEntries (found);
         {
             std::lock_guard<std::mutex> guard (lock);
             entries = std::move (found);
+            packsKnown = false;
             indexLoaded = true;   // what's listed is newer than the index
         }
         // Written only when something changed (a file read anew, or one gone): 10,000 grooves are megabytes.
@@ -626,8 +636,47 @@ namespace grooves
         return {};
     }
 
+    const juce::StringArray& valuesIn (const Entry& e, Column c, juce::StringArray& scratch)
+    {
+        if (e.cached != nullptr)
+            return e.cached->values[(size_t) c];
+        scratch = valuesOf (e, c);
+        return scratch;
+    }
+
+    void cacheEntries (std::vector<Entry>& list)
+    {
+        // Each groove's column values and search text, and its place by name, worked out once (in the scanner's
+        // thread when it's the one listing them).
+        std::vector<size_t> order (list.size());
+        for (size_t i = 0; i < order.size(); ++i)
+            order[i] = i;
+        std::sort (order.begin(), order.end(), [&list] (size_t a, size_t b)
+        {
+            if (const auto c = list[a].family.compareNatural (list[b].family); c != 0)
+                return c < 0;
+            return list[a].name.compareNatural (list[b].name) < 0;
+        });
+        std::vector<int> rank (list.size());
+        for (size_t k = 0; k < order.size(); ++k)
+            rank[order[k]] = (int) k;
+        for (size_t i = 0; i < list.size(); ++i)
+        {
+            auto& e = list[i];
+            e.cached = nullptr;
+            auto c = std::make_shared<Entry::Cached>();
+            for (int col = 0; col < numColumns; ++col)
+                c->values[(size_t) col] = valuesOf (e, (Column) col);
+            c->haystack = (e.name + " " + e.family + " " + e.file.getParentDirectory().getParentDirectory().getFileName()).toLowerCase();
+            c->nameRank = rank[i];
+            e.cached = std::move (c);
+        }
+    }
+
     juce::String valueOf (const Entry& e, Column c)
     {
+        if (e.cached != nullptr)
+            return e.cached->values[(size_t) c].joinIntoString (", ");
         return valuesOf (e, c).joinIntoString (", ");
     }
 
@@ -689,9 +738,13 @@ namespace grooves
                     continue;
                 if (std::any_of (leftOut.begin(), leftOut.end(), [&e] (const juce::File& f) { return e.file.isAChildOf (f); }))
                     continue;
-                const auto haystack = (e.name + " " + e.family + " " + e.file.getParentDirectory().getParentDirectory().getFileName()).toLowerCase();
-                if (! std::all_of (words.begin(), words.end(), [&] (const juce::String& w) { return haystack.contains (w); }))
-                    continue;
+                if (! words.isEmpty())
+                {
+                    const auto haystack = e.cached != nullptr ? e.cached->haystack
+                        : (e.name + " " + e.family + " " + e.file.getParentDirectory().getParentDirectory().getFileName()).toLowerCase();
+                    if (! std::all_of (words.begin(), words.end(), [&] (const juce::String& w) { return haystack.contains (w); }))
+                        continue;
+                }
                 if (! filters.passes (e))
                     continue;
                 result.push_back (e);
@@ -701,6 +754,8 @@ namespace grooves
         }
         const auto byName = [] (const Entry& a, const Entry& b)
         {
+            if (a.cached != nullptr && b.cached != nullptr)
+                return a.cached->nameRank < b.cached->nameRank;
             if (const auto c = a.family.compareNatural (b.family); c != 0)
                 return c < 0;
             return a.name.compareNatural (b.name) < 0;

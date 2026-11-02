@@ -23,6 +23,8 @@ float LevelMeter::dbToProportion (float db) const noexcept
 
 void LevelMeter::timerCallback()
 {
+    if (! isShowing())   // 0.30.0: a hidden page's timer does nothing
+        return;
     const auto peakDb = juce::Decibels::gainToDecibels (source.takePeak(), minDb);
     const auto fallenDb = displayedDb - fallDbPerSecond / (float) refreshHz;
     const auto newDb = juce::jmax (peakDb, fallenDb, minDb);

@@ -42,6 +42,8 @@ void MultiPointEditor::setShape (const ModShapeData& shape, bool finished)
 
 void MultiPointEditor::timerCallback()
 {
+    if (! isShowing())   // 0.30.0: a hidden page's timer does nothing
+        return;
     // Undo or a preset changed it.
     if (dragging < 0 && curving < 0 && ! (getShape() == shown))
     {

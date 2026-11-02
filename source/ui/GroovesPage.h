@@ -17,6 +17,8 @@
 // - GROOVE PARTS beside them (it folds away), with TO SEQUENCER and LAYER ONTO.
 #pragma once
 
+#include "ui/PaintCache.h"
+
 #include "PluginProcessor.h"
 #include "ui/TapPanel.h"
 
@@ -118,6 +120,9 @@ private:
 
     void changeListenerCallback (juce::ChangeBroadcaster*) override;
     void timerCallback() override;
+    void findPlayingRow();
+    void paintPanels (juce::Graphics&);
+    PaintCache panelCache;
     void requery();
     void rebuildBrowser();
     void browseTo (const juce::File& folder, bool remember);   // the folder chosen (history kept unless going back)
@@ -133,6 +138,10 @@ private:
     std::optional<grooves::Groove> readRow (int row) const;
     std::vector<BrowserRow> rowsFor (const juce::File& folder) const;   // a browser column's rows for a folder
     std::vector<juce::File> childrenOf (const juce::File&) const;
+    // 0.30.0: each folder's subfolders, read from the disk once until the library changes or REFRESH (the browser asks
+    // for them many times a click).
+    mutable std::map<juce::String, std::vector<juce::File>> childCache;
+    mutable std::map<juce::String, std::vector<BrowserRow>> rowCache;
 
     class BrowserColumn;
     class FilterColumn;
@@ -205,5 +214,6 @@ private:
     std::unique_ptr<juce::FileChooser> chooser;
     bool scannedOnce = false;
     juce::File shownPlaying;
+    int playingRow = -1;   // its row in `results` (-1: not listed), found once when it or the list changes
     double shownPosition = -2.0;
 };

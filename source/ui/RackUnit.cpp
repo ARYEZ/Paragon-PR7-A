@@ -72,6 +72,8 @@ void RackUnit::mouseUp (const juce::MouseEvent& e)
 
 void RackUnit::timerCallback()
 {
+    if (! isShowing())   // 0.30.0: a hidden page's timer does nothing
+        return;
     // The ladder holds a peak and falls back about 15 dB a second, as a meter's lights do.
     if (spec.ladderReading)
         ladderHeld = juce::jmax (spec.ladderReading(), ladderHeld - 0.5f);

@@ -60,6 +60,8 @@ void LimiterDisplay::resized()
 
 void LimiterDisplay::timerCallback()
 {
+    if (! isShowing())   // 0.30.0: a hidden page's timer does nothing
+        return;
     const auto read = processor.getLimiter().readFrames (incoming.data(), (int) incoming.size());
     if (read == 0 && ! history.empty())
         return;
@@ -330,6 +332,8 @@ void LimiterPage::showLegacyControls()
 
 void LimiterPage::timerCallback()
 {
+    if (! isShowing())   // 0.30.0: a hidden page's timer does nothing
+        return;
     auto& limiter = processor.getLimiter();
     heldTruePeakDb = juce::jmax (heldTruePeakDb, limiter.getOutputTruePeakDb());
     heldReductionDb = juce::jmax (heldReductionDb, limiter.getReductionDb (0), limiter.getReductionDb (1));

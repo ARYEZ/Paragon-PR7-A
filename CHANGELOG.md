@@ -2,6 +2,36 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.30.0
+
+**A quicker window, GROOVES above all.** You found the whole interface sticky, the GROOVES tab worst. I measured it here with a library of 3,000 grooves (a test that opens the window, plays a groove and times every click and repaint), and found three causes:
+
+- **Every click on GROOVES redid everything from scratch.**
+  - **Folders:** it read every folder in the browser from the disk again, several times a click.
+  - **Filter counts and sorting:** it worked out each groove's filter values (GENRE, TYPE, TEMPO...) and its place in the list again, for every groove.
+  - **Now:** a folder is read once (again when the library changes, or on REFRESH), and each groove's values, search text and place by name are worked out once, when the library lists it.
+- **The window's background was drawn again with every small repaint.** A meter moving, a playing groove's progress line or a hovered button repainted the gradient, the logo and the frames under it: the window's own drawing was most of every full repaint. Now it is drawn once into a picture at your screen's own pixel size (HiDPI too) and copied; the GROOVES page's panels likewise. It looks the same: compared pixel for pixel with the old drawing at 1x and 2x, no pixel differs by more than 3/255.
+- **Hidden pages kept working.** The FX pages' meters and displays, the MIDI monitor and the level meters ran their timers while another page was showing. Now they rest while hidden.
+- **Also:** the playing groove's row is remembered instead of being searched for 15 times a second, and only its row repaints (the whole list did when a groove started or stopped).
+
+**Measured (3,000 grooves, this machine), before → after:**
+
+| What | Before | After |
+|---|---|---|
+| Opening a folder you've opened before | 74 ms | 4 ms |
+| Opening a folder the first time | 74 ms | 35-48 ms (the disk's part) |
+| Ticking a filter | 10-11 ms | 3-5 ms |
+| CLEAR ALL FILTERS | 19 ms | 3.5-5 ms |
+| Searching | 6 ms | 3.3-4.5 ms |
+| Redrawing the whole window | 24-31 ms | 14 ms (mostly the test's own picture-taking) |
+
+**Honest limits:**
+- **Measured on Linux without a real window** (the container can't open one): the numbers are the work done on the window's thread. Windows draws differently (on the graphics card), so your gain may differ.
+- **Folders the first time:** opening a folder for the first time still reads its subfolders from the disk. On a slow or network drive that's the part you may still feel.
+- **Tell me where it still sticks:** the page and the click. With that I can measure the exact case.
+
+**Tests:** the cached values against the ones worked out each time (every column, the filters, the name order).
+
 ## 0.29.0
 
 **LAYER: your own sample with any drum.** You found the snare very good but the kick "still not there", and sent your perfect kick. Modern metal kicks are almost always the real kick plus a sample layered on it, so any drum can now have a **LAYER**: a sample of yours, or a folder of several hits, played with every one of its hits.

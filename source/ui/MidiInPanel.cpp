@@ -389,6 +389,8 @@ void MidiInPanel::pollMidi()
 
 void MidiInPanel::timerCallback()
 {
+    if (! isShowing())   // 0.30.0: a hidden page's timer does nothing
+        return;
     pollMidi();
     if (tab == Tab::hihat || tab == Tab::mapping)
         repaint (tab == Tab::hihat ? pedalBar().expanded (4, 20) : zoneBar().expanded (4, 20));

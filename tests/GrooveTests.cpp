@@ -503,3 +503,46 @@ TEST_CASE ("GROOVE LIBRARY 0.5: filter columns: any of the values chosen in a co
     CHECK_FALSE (f.isEmpty());
     CHECK (grooves::Filters().isEmpty());
 }
+
+TEST_CASE ("GROOVES 0.30.0: the values worked out once when listed are the ones worked out each time", "[grooves]")
+{
+    using namespace grooves;
+    std::vector<Entry> list;
+    const char* names[] = { "Verse 2", "verse 10", "Chorus", "Fill 1", "Ending", "Intro" };
+    for (int i = 0; i < 6; ++i)
+    {
+        Entry e;
+        e.file = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("Pack/Song " + juce::String (i % 2) + "/" + names[i] + ".mid");
+        e.name = names[i];
+        e.family = "Song " + juce::String (i % 2);
+        e.bpm = 70.0 + 30.0 * i;
+        e.bpmKnown = i != 3;
+        e.hand = (PowerHand) (i % 3);
+        e.feel = i % 2 == 0 ? Feel::straight : Feel::swung;
+        e.part = partOf (e.file);
+        if (i == 2)
+            e.tags = { "Genre:Pop/Rock", "Type:Half Time", "Power Hand:Ride Crash" };
+        list.push_back (e);
+    }
+    auto cached = list;
+    cacheEntries (cached);
+    Filters filters;
+    filters.include[(size_t) Column::section] = { "Verse", "Chorus" };
+    filters.exclude[(size_t) Column::tempo] = { "Below 80" };
+    for (size_t i = 0; i < list.size(); ++i)
+    {
+        REQUIRE (cached[i].cached != nullptr);
+        for (int c = 0; c < numColumns; ++c)
+        {
+            juce::StringArray scratch;
+            CHECK (valuesIn (cached[i], (Column) c, scratch) == valuesOf (list[i], (Column) c));
+            CHECK (valueOf (cached[i], (Column) c) == valueOf (list[i], (Column) c));
+        }
+        CHECK (filters.passes (cached[i]) == filters.passes (list[i]));
+    }
+    // The name order: family, then name, numbers in order ("verse 10" after "Verse 2").
+    std::vector<juce::String> byRank (list.size());
+    for (const auto& e : cached)
+        byRank[(size_t) e.cached->nameRank] = e.family + "/" + e.name;
+    CHECK (byRank == std::vector<juce::String> { "Song 0/Chorus", "Song 0/Ending", "Song 0/Verse 2", "Song 1/Fill 1", "Song 1/Intro", "Song 1/verse 10" });
+}

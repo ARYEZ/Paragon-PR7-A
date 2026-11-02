@@ -49,6 +49,8 @@ std::vector<EchoDisplay::Echo> EchoDisplay::echoes() const
 
 void EchoDisplay::timerCallback()
 {
+    if (! isShowing())   // 0.30.0: a hidden page's timer does nothing
+        return;
     const auto now = echoes();
     const auto same = now.size() == shown.size()
                       && std::equal (now.begin(), now.end(), shown.begin(), [] (const Echo& a, const Echo& b)
@@ -125,6 +127,8 @@ DecayDisplay::DecayDisplay (ParagonX1AudioProcessor& p) : processor (p)
 
 void DecayDisplay::timerCallback()
 {
+    if (! isShowing())   // 0.30.0: a hidden page's timer does nothing
+        return;
     const auto settings = processor.getReverbSettings();
     const auto newDecay = effects::Reverb::decaySeconds (settings.type, settings.size);
     const auto newPre = settings.preDelayMs * 0.001f;

@@ -134,6 +134,7 @@ MainView::MainView (ParagonX1AudioProcessor& processorToShow)
       blockEditor (processorToShow),
       songCreator (processorToShow)
 {
+    setOpaque (true);   // it fills itself: nothing behind it needs drawing
     // Header
     for (auto* tab : { &drumsTab, &groovesTab, &mixerTab, &fxTab, &presetsTab, &settingsTab })
     {
@@ -372,6 +373,12 @@ bool MainView::keyPressed (const juce::KeyPress& key)
 
 void MainView::paint (juce::Graphics& g)
 {
+    // 0.30.0: drawn once into a picture and copied (every child's repaint repainted it).
+    backgroundCache.draw (g, getLocalBounds(), [this] (juce::Graphics& bg) { paintBackground (bg); });
+}
+
+void MainView::paintBackground (juce::Graphics& g)
+{
     // Background: near black, with a faint red warmth behind the kit.
     g.fillAll (ParagonColours::background);
     const auto centre = juce::Point<float> (450.0f, 254.0f);
@@ -419,6 +426,7 @@ void MainView::paint (juce::Graphics& g)
 
 void MainView::resized()
 {
+    backgroundCache.invalidate();
     // Header
     {
         IconButton* tabs[] = { &drumsTab, &groovesTab, &mixerTab, &fxTab, &presetsTab, &settingsTab };

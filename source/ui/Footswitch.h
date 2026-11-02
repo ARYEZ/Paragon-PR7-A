@@ -49,7 +49,7 @@ public:
     void mouseUp (const juce::MouseEvent&) override;
 
 private:
-    void timerCallback() override { refresh(); }
+    void timerCallback() override { if (isShowing()) refresh(); }
 
     juce::String number, name;
     juce::AudioProcessorValueTreeState& parameters;

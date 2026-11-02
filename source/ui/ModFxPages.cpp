@@ -135,6 +135,8 @@ LoFiDisplay::LoFiDisplay (ParagonX1AudioProcessor& p, std::function<effects::LoF
 
 void LoFiDisplay::timerCallback()
 {
+    if (! isShowing())   // 0.30.0: a hidden page's timer does nothing
+        return;
     const auto settings = settingsNow();
     if ((int) settings.type != shownType || settings.amount != shownAmount)
     {
@@ -337,6 +339,8 @@ bool ModFxPage::shows (const ParamControl& control) const
 
 void ModFxPage::timerCallback()
 {
+    if (! isShowing())   // 0.30.0: a hidden page's timer does nothing
+        return;
     juce::String key;
     for (auto& c : controls)
         key << (shows (*c) ? "1" : "0");

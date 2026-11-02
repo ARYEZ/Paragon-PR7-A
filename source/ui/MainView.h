@@ -6,6 +6,7 @@
 #include "PluginProcessor.h"
 #include "ui/DockPanels.h"
 #include "ui/Icons.h"
+#include "ui/PaintCache.h"
 #include "ui/LevelMeter.h"
 #include "ui/ParagonLookAndFeel.h"
 #include "ui/RigBrowser.h"
@@ -127,6 +128,8 @@ public:
     bool keyPressed (const juce::KeyPress&) override;
 
 private:
+    void paintBackground (juce::Graphics&);
+    PaintCache backgroundCache { true };
     void changeListenerCallback (juce::ChangeBroadcaster*) override;
     void timerCallback() override;
     void refreshRig();

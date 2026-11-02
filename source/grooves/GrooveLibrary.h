@@ -36,6 +36,15 @@ namespace grooves
         // (lower first; 0 for most).
         juce::StringArray tags;
         int priority = 0;
+        // 0.30.0: worked out once when the library lists it (null for an entry made elsewhere: worked out each time),
+        // so the page's filters, counts, search and sorting don't redo them for every groove on every click.
+        struct Cached
+        {
+            std::array<juce::StringArray, 7> values;   // valuesOf each Column
+            juce::String haystack;                    // what the search looks in, lower case
+            int nameRank = 0;                         // its place by family then name (natural order)
+        };
+        std::shared_ptr<const Cached> cached;
 
         juce::StringArray tagged (const juce::String& group) const;   // the values of one group of its tags
 
@@ -52,9 +61,14 @@ namespace grooves
     // - TEMPO: in steps of 20 BPM. SECTION: from the names (Intro, Verse, Chorus...): our own, as before.
     enum class Column { genre, playStyle, type, time, hand, tempo, section };
     inline constexpr int numColumns = 7;
+    static_assert (std::tuple_size_v<decltype (Entry::Cached::values)> == numColumns);
     inline const juce::StringArray columnNames { "GENRE", "PLAY STYLE", "TYPE", "TIME", "POWER HAND", "TEMPO", "SECTION" };
     inline constexpr std::array<bool, numColumns> shownByDefault { true, true, true, true, true, false, false };
     juce::StringArray valuesOf (const Entry&, Column);
+    // The same, without a copy when the entry has them cached (`scratch` holds them when it hasn't).
+    const juce::StringArray& valuesIn (const Entry&, Column, juce::StringArray& scratch);
+    // Works out each entry's `cached` (the library does it whenever it lists them).
+    void cacheEntries (std::vector<Entry>&);
     juce::String valueOf (const Entry&, Column);   // its values, joined (", ")
     // The order a column lists the values it knows (others follow, alphabetically; TIME, simplest first).
     juce::StringArray orderOf (Column);
@@ -78,7 +92,8 @@ namespace grooves
                 const auto& out = exclude[(size_t) c];
                 if (in.isEmpty() && out.isEmpty())
                     continue;
-                const auto values = valuesOf (e, (Column) c);
+                juce::StringArray scratch;
+                const auto& values = valuesIn (e, (Column) c, scratch);
                 // TYPE's values describe different things at once (how it's felt, what it is, how hard): every one
                 // chosen must be there. The other columns: any one.
                 if (c == (int) Column::type)
@@ -215,6 +230,8 @@ namespace grooves
         std::atomic<bool> indexLoaded { false };   // set by a scan too
         mutable std::mutex lock;        // guards entries
         std::vector<Entry> entries;
+        mutable std::vector<juce::File> knownPacks;   // getPacks's, while packsKnown (both under the lock)
+        mutable bool packsKnown = false;
         std::atomic<bool> scanning { false };
         std::atomic<int> scanned { 0 };
         std::unique_ptr<Scanner> scanner;

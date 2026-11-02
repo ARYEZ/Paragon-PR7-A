@@ -661,11 +661,15 @@ void GroovesPage::visibilityChanged()
 
 void GroovesPage::refresh()
 {
+    // The folders on disk may have changed: read again when asked.
+    childCache.clear();
+    rowCache.clear();
     // Every value each filter column has anywhere in the library (those none of the grooves here have show greyed).
     std::array<std::set<juce::String>, grooves::numColumns> seen;
+    juce::StringArray scratch;
     for (const auto& e : library.getEntries())
         for (int c = 0; c < grooves::numColumns; ++c)
-            for (const auto& v : grooves::valuesOf (e, (grooves::Column) c))
+            for (const auto& v : grooves::valuesIn (e, (grooves::Column) c, scratch))
                 seen[(size_t) c].insert (v);
     for (int c = 0; c < grooves::numColumns; ++c)
     {
@@ -685,6 +689,9 @@ void GroovesPage::refresh()
 // THE BROWSER
 std::vector<juce::File> GroovesPage::childrenOf (const juce::File& folder) const
 {
+    const auto key = folder.getFullPathName();
+    if (const auto known = childCache.find (key); known != childCache.end())
+        return known->second;
     std::vector<juce::File> kids;
     if (folder.isDirectory())
     {
@@ -700,6 +707,7 @@ std::vector<juce::File> GroovesPage::childrenOf (const juce::File& folder) const
     {
         return a.getFileName().compareNatural (b.getFileName()) < 0;
     });
+    childCache[key] = kids;
     return kids;
 }
 
@@ -707,6 +715,9 @@ std::vector<GroovesPage::BrowserRow> GroovesPage::rowsFor (const juce::File& fol
 {
     // Two levels to a column: a folder with folders inside is a heading with them under it; the others are listed
     // first, under the folder's own name.
+    const auto key = folder.getFullPathName();
+    if (const auto known = rowCache.find (key); known != rowCache.end())
+        return known->second;
     std::vector<BrowserRow> leaves, groups;
     for (const auto& kid : childrenOf (folder))
     {
@@ -727,6 +738,7 @@ std::vector<GroovesPage::BrowserRow> GroovesPage::rowsFor (const juce::File& fol
         rows.insert (rows.end(), leaves.begin(), leaves.end());
     }
     rows.insert (rows.end(), groups.begin(), groups.end());
+    rowCache[key] = rows;
     return rows;
 }
 
@@ -1133,8 +1145,9 @@ void GroovesPage::requery()
     {
         const auto column = (grooves::Column) c;
         std::map<juce::String, int> counts;
+        juce::StringArray scratch;
         for (const auto& e : scope)
-            for (const auto& v : grooves::valuesOf (e, column))
+            for (const auto& v : grooves::valuesIn (e, column, scratch))
                 ++counts[v];
         auto values = knownValues[(size_t) c];
         for (const auto* chosenOnes : { &filters.include[(size_t) c], &filters.exclude[(size_t) c] })
@@ -1152,6 +1165,7 @@ void GroovesPage::requery()
         filterColumns[(size_t) c]->setValues (values, numbers);
     }
     sortResults();
+    findPlayingRow();
     table.getHeader().setColumnVisible (matchScore, tapSearch.has_value());
     rebuildChips();
     table.updateContent();
@@ -1196,6 +1210,7 @@ void GroovesPage::sortOrderChanged (int column, bool forwards)
     headerSort = column;
     headerForwards = forwards;
     sortResults();
+    findPlayingRow();
     table.updateContent();
     table.repaint();
 }
@@ -1558,17 +1573,34 @@ void GroovesPage::timerCallback()
     const auto nowPlaying = position >= 0.0 ? file : juce::File();
     if (nowPlaying != shownPlaying)
     {
+        // Only the rows it leaves and goes to (the whole list was repainted before 0.30.0).
+        const auto before = playingRow;
         shownPlaying = nowPlaying;
         shownPosition = position;
-        table.repaint();
+        findPlayingRow();
+        if (before >= 0)
+            table.repaintRow (before);
+        if (playingRow >= 0)
+            table.repaintRow (playingRow);
     }
-    else if (std::abs (position - shownPosition) > 1.0e-3)
+    else if (playingRow >= 0 && std::abs (position - shownPosition) > 1.0e-3)
     {
         shownPosition = position;
-        for (int row = 0; row < (int) results.size(); ++row)
-            if (results[(size_t) row].file == shownPlaying)
-                table.repaintRow (row);
+        table.repaintRow (playingRow);
     }
+}
+
+void GroovesPage::findPlayingRow()
+{
+    playingRow = -1;
+    if (shownPlaying == juce::File())
+        return;
+    for (int row = 0; row < (int) results.size(); ++row)
+        if (results[(size_t) row].file == shownPlaying)
+        {
+            playingRow = row;
+            return;
+        }
 }
 
 std::optional<grooves::Groove> GroovesPage::readRow (int row) const
@@ -1945,6 +1977,12 @@ bool GroovesPage::shouldDropFilesWhenDraggedExternally (const juce::DragAndDropT
 //==============================================================================
 void GroovesPage::paint (juce::Graphics& g)
 {
+    // 0.30.0: drawn once and copied (it's under the list, whose rows repaint as a groove plays).
+    panelCache.draw (g, getLocalBounds(), [this] (juce::Graphics& pg) { paintPanels (pg); });
+}
+
+void GroovesPage::paintPanels (juce::Graphics& g)
+{
     DockStyle::drawPanel (g, getLocalBounds().toFloat());
     const auto panel = [&g] (juce::Rectangle<int> r)
     {
@@ -1975,6 +2013,7 @@ void GroovesPage::paint (juce::Graphics& g)
 
 void GroovesPage::resized()
 {
+    panelCache.invalidate();
     auto area = getLocalBounds().reduced (14, 10);
     const auto place = [] (juce::Rectangle<int>& row, juce::Component& c, int width, int gap = 8)
     {
