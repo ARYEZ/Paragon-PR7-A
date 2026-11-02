@@ -2,6 +2,36 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.28.0
+
+**Disk streaming: the whole kit, every hit, at full quality.** You asked for the highest quality we can get. A DrumGizmo kit can now load **STREAMED**: every recorded hit, every mic, every cymbal's full ring (the CrocellKit's ride rings for 31 s), with only each hit's first 0.2 s held in memory. The rest is read from disk while it plays, as big sampled drum libraries do.
+
+- **The CrocellKit streamed:**
+  - **All 655 recorded hits** of the drums it plays, against 254 in 0.27.0's LIGHT.
+  - **Memory:** 377 MB, against about 6 GB with the whole kit in memory.
+  - **Load time:** under 2 s here.
+- **A07 Crocell Metal now streams.** LOAD... > A DRUMGIZMO KIT... offers STREAMED (best), LIGHT (trimmed, all in memory) and FULL IN MEMORY.
+- **How it works** (our own design):
+  - When a hit starts, a background thread reads the rest of its file ahead of where it's playing, about a third of a second ahead.
+  - A hit's 15 mics come from one file, so the file is read once and split into all its mics.
+  - Up to 48 hits stream at once, as many as the kit plays.
+  - Each stream is freed as soon as its hit has finished.
+- **Live playback never waits for the disk.** If the disk ever fell behind, the missing bit would be silent and counted, never a stall.
+- **Bouncing waits for the disk** (BOUNCE TO AUDIO and any offline render), so a bounce is always complete.
+- **Fixed:**
+  - A replaced kit was never freed from memory (since 0.19.0): loading kits again and again kept every old one. Now each is freed once its longest hit can no longer be playing, plus 2 s.
+  - The bounce now runs as an offline render.
+- **Measured here:**
+  - A 180 BPM double-kick beat with crashes, china and ride, played four times faster than real time: no late samples, up to 18 hits streaming at once.
+  - About 11% of one core for that beat. At its own pitch each sample is read once, without interpolation; it's the same sound for a quarter of the work.
+- **Honest limits:**
+  - This computer's disk is fast. On yours, keep the kit on an SSD if you can: a busy beat reads about 50 MB/s from 15-mic files, and a spinning hard disk may fall behind.
+  - As before, I can't listen. The streamed sound is identical to the in-memory sound, which the tests measure.
+- **Tests:**
+  - streamed hits hold only their heads but play exactly as the same kit in memory (to float rounding), both bouncing and live with the disk thread reading;
+  - no late samples live;
+  - every stream freed afterwards.
+
 ## 0.27.0
 
 **A real recorded metal kit: DrumGizmo kits, and the CrocellKit.** You said the modelled drums, the snare and cymbals worst, sound fake and thin, and chose samples. PR7-D now loads **DrumGizmo kits**: free, multi-mic drum kits recorded in real studios, in an open format. The one to start with is the **CrocellKit**, the kit of the Danish metal band Crocell, recorded with 15 mics through a studio's setup.

@@ -55,6 +55,8 @@ namespace synth::drums
         int note = -1;                              // SFZ: the note whose regions it is (-1: all of the file's)
 
         int numHits() const noexcept;
+        bool streamed() const noexcept;              // 0.28.0: its hits play from disk past their heads
+        double longestSeconds() const noexcept;      // its longest hit, in seconds (streamed: whole)
         bool hasMics() const noexcept;               // its hits come in mic channels (0.20.0)
         juce::Array<int> micChannels() const;        // which ones
         int layerFor (int velocity) const noexcept;   // 1-127 -> the layer's index (-1: none)

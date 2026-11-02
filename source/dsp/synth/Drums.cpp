@@ -514,6 +514,12 @@ namespace synth::drums
                 endPosition = juce::jlimit (position + 1.0, (double) length - 1.0, std::floor (juce::jmax (from, to) * length));
                 step = ratio * sample->sampleRate / rate;
                 endFade = endPosition < length - 1.0 ? 0.003 * rate * step : 0.0;
+                // 0.28.0: a streamed hit plays its head (faded at its end) until the kit gives it its stream.
+                streamer = nullptr;
+                streamId = -1;
+                streamOutput = sample->streamOutput;
+                if (sample->stream != nullptr)
+                    endFade = 0.005 * rate * step;
                 // DECAY: the whole sample from the middle up; below it, a fade that shortens it.
                 envCoef = d >= 0.5 ? 1.0f : tau (0.005 + 1.5 * std::pow (d / 0.5, 3.0));
                 // TONE: darker (a low-pass down to 500 Hz) or thinner (a high-pass up to 2 kHz), flat at the middle.
@@ -802,6 +808,22 @@ namespace synth::drums
         clickCoef = decayCoefficient (2.0 * contact + 0.0005, rate);
         f1.set (juce::jmin (5500.0 * (0.6 + 0.8 * tone), 0.45 * rate), 1.0, rate);
         noiseLevel = (float) ((china ? 0.6 : 0.3 + 1.2 * snap) * hardness * (1.2 - 0.7 * strike));   // the ping: clearest on the bow
+    }
+
+    void Voice::enableStream (Streamer* to, int id, bool wait) noexcept
+    {
+        // DISK STREAMING (0.28.0): the whole hit, its head from memory and the rest from its stream.
+        if (! active || model != Model::sample || sample == nullptr || sample->stream == nullptr || to == nullptr || id < 0)
+            return;
+        streamer = to;
+        streamId = id;
+        waitForDisk = wait;
+        const auto full = (double) sample->frames() - 1.0;
+        if (shape != nullptr && ! reversed)
+            shapeDx *= juce::jmax (1.0, endPosition - startPosition) / juce::jmax (1.0, full - startPosition);
+        endPosition = full;
+        endFade = 0.0;
+        streamer->attach (streamId, streamOutput);
     }
 
     void Voice::startShape (const SlotSettings& s, double regionSamples) noexcept
@@ -1193,6 +1215,73 @@ namespace synth::drums
             highPole = (float) (1.0 - std::exp (-twoPi * 20.0 * std::pow (100.0, (tone - 0.5) * 2.0) / rate));
     }
 
+    void Voice::renderStreamed (float* left, float* right, int numSamples) noexcept
+    {
+        // DISK STREAMING (0.28.0): as SAMPLE's loop, each frame from the head in memory or, past it, the stream.
+        const auto head = (juce::int64) sample->length();
+        const auto length = sample->frames();
+        const auto channels = juce::jmin (2, (int) sample->channels.size());
+        const auto frameAt = [this, head, length] (int c, juce::int64 f) -> float
+        {
+            if (f < 0 || f >= length)
+                return 0.0f;
+            if (f < head)
+                return sample->channels[(size_t) c][(size_t) f];
+            return streamer->sample (streamId, streamOutput, c, f, waitForDisk);
+        };
+        for (int i = 0; i < numSamples; ++i)
+        {
+            if (waitLeft > 0)
+            {
+                --waitLeft;
+                continue;
+            }
+            if (! advanceShape())
+            {
+                active = false;
+                break;
+            }
+            const auto index = (juce::int64) position;
+            if (position >= endPosition || index >= length - 1 || env < 1.0e-4f)
+            {
+                active = false;
+                break;
+            }
+            const auto frac = (float) (position - (double) index);
+            auto gain = env * level * fade * shapeGain;
+            if (attackTime > 0.0f && t < attackTime)
+                gain *= (float) t / attackTime;
+            gain *= 1.0f + spike * click;
+            click *= clickCoef;
+            env *= envCoef;
+            std::array<float, 2> out {};
+            for (int c = 0; c < channels; ++c)
+            {
+                // At its own pitch every read falls on a sample (frac 0): one read, what the curve gives there anyway.
+                auto y = frac <= 0.0f ? frameAt (c, index)
+                                      : cubic (frameAt (c, index - 1), frameAt (c, index), frameAt (c, index + 1), frameAt (c, index + 2), frac);
+                if (lowPole > 0.0f)
+                    y = (lowState[(size_t) c] += lowPole * (y - lowState[(size_t) c]));
+                if (highPole > 0.0f)
+                    y -= (highState[(size_t) c] += highPole * (y - highState[(size_t) c]));
+                out[(size_t) c] = y * gain;
+            }
+            left[i] += out[0] * panLeft;
+            right[i] += (channels > 1 ? out[1] : out[0]) * panRight;
+            position += step;
+            t += 1.0 / sampleRate;
+            if (gateLeft > 0 && --gateLeft == 0)
+                fadeOut (0.003);
+            if (fadeStep > 0.0f && (fade -= fadeStep) <= 0.0f)
+            {
+                active = false;
+                break;
+            }
+        }
+        // Where it's read up to: the stream may reuse what's behind it.
+        streamer->consumed (streamId, streamOutput, juce::jmax (head, (juce::int64) position - 2));
+    }
+
     void Voice::fadeOut (double seconds) noexcept
     {
         if (active)
@@ -1201,6 +1290,11 @@ namespace synth::drums
 
     void Voice::render (float* left, float* right, int numSamples) noexcept
     {
+        if (model == Model::sample && streamId >= 0)
+        {
+            renderStreamed (left, right, numSamples);
+            return;
+        }
         if (model == Model::sample)
         {
             const auto length = sample->length();
@@ -1525,6 +1619,15 @@ namespace synth::drums
         // piece there, late by the channel's TIME OFFSET; the channel's RELEASE fades it after that long.
         const auto piece = juce::jlimit (0, mixer::numPieces - 1, pieceOfSlot (slot));
         auto first = true;
+        // DISK STREAMING (0.28.0): a streamed hit claims one stream for all its mics (none free: its heads only).
+        auto stream = -1;
+        if (settings.streamer != nullptr)
+            for (const auto& mic : *mics)
+                if (mic.sample != nullptr && mic.sample->stream != nullptr)
+                {
+                    stream = settings.streamer->claim (*mic.sample->stream);
+                    break;
+                }
         for (const auto& mic : *mics)
         {
             // The mic's own channel (by its name), then ROUTE INSTRUMENT MICROPHONES' (0.23.0): another channel, a user
@@ -1552,6 +1655,7 @@ namespace synth::drums
             voice->micGain = gain;
             voice->bleed = ! direct;
             voice->releaseLeft = ch.releaseSeconds > 0.0 ? juce::jmax (1, (int) (ch.releaseSeconds * sampleRate)) + voice->waitLeft : -1;
+            voice->enableStream (settings.streamer, stream, settings.waitForDisk);
             first = false;
         }
     }
@@ -1767,6 +1871,16 @@ namespace synth::drums
         }
         sequencerPosition = position;
         sequencerPattern = sequencer.trigger == drumseq::Trigger::key ? keyPattern : sequencer.pattern;
+
+        // DISK STREAMING (0.28.0): the streams no voice plays any more go back to the pool.
+        if (settings.streamer != nullptr)
+        {
+            std::array<bool, Streamer::maxStreams> inUse {};
+            for (const auto& v : voices)
+                if (v.active && v.streamId >= 0 && v.streamId < Streamer::maxStreams)
+                    inUse[(size_t) v.streamId] = true;
+            settings.streamer->release (inUse);
+        }
     }
 
     bool Kit::audible (const KitSettings& settings, int slot) noexcept

@@ -186,9 +186,18 @@ namespace synth::drums::drumgizmo
         bool makeHit (const HitSource& source, const Trim& trim, juce::AudioFormatManager& formats, Instrument::Hit& hit,
                       juce::StringArray& problems)
         {
-            // Every file this hit uses (usually one, a channel per mic).
+            // Every file this hit uses (usually one, a channel per mic). STREAMED (0.28.0): a hit from one file holds
+            // only its head here; the rest is read from the file while it plays.
             std::map<juce::String, std::unique_ptr<juce::AudioBuffer<float>>> buffers;
             double rate = 48000.0;
+            auto streaming = trim.stream && ! source.files.empty()
+                             && std::all_of (source.files.begin(), source.files.end(), [&] (const HitSource::File& f) { return f.file == source.files.front().file; });
+            std::shared_ptr<StreamSource> stream;
+            if (streaming)
+            {
+                stream = std::make_shared<StreamSource>();
+                stream->file = source.files.front().file;
+            }
             for (const auto& f : source.files)
             {
                 const auto key = f.file.getFullPathName();
@@ -202,7 +211,14 @@ namespace synth::drums::drumgizmo
                     continue;
                 }
                 rate = reader->sampleRate;
-                const auto frames = (int) juce::jmin<juce::int64> (reader->lengthInSamples, (juce::int64) (trim.maxSeconds * rate));
+                const auto frames = (int) juce::jmin<juce::int64> (reader->lengthInSamples,
+                                                                   (juce::int64) ((streaming ? trim.headSeconds : trim.maxSeconds) * rate));
+                if (stream != nullptr)
+                {
+                    stream->sampleRate = rate;
+                    stream->length = reader->lengthInSamples;
+                    stream->headFrames = frames;
+                }
                 auto b = std::make_unique<juce::AudioBuffer<float>> ((int) reader->numChannels, juce::jmax (1, frames));
                 b->clear();
                 reader->read (b.get(), 0, frames, 0, true, true);
@@ -210,7 +226,7 @@ namespace synth::drums::drumgizmo
             }
 
             // The mics by mixer channel: each source's samples and side.
-            struct Source { const float* data; int length; int side; };
+            struct Source { const float* data; int length; int side; int fileChannel; };
             std::map<int, std::vector<Source>> byChannel;
             float hitPeak = 0.0f;
             for (const auto& f : source.files)
@@ -220,7 +236,7 @@ namespace synth::drums::drumgizmo
                     continue;
                 const auto place = micFor (f.channel);
                 const auto* data = b->getReadPointer (f.fileChannel - 1);
-                byChannel[place.channel].push_back ({ data, b->getNumSamples(), place.side });
+                byChannel[place.channel].push_back ({ data, b->getNumSamples(), place.side, f.fileChannel - 1 });
                 for (int i = 0; i < b->getNumSamples(); ++i)
                     hitPeak = juce::jmax (hitPeak, std::abs (data[i]));
             }
@@ -264,7 +280,7 @@ namespace synth::drums::drumgizmo
                 auto length = 0;
                 for (const auto& s : sources)
                     length = juce::jmax (length, s.length);
-                auto cap = (int) ((isOwn (channel) ? trim.maxSeconds : trim.bleedSeconds) * rate);
+                auto cap = streaming ? length : (int) ((isOwn (channel) ? trim.maxSeconds : trim.bleedSeconds) * rate);
                 const auto cut = length > cap;
                 length = juce::jmin (length, cap);
                 auto sample = std::make_shared<Sample>();
@@ -295,11 +311,33 @@ namespace synth::drums::drumgizmo
                         peak = juce::jmax (peak, std::abs (v));
                 if (! trim.full && peak < hitPeak * 0.001f)
                     continue;
+                if (stream != nullptr)
+                {
+                    // Streamed: the head as it is (the rest follows from the file), and how the file makes this mic.
+                    const auto output = (int) hit.mics.size();
+                    for (const auto& src : sources)
+                    {
+                        if (! stereo)
+                            stream->parts.push_back ({ src.fileChannel, output, 0, 1.0f });
+                        else
+                        {
+                            if (src.side <= 0)
+                                stream->parts.push_back ({ src.fileChannel, output, 0, src.side < 0 ? 1.0f : 0.7071f });
+                            if (src.side >= 0)
+                                stream->parts.push_back ({ src.fileChannel, output, 1, src.side > 0 ? 1.0f : 0.7071f });
+                        }
+                    }
+                    sample->streamOutput = output;
+                }
                 int sounding = 1;
                 for (const auto& c : sample->channels)
                     sounding = juce::jmax (sounding, soundingLength (c.data(), (int) c.size(), juce::jmax (1.0e-6f, peak * 1.0e-4f)));
+                if (stream != nullptr)
+                    sounding = length;   // no trimming: its end comes from the file
                 for (auto& c : sample->channels)
                 {
+                    if (stream != nullptr)
+                        break;
                     c.resize ((size_t) sounding);
                     fadeEnd (c, cut && sounding == length ? juce::jmin ((int) (0.25 * rate), sounding / 5) : juce::jmin ((int) (0.005 * rate), sounding));
                 }
@@ -317,6 +355,12 @@ namespace synth::drums::drumgizmo
             }
             if (hit.mics.empty())
                 return false;
+            if (stream != nullptr)
+            {
+                stream->numOutputs = (int) hit.mics.size();
+                for (auto& m : hit.mics)
+                    const_cast<Sample&> (*m.sample).stream = stream;   // made just above, held nowhere else
+            }
             const auto mixSize = juce::jmax (mix->channels[0].size(), mix->channels[1].size());
             for (auto& c : mix->channels)
                 c.resize (mixSize, 0.0f);
@@ -422,6 +466,10 @@ namespace synth::drums::drumgizmo
                         scale (h.sample);
                         for (const auto& m : h.mics)
                             scale (m.sample);
+                        // A streamed hit's file is read at the same gain (each hit's recipe once: its mics share it).
+                        if (! h.mics.empty() && h.mics.front().sample->stream != nullptr)
+                            for (auto& part : const_cast<StreamSource&> (*h.mics.front().sample->stream).parts)
+                                part.gain *= gain;
                     }
             }
         }

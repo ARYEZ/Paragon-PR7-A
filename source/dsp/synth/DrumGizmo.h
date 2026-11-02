@@ -52,6 +52,11 @@ namespace synth::drums::drumgizmo
         double maxSeconds = 4.5, bleedSeconds = 1.0;
         static Trim light() { return {}; }
         static Trim everything() { Trim t; t.full = true; t.maxLayers = 16; t.hitsPerLayer = 1000; t.maxSeconds = 120.0; t.bleedSeconds = 120.0; return t; }
+        // 0.28.0: STREAMED: everything, as FULL, with each hit's first `headSeconds` in memory and the rest read from
+        // disk while it plays (DiskStreamer.h).
+        bool stream = false;
+        double headSeconds = 0.2;
+        static Trim streamed() { auto t = everything(); t.stream = true; return t; }
     };
 
     // One drum from the kit: the named instruments' hits together (a double kick's two feet as one drum, alternating

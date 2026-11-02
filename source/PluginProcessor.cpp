@@ -915,6 +915,7 @@ void ParagonX1AudioProcessor::retireOldData()
     std::erase_if (retiredMidiIns, [now] (const auto& retired) { return now - retired.second > retiredTableMs; });
     mixerEffects.freeRetired();
     std::erase_if (retiredSamples, [now] (const auto& retired) { return now - retired.second > retiredTableMs; });
+    std::erase_if (retiredInstruments, [now] (const auto& retired) { return now - retired.second > retiredTableMs; });
     std::erase_if (retiredGrooves, [now] (const auto& retired) { return now - retired.second > retiredTableMs; });
     std::erase_if (retiredSongs, [now] (const auto& retired) { return now - retired.second > retiredTableMs; });
 }
@@ -1034,8 +1035,15 @@ void ParagonX1AudioProcessor::setDrumInstrument (int slot, std::shared_ptr<const
     slot = juce::jlimit (0, ParamIDs::numDrums - 1, slot);
     if (drumInstruments[(size_t) slot] == instrument)
         return;
-    if (drumInstruments[(size_t) slot] != nullptr)
-        retiredInstruments.emplace_back (drumInstruments[(size_t) slot], juce::Time::getMillisecondCounterHiRes());
+    // A replaced instrument stays until its longest hit can't still be playing (0.28.0: a streamed cymbal rings for
+    // half a minute), then 2 s more, as other retired tables do.
+    if (const auto& old = drumInstruments[(size_t) slot]; old != nullptr)
+        retiredInstruments.emplace_back (old, juce::Time::getMillisecondCounterHiRes() + 1000.0 * old->longestSeconds());
+    if (instrument != nullptr && instrument->streamed() && diskStreamer == nullptr)
+    {
+        diskStreamer = std::make_unique<synth::drums::Streamer>();
+        streamerForAudio = diskStreamer.get();
+    }
     drumInstruments[(size_t) slot] = std::move (instrument);
     instrumentsForAudio[(size_t) slot] = drumInstruments[(size_t) slot].get();
 }
@@ -1090,9 +1098,10 @@ void ParagonX1AudioProcessor::startLoading (std::vector<std::pair<int, juce::Str
             {
                 // A DrumGizmo kit's instrument(s): "dg|<names, by commas>;<light | full>|<kit file>".
                 const auto names = juce::StringArray::fromTokens (parts[1].upToFirstOccurrenceOf (";", false, false), ",", {});
-                const auto full = parts[1].fromFirstOccurrenceOf (";", false, false) == "full";
-                instrument = synth::drums::drumgizmo::load (source, names, full ? synth::drums::drumgizmo::Trim::everything()
-                                                                                  : synth::drums::drumgizmo::Trim::light(), problems);
+                const auto mode = parts[1].fromFirstOccurrenceOf (";", false, false);
+                using synth::drums::drumgizmo::Trim;
+                instrument = synth::drums::drumgizmo::load (source, names, mode == "full" ? Trim::everything()
+                                                                         : mode == "stream" ? Trim::streamed() : Trim::light(), problems);
             }
             else if (parts[0] == "folder")
                 instrument = synth::drums::instruments::fromFolder (source);
@@ -1223,7 +1232,7 @@ ParagonX1AudioProcessor::KitImport ParagonX1AudioProcessor::importSfzKit (const 
     return result;
 }
 
-ParagonX1AudioProcessor::DrumGizmoImport ParagonX1AudioProcessor::importDrumGizmoKit (const juce::File& kitFile, bool full)
+ParagonX1AudioProcessor::DrumGizmoImport ParagonX1AudioProcessor::importDrumGizmoKit (const juce::File& kitFile, KitLoad load)
 {
     // 0.27.0: a whole DrumGizmo kit onto the slots (our rules: drumgizmo::assign), its mics into the mixer's channels.
     DrumGizmoImport result;
@@ -1240,7 +1249,8 @@ ParagonX1AudioProcessor::DrumGizmoImport ParagonX1AudioProcessor::importDrumGizm
         setDrumSample (slot, nullptr);
         makeSlotPlaySample (slot);
         setParameterNow (ParamIDs::drum (slot, "On"), 1.0f);
-        refs.emplace_back (slot, "dg|" + names.joinIntoString (",") + (full ? ";full" : ";light") + "|" + kitFile.getFullPathName());
+        refs.emplace_back (slot, "dg|" + names.joinIntoString (",") + (load == KitLoad::full ? ";full" : load == KitLoad::streamed ? ";stream" : ";light")
+                                 + "|" + kitFile.getFullPathName());
     }
     // The hi-hat's and ride's articulations the kit has no hits for: off, so they play the nearest it has (their
     // stand-ins), not a synth drum among recorded ones.
@@ -1709,6 +1719,8 @@ synth::drums::KitSettings ParagonX1AudioProcessor::getKitSettings() const noexce
         kit.micRoutes = &compiled->micRoutes;
     }
     kit.effects = &mixerEffects;
+    kit.streamer = streamerForAudio.load();   // 0.28.0: DISK STREAMING
+    kit.waitForDisk = isNonRealtime();        // bouncing waits for the disk; live plays on
     // SIMULATED MICS AND ROOM (0.26.0).
     kit.micSim.on = param (ParamIDs::drumsMicSim) > 0.5f;
     kit.micSim.room = juce::jlimit (0, synth::micsim::roomNames.size() - 1, juce::roundToInt (param (ParamIDs::drumsRoom)));
@@ -3557,6 +3569,7 @@ ParagonX1AudioProcessor::SongBouncer::SongBouncer (ParagonX1AudioProcessor& from
     juce::MemoryBlock state;
     from.getStateInformation (state);
     copy->setStateInformation (state.getData(), (int) state.getSize());
+    copy->setNonRealtime (true);   // 0.28.0: a streamed kit waits for the disk here, so the bounce is whole
     sampleRate = from.getSampleRate() > 0.0 ? from.getSampleRate() : 48000.0;
     bpm = from.getHostBpm();
     if (options.perOutput)

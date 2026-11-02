@@ -409,7 +409,7 @@ TEST_CASE ("Render the editor to a PNG", "[.][snapshot]")
         // 0.27.0: a DrumGizmo kit from this computer (PARAGON_SNAPSHOT_DGKIT): the snare's layers, a hit played.
         if (const auto dg = env ("PARAGON_SNAPSHOT_DGKIT"); dg.isNotEmpty() && page != "mixer")
         {
-            processor.importDrumGizmoKit (juce::File (dg), false);
+            processor.importDrumGizmoKit (juce::File (dg), ParagonX1AudioProcessor::KitLoad::streamed);
             processor.waitForInstruments (600000);
             drums.showView (DrumPage::View::drum);
             drums.select (2);
@@ -684,7 +684,7 @@ TEST_CASE ("Render the editor to a PNG", "[.][snapshot]")
     const auto micSimShot = env ("PARAGON_SNAPSHOT_MICSIM").getIntValue();
     if (const auto dg = env ("PARAGON_SNAPSHOT_DGKIT"); page == "mixer" && dg.isNotEmpty())
     {
-        processor.importDrumGizmoKit (juce::File (dg), false);
+        processor.importDrumGizmoKit (juce::File (dg), ParagonX1AudioProcessor::KitLoad::streamed);
         processor.waitForInstruments (600000);
         for (const auto& rig : makeFactoryRigs())
             if (rig.name == "Crocell Metal")

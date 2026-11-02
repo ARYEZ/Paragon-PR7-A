@@ -266,7 +266,7 @@ std::vector<Rig> makeFactoryRigs()
          .set (ParamIDs::mix (synth::mixer::room, "Level"), -6.0f).set (ParamIDs::mix (synth::mixer::ambience, "Level"), -12.0f);
     add (djent);
 
-    // A07 (0.27.0): a real metal kit: the free CrocellKit (DrumGizmo, CC-BY 4.0: the kit of the Danish band Crocell,
+    // A07 (0.27.0; streamed from disk since 0.28.0, every hit at full length): a real metal kit: the free CrocellKit (DrumGizmo, CC-BY 4.0: the kit of the Danish band Crocell,
     // mic'd by JBOSound, sampled by Lars Muldjord), loaded from where the user unzipped it ("{kit:CrocellKit}": this
     // computer's place for it, learnt when it's loaded once with LOAD... > A DRUMGIZMO KIT...). Its 15 mics through THE
     // MIXER with a metal mix of our own (not tuned by ear yet): the kick's click up and its box out, a gate on each tom,
@@ -286,7 +286,7 @@ std::vector<Rig> makeFactoryRigs()
             { CR2, "CrashR" }, { CHN, "ChinaR" }, { SPL, "SplashL" }, { HH, "HihatSemiOpen" }, { HO1, "HihatClosedNoPedal" } };
         for (const auto& [slot, names] : drums)
         {
-            crocell.rig.drumInstruments[slot] = juce::String ("dg|") + names + ";light|{kit:CrocellKit}/CrocellKit_full.xml";
+            crocell.rig.drumInstruments[slot] = juce::String ("dg|") + names + ";stream|{kit:CrocellKit}/CrocellKit_full.xml";
             crocell.drum (slot, "Model", (float) (int) Model::sample);
         }
         crocell.drum (HO3, "On", 0.0f).drum (RE, "On", 0.0f);   // played by their stand-ins: open hat, ride

@@ -173,7 +173,11 @@ public:
     // (where this computer keeps it: factory presets name kits as "{kit:<name>}/<file>"). Which slot took which
     // instruments, and those left out.
     struct DrumGizmoImport { juce::String kitName; std::vector<std::pair<int, juce::StringArray>> slots; juce::StringArray unused; };
-    DrumGizmoImport importDrumGizmoKit (const juce::File& kitFile, bool full);
+    // How much of a kit: LIGHT (trimmed, in memory), FULL (all of it in memory), STREAMED (all of it, from disk; 0.28.0).
+    enum class KitLoad { light, full, streamed };
+    DrumGizmoImport importDrumGizmoKit (const juce::File& kitFile, KitLoad);
+    int getStreamUnderruns() const noexcept { return diskStreamer != nullptr ? diskStreamer->getUnderruns() : 0; }
+    int getActiveStreams() const noexcept { return diskStreamer != nullptr ? diskStreamer->getActiveStreams() : 0; }
     void rememberKit (const juce::String& name, const juce::File& folder);
     void loadInstrumentRef (int slot, const juce::String& ref);   // a slot's instrument by its reference (as presets keep it)
     juce::File knownKitFolder (const juce::String& name) const;
@@ -591,7 +595,10 @@ private:
     // THE SAMPLE ENGINE (0.19.0).
     std::array<std::shared_ptr<const synth::drums::Instrument>, ParamIDs::numDrums> drumInstruments;
     std::array<std::atomic<const synth::drums::Instrument*>, ParamIDs::numDrums> instrumentsForAudio {};
-    std::vector<std::pair<std::shared_ptr<const synth::drums::Instrument>, double>> retiredInstruments;
+    std::vector<std::pair<std::shared_ptr<const synth::drums::Instrument>, double>> retiredInstruments;   // 0.28.0: kept until its longest hit is over
+    // DISK STREAMING (0.28.0): made when the first streamed instrument arrives (its rings take memory).
+    std::unique_ptr<synth::drums::Streamer> diskStreamer;
+    std::atomic<synth::drums::Streamer*> streamerForAudio { nullptr };
     std::array<juce::String, ParamIDs::numDrums> instrumentRefs;   // what each slot holds or is loading
     std::unique_ptr<juce::ThreadPool> instrumentPool;   // made on the first load (most instances never load one)
     mutable std::mutex loadedLock;

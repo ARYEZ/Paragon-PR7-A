@@ -1128,11 +1128,12 @@ void DrumPage::importDrumGizmoKit()
         // How much of it to load: LIGHT fits in about a gigabyte; FULL is every hit (several gigabytes).
         juce::PopupMenu sizes;
         juce::Component::SafePointer<DrumPage> self (this);
-        const auto import = [self, file] (bool full)
+        using Load = ParagonX1AudioProcessor::KitLoad;
+        const auto import = [self, file] (Load load)
         {
             if (self == nullptr)
                 return;
-            const auto result = self->processor.importDrumGizmoKit (file, full);
+            const auto result = self->processor.importDrumGizmoKit (file, load);
             juce::String text;
             for (const auto& [slot, names] : result.slots)
                 text << synth::drums::slotDefaults[(size_t) slot].key << " " << synth::drums::articulationName (slot) << ": "
@@ -1144,8 +1145,10 @@ void DrumPage::importDrumGizmoKit()
                                                    result.slots.empty() ? "None of its instruments matched a drum." : text);
         };
         sizes.addSectionHeader ("HOW MUCH OF IT...");
-        sizes.addItem ("LIGHT: up to 8 layers of 2 hits, tails trimmed (about 1 GB for a big kit)", [import] { import (false); });
-        sizes.addItem ("FULL: every hit, every mic, full length (several GB of memory)", [import] { import (true); });
+        sizes.addItem ("STREAMED (best): every hit, every mic, full length; their starts in memory (about 0.5 GB), the rest "
+                       "read from disk as they play", [import] { import (Load::streamed); });
+        sizes.addItem ("LIGHT: up to 8 layers of 2 hits, tails trimmed, all in memory (about 1 GB for a big kit)", [import] { import (Load::light); });
+        sizes.addItem ("FULL IN MEMORY: every hit, every mic, full length (several GB of memory)", [import] { import (Load::full); });
         sizes.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&self->load));
     });
 }

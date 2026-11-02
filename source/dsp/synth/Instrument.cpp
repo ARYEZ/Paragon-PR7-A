@@ -12,6 +12,31 @@ namespace synth::drums
         return n;
     }
 
+    bool Instrument::streamed() const noexcept
+    {
+        for (const auto& l : layers)
+            for (const auto& h : l.hits)
+                for (const auto& m : h.mics)
+                    if (m.sample != nullptr && m.sample->stream != nullptr)
+                        return true;
+        return false;
+    }
+
+    double Instrument::longestSeconds() const noexcept
+    {
+        double longest = 0.0;
+        for (const auto& l : layers)
+            for (const auto& h : l.hits)
+            {
+                if (h.sample != nullptr)
+                    longest = juce::jmax (longest, (double) h.sample->frames() / h.sample->sampleRate);
+                for (const auto& m : h.mics)
+                    if (m.sample != nullptr)
+                        longest = juce::jmax (longest, (double) m.sample->frames() / m.sample->sampleRate);
+            }
+        return longest;
+    }
+
     bool Instrument::hasMics() const noexcept
     {
         for (const auto& l : layers)

@@ -6,9 +6,11 @@
 #include "dsp/synth/MultiPoint.h"
 #include "dsp/synth/Mixer.h"
 #include "dsp/synth/MicSim.h"
+#include "dsp/synth/DiskStreamer.h"
 #include "dsp/synth/Noise.h"
 #include "dsp/synth/VelocityCurve.h"
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <cstdint>
@@ -229,6 +231,12 @@ namespace synth::drums
         std::vector<std::vector<float>> channels;   // 1 or 2, all the same length
 
         int length() const noexcept { return channels.empty() ? 0 : (int) channels[0].size(); }
+
+        // DISK STREAMING (0.28.0): a streamed hit's mic holds only its head in `channels`; the rest is read from
+        // `stream`'s file while it plays (its output `streamOutput` of the hit's recipe). `frames()`: its whole length.
+        std::shared_ptr<const StreamSource> stream;
+        int streamOutput = -1;
+        juce::int64 frames() const noexcept { return stream != nullptr ? std::max<juce::int64> (length(), stream->length) : length(); }
     };
 
     // Samples from files (WAV, AIFF, FLAC...), and as text inside presets and projects (16-bit, gzipped, base64).
@@ -351,6 +359,10 @@ namespace synth::drums
         const mixer::SendTable* sends = nullptr;
         mixer::MuteMode muteMode = mixer::MuteMode::preSend;
         mixer::EffectHost* effects = nullptr;   // 0.22.0: the strips' effects (null: none)
+        // 0.28.0: DISK STREAMING (null: nothing streams; streamed hits play their heads only), and whether to wait for
+        // the disk (bouncing) rather than play silence when it's late (live).
+        Streamer* streamer = nullptr;
+        bool waitForDisk = false;
         // 0.26.0: SIMULATED MICS AND ROOM: synth drums and single samples through the mixer's mic channels.
         micsim::Settings micSim;
 
@@ -513,6 +525,12 @@ namespace synth::drums
 
         // SAMPLE's.
         const Sample* sample = nullptr;
+        // 0.28.0: a streamed sample's stream (-1: its head only), its mic in the hit's recipe.
+        Streamer* streamer = nullptr;
+        int streamId = -1, streamOutput = -1;
+        bool waitForDisk = false;
+        void enableStream (Streamer*, int id, bool wait) noexcept;
+        void renderStreamed (float* left, float* right, int numSamples) noexcept;
         double position = 0.0, step = 1.0, endPosition = 0.0, endFade = 0.0;   // END: where it stops, fading over endFade
         float lowPole = 0.0f, highPole = 0.0f;
         std::array<float, 2> lowState {}, highState {};

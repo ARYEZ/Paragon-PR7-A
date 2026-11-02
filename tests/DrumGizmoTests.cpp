@@ -217,7 +217,7 @@ TEST_CASE ("DRUMGIZMO: a whole kit onto the slots, played through the mixer; a p
     ParagonX1AudioProcessor p;
     p.prepareToPlay (sampleRate, blockSize);
     p.useRigFolder (temp.folder.getChildFile ("Presets"));
-    const auto result = p.importDrumGizmoKit (kit, false);
+    const auto result = p.importDrumGizmoKit (kit, ParagonX1AudioProcessor::KitLoad::light);
     CHECK (result.kitName == "TinyKit");
     REQUIRE (p.waitForInstruments());
     CHECK (p.getInstrumentRef (notemap::SD).startsWith ("dg|Snare;light|"));
@@ -263,4 +263,83 @@ TEST_CASE ("DRUMGIZMO: a whole kit onto the slots, played through the mixer; a p
     REQUIRE (q.waitForInstruments());
     CHECK (q.getDrumInstrument (notemap::SD2) == nullptr);
     CHECK (q.getInstrumentProblems().joinIntoString (" ").contains ("NoSuchKit"));
+}
+
+TEST_CASE ("DISK STREAMING: a streamed kit holds only each hit's head and plays exactly as the same kit in memory, live and bouncing",
+           "[drumgizmo][streaming]")
+{
+    TempFolder temp;
+    const auto kit = writeKit (temp.folder);
+    using Load = ParagonX1AudioProcessor::KitLoad;
+    const auto make = [&] (Load load, bool offline)
+    {
+        auto p = std::make_unique<ParagonX1AudioProcessor>();
+        p->setNonRealtime (offline);
+        p->prepareToPlay (sampleRate, blockSize);
+        p->useRigFolder (temp.folder.getChildFile ("Presets"));
+        p->importDrumGizmoKit (kit, load);
+        REQUIRE (p->waitForInstruments());
+        return p;
+    };
+    // Snare and kick at once, then again 1 s later (the streams of the first freed and taken again), 3 s in all; live
+    // (not offline), each block waits a little, as a real audio callback comes at its time, so the disk thread keeps up.
+    const auto play = [] (ParagonX1AudioProcessor& p, bool paced)
+    {
+        std::vector<float> out;
+        juce::AudioBuffer<float> buffer (p.getTotalNumOutputChannels(), blockSize);
+        const auto blocks = (int) (3.0 * sampleRate / blockSize);
+        for (int b = 0; b < blocks; ++b)
+        {
+            juce::MidiBuffer midi;
+            if (b == 0 || b == (int) (sampleRate / blockSize))
+                for (const auto slot : { (int) notemap::SD, (int) notemap::BD })
+                    midi.addEvent (juce::MidiMessage::noteOn (10, testkit::keyFor (slot), (juce::uint8) 120), 0);
+            buffer.clear();
+            p.processBlock (buffer, midi);
+            out.insert (out.end(), buffer.getReadPointer (0), buffer.getReadPointer (0) + blockSize);
+            if (paced)
+                juce::Thread::sleep (2);
+        }
+        return out;
+    };
+    const auto memory = make (Load::full, true);
+    const auto bounced = make (Load::streamed, true);
+    const auto live = make (Load::streamed, false);
+
+    // Streamed: each mic holds 0.2 s (the hits are 2 s long); in memory: all of it.
+    const auto& streamedHit = bounced->getDrumInstrument (notemap::SD)->layers.back().hits.front();
+    const auto& memoryHit = memory->getDrumInstrument (notemap::SD)->layers.back().hits.front();
+    REQUIRE_FALSE (streamedHit.mics.empty());
+    for (const auto& m : streamedHit.mics)
+    {
+        CHECK (m.sample->stream != nullptr);
+        CHECK (m.sample->length() == Catch::Approx (0.2 * sampleRate).margin (1));
+        CHECK (m.sample->frames() == Catch::Approx (2.0 * sampleRate).margin (1));
+    }
+    CHECK (memoryHit.mics.front().sample->length() == Catch::Approx (2.0 * sampleRate).margin (1));
+    CHECK (bounced->getDrumInstrument (notemap::SD)->streamed());
+
+    const auto reference = play (*memory, false);
+    const auto fromDisk = play (*bounced, false);
+    const auto fromDiskLive = play (*live, true);
+    REQUIRE (reference.size() == fromDisk.size());
+    double worst = 0.0, worstLive = 0.0, loudest = 0.0;
+    // Compared up to the first hit's last 5 ms: in memory a hit's end is faded (it may have been cut short); streamed,
+    // it ends as its file does (a kit's files end in silence).
+    for (size_t i = 0; i < (size_t) (1.99 * sampleRate); ++i)
+    {
+        worst = std::max (worst, (double) std::abs (reference[i] - fromDisk[i]));
+        worstLive = std::max (worstLive, (double) std::abs (reference[i] - fromDiskLive[i]));
+        loudest = std::max (loudest, (double) std::abs (reference[i]));
+    }
+    INFO ("loudest " << loudest << ", bounce differs by " << worst << ", live by " << worstLive << ", underruns " << live->getStreamUnderruns());
+    REQUIRE (loudest > 0.05);
+    // Well past the head (1.5 s into a 2 s hit) it still sounds, from the disk.
+    CHECK (rms (fromDisk, (size_t) (0.5 * sampleRate), (size_t) (0.9 * sampleRate)) > 0.001);
+    CHECK (worst < 1.0e-5);       // the same, to float rounding (gains multiply in another order)
+    CHECK (worstLive < 1.0e-5);
+    CHECK (live->getStreamUnderruns() == 0);
+    // Every stream free again once the hits are over.
+    CHECK (live->getActiveStreams() == 0);
+    CHECK (bounced->getActiveStreams() == 0);
 }
