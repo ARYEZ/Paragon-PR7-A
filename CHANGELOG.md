@@ -2,6 +2,39 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.29.0
+
+**LAYER: your own sample with any drum.** You found the snare very good but the kick "still not there", and sent your perfect kick. Modern metal kicks are almost always the real kick plus a sample layered on it, so any drum can now have a **LAYER**: a sample of yours, or a folder of several hits, played with every one of its hits.
+
+- **Loading one:** DRUMS > choose the drum > LOAD... > **A LAYER WITH THIS DRUM...**: a sample, or a folder of several takes (they play in turn).
+- **Its knobs** (on the DRUM view):
+  - **LAYER** sets its level.
+  - **LAYER OUT** sets where it plays: with the drum, or a mixer channel of its own.
+  - Remove it from the same LOAD... menu.
+- **On a kit that plays through the mixer** (the CrocellKit, or SIMULATED MICS), loading a layer:
+  - gives it a **USER channel of its own**, named after the drum ("KICK LAYER"), with its own fader, effects, sends and output;
+  - turns the drum's own **close mics down 10 dB**, so your sample leads while the real kick's overheads, room and bleed stay as they are (one undo puts it back).
+- **How it plays:**
+  - **Velocity:** it follows the drum's (soft hits quieter).
+  - **Timing:** it's sample-aligned with the drum.
+  - **Choke and voices:** it's cut, choked and faded with the hit it belongs to.
+  - **Saving:** presets, kits and projects keep it (where its file is, like an instrument; not the audio inside the preset).
+- **Measured with your kick on the Crocell Metal kit:**
+  - **Pitch:** 90 → 69 → 63 Hz, against your sample's 89 → 67 → 63.
+  - **Click:** 3.5 kHz, as yours.
+  - **Body:** 44 Hz, as yours.
+  - **Spectrum:** within a few dB of your sample band by band.
+  - **The tail:** it rings longer than your sample alone (the real kick's room, which the metal mix compresses). The ROOM fader sets how much.
+- **Honest limits:**
+  - **One sample:** every hit is the same take (only louder or softer), which can sound machine-like on fast double kick. A folder of several takes of your kick fixes that: they play in turn.
+  - **LAYER OUT names:** it lists the user channels by number ("User 1"); the mixer shows their names.
+  - I can't listen. The numbers are measured; your ears decide the balance between the layer and the real kick.
+- **Tests:**
+  - the layer plays with each hit, at LAYER level and the hit's velocity, OFF silent, removed;
+  - through the mixer: its own USER channel (its name, fader, mute, solo) and the drum's close mics 10 dB down;
+  - a folder's hits in turn;
+  - presets, a preset's file and the project keeping it.
+
 ## 0.28.0
 
 **Disk streaming: the whole kit, every hit, at full quality.** You asked for the highest quality we can get. A DrumGizmo kit can now load **STREAMED**: every recorded hit, every mic, every cymbal's full ring (the CrocellKit's ride rings for 31 s), with only each hit's first 0.2 s held in memory. The rest is read from disk while it plays, as big sampled drum libraries do.

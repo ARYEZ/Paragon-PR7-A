@@ -306,6 +306,11 @@ namespace synth::drums
         float position = 0.3f, shell = 0.4f, variation = 0.3f;
         // SIMULATED MICS (0.26.0): while the kit's are on, this drum is heard through them (else its own way).
         bool miked = true;
+        // ITS LAYER (0.29.0): a sample (or folder of hits) of the user's played with every hit, at `layerGain` (velocity
+        // as the drum's), into the mixer's mic channel `layerChannel` (-1: the drum's own way, its VOLUME, PAN, INSERT...).
+        const Instrument* layer = nullptr;
+        float layerGain = 1.0f;
+        int layerChannel = -1;
 
         bool filtered() const noexcept { return lowPass < 19999.0f || highPass > 20.01f; }
         // The sequencer's lead for the anchor (seconds early).
@@ -685,6 +690,7 @@ namespace synth::drums
         std::uint64_t ages = 0;
         std::uint32_t noiseSeed = 0x2545f491u;
         std::array<HitMemory, numSlots> hitMemory {};   // THE SAMPLE ENGINE's round-robins (0.19.0)
+        std::array<HitMemory, numSlots> layerMemory {}; // 0.29.0: each drum's layer's
         std::array<std::atomic<int>, numSlots> lastChoice {};   // layer x 1000 + hit + 1 (0: none)
         std::atomic<int> pedal { 127 };   // CC 4: before any arrives, closed
         std::array<std::uint8_t, 128> controllers {};   // each controller's last value (CC ZONES)

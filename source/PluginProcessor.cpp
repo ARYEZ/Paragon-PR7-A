@@ -1027,12 +1027,12 @@ void ParagonX1AudioProcessor::clearDrumSample (int slot)
 // THE SAMPLE ENGINE (0.19.0)
 std::shared_ptr<const synth::drums::Instrument> ParagonX1AudioProcessor::getDrumInstrument (int slot) const
 {
-    return drumInstruments[(size_t) juce::jlimit (0, ParamIDs::numDrums - 1, slot)];
+    return drumInstruments[(size_t) juce::jlimit (0, 2 * ParamIDs::numDrums - 1, slot)];
 }
 
 void ParagonX1AudioProcessor::setDrumInstrument (int slot, std::shared_ptr<const synth::drums::Instrument> instrument)
 {
-    slot = juce::jlimit (0, ParamIDs::numDrums - 1, slot);
+    slot = juce::jlimit (0, 2 * ParamIDs::numDrums - 1, slot);   // 0.29.0: a layer's too
     if (drumInstruments[(size_t) slot] == instrument)
         return;
     // A replaced instrument stays until its longest hit can't still be playing (0.28.0: a streamed cymbal rings for
@@ -1103,6 +1103,8 @@ void ParagonX1AudioProcessor::startLoading (std::vector<std::pair<int, juce::Str
                 instrument = synth::drums::drumgizmo::load (source, names, mode == "full" ? Trim::everything()
                                                                          : mode == "stream" ? Trim::streamed() : Trim::light(), problems);
             }
+            else if (parts[0] == "file")
+                instrument = synth::drums::instruments::fromFile (source);   // 0.29.0: one hit (a layer's)
             else if (parts[0] == "folder")
                 instrument = synth::drums::instruments::fromFolder (source);
             else
@@ -1274,6 +1276,67 @@ void ParagonX1AudioProcessor::loadInstrumentRef (int slot, const juce::String& r
     requestCheckpoint();
 }
 
+void ParagonX1AudioProcessor::loadLayer (int slot, const juce::File& fileOrFolder)
+{
+    slot = juce::jlimit (0, ParamIDs::numDrums - 1, slot);
+    startLoading ({ { layerOf (slot), (fileOrFolder.isDirectory() ? "folder||" : "file||") + fileOrFolder.getFullPathName() } });
+    // Through the mixer (a multi-mic drum, or one heard through SIMULATED MICS): a channel of its own, the drum's own
+    // close mics 10 dB down so the layer leads (its room, overheads and bleed stay as they are).
+    const auto instrument = drumInstruments[(size_t) slot];
+    const auto micSim = parameters.getRawParameterValue (ParamIDs::drumsMicSim)->load() > 0.5f;
+    if ((instrument != nullptr && instrument->hasMics()) || micSim)
+        if (createLayerChannel (slot) >= 0)
+        {
+            const auto piece = synth::drums::pieceOfSlot (slot);
+            for (int c = 0; c < synth::mixer::numChannels && piece >= 0; ++c)
+                if (synth::drums::isDirect (slot, c) && ! synth::mixer::hearsWholeKit (c))
+                    if (auto* level = parameters.getParameter (ParamIDs::mix (c, "Level")))
+                    {
+                        auto* ranged = dynamic_cast<juce::RangedAudioParameter*> (level);
+                        setParameterNow (ParamIDs::mix (c, "Level"), juce::jmax (-60.0f, ranged->convertFrom0to1 (ranged->getValue()) - 10.0f));
+                    }
+        }
+    markModified();
+    requestCheckpoint();
+}
+
+void ParagonX1AudioProcessor::clearLayer (int slot)
+{
+    slot = juce::jlimit (0, ParamIDs::numDrums - 1, slot);
+    setDrumInstrument (layerOf (slot), nullptr);
+    instrumentRefs[(size_t) layerOf (slot)] = {};
+    markModified();
+    requestCheckpoint();
+}
+
+int ParagonX1AudioProcessor::createLayerChannel (int slot)
+{
+    slot = juce::jlimit (0, ParamIDs::numDrums - 1, slot);
+    // The first USER channel no mic route and no other layer uses: settings back to new, named, the layer into it.
+    auto used = getUserChannelsInUse();
+    for (int u = 0; u < synth::mixer::numUserChannels; ++u)
+    {
+        const auto channel = synth::mixer::numChannels + u;
+        if (used.contains (channel))
+            continue;
+        for (const auto* what : ParamIDs::mixSettings)
+            if (auto* parameter = parameters.getParameter (ParamIDs::mix (channel, what)))
+            {
+                parameter->beginChangeGesture();
+                parameter->setValueNotifyingHost (parameter->getDefaultValue());
+                parameter->endChangeGesture();
+            }
+        auto m = matrix;
+        const auto piece = synth::drums::pieceOfSlot (slot);
+        m.userChannelNames[(size_t) u] = (juce::String (piece >= 0 ? synth::drums::pieces[(size_t) piece].name : synth::drums::slotDefaults[(size_t) slot].key) + " LAYER").substring (0, 24);
+        setModMatrix (m);
+        setParameterNow (ParamIDs::drum (slot, "LayerOut"), (float) (channel + 1));
+        requestCheckpoint();
+        return channel;
+    }
+    return -1;
+}
+
 juce::File ParagonX1AudioProcessor::knownKitsFile() const { return rigLibrary->getFolder().getChildFile ("Sample Kits.xml"); }
 
 void ParagonX1AudioProcessor::rememberKit (const juce::String& name, const juce::File& folder)
@@ -1417,6 +1480,11 @@ juce::Array<int> ParagonX1AudioProcessor::getUserChannelsInUse() const
     for (const auto to : matrix.micRoutes)
         if (synth::mixer::isUserChannel (to))
             used.addIfNotAlreadyThere (to);
+    // 0.29.0: and the drums' layers' channels.
+    for (int k = 0; k < ParamIDs::numDrums; ++k)
+        if (auto* out = parameters.getRawParameterValue (ParamIDs::drum (k, "LayerOut")))
+            if (const auto channel = juce::roundToInt (out->load()) - 1; synth::mixer::isUserChannel (channel))
+                used.addIfNotAlreadyThere (channel);
     used.sort();
     return used;
 }
@@ -1658,6 +1726,11 @@ synth::drums::KitSettings ParagonX1AudioProcessor::getKitSettings() const noexce
         s.randomize = get (drumSetting ("Randomize")) > 0.5f;
         s.adjacent = get (drumSetting ("Adjacent")) > 0.5f;
         s.velocityToVolume = get (drumSetting ("VelToVol")) > 0.5f;
+        // 0.29.0: ITS LAYER.
+        s.layer = instrumentsForAudio[(size_t) layerOf (k)].load();
+        const auto layerDb = get (drumSetting ("LayerLevel"));
+        s.layerGain = layerDb <= -59.95f ? 0.0f : juce::Decibels::decibelsToGain (layerDb);
+        s.layerChannel = juce::roundToInt (get (drumSetting ("LayerOut"))) - 1;
         s.layerLimit = juce::roundToInt (get (drumSetting ("LayerLimit")));
         s.voices = juce::jlimit (1, synth::drums::Kit::maxVoices, juce::roundToInt (get (drumSetting ("Voices"))));
         s.position = get (drumSetting ("Position"));
@@ -1881,12 +1954,13 @@ std::unique_ptr<juce::XmlElement> ParagonX1AudioProcessor::captureDrumKit() cons
             e->setAttribute ("index", k + 1);
             e->setAttribute ("curve", curve.encode());
         }
-        if (instrumentRefs[(size_t) k].isNotEmpty())
-        {
-            auto* e = xml->createNewChildElement ("DrumInstrument");
-            e->setAttribute ("slot", k + 1);
-            e->setAttribute ("ref", instrumentRefs[(size_t) k]);
-        }
+        for (const auto index : { k, layerOf (k) })   // 0.29.0: its layer as "slot" numDrums + k + 1
+            if (instrumentRefs[(size_t) index].isNotEmpty())
+            {
+                auto* e = xml->createNewChildElement ("DrumInstrument");
+                e->setAttribute ("slot", index + 1);
+                e->setAttribute ("ref", instrumentRefs[(size_t) index]);
+            }
     }
     return xml;
 }
@@ -1950,14 +2024,14 @@ bool ParagonX1AudioProcessor::applyDrumKit (const juce::XmlElement& xml)
         curve = {};
     {
         std::vector<std::pair<int, juce::String>> refs;
-        std::array<bool, ParamIDs::numDrums> has {};
+        std::array<bool, 2 * ParamIDs::numDrums> has {};
         for (const auto* e : xml.getChildWithTagNameIterator ("DrumInstrument"))
-            if (const auto slot = e->getIntAttribute ("slot") - 1; slot >= 0 && slot < ParamIDs::numDrums)
+            if (const auto slot = e->getIntAttribute ("slot") - 1; slot >= 0 && slot < 2 * ParamIDs::numDrums)
             {
                 refs.emplace_back (slot, e->getStringAttribute ("ref"));
                 has[(size_t) slot] = true;
             }
-        for (int k = 0; k < ParamIDs::numDrums; ++k)
+        for (int k = 0; k < 2 * ParamIDs::numDrums; ++k)
             if (! has[(size_t) k])
             {
                 setDrumInstrument (k, nullptr);
@@ -2212,8 +2286,9 @@ Rig ParagonX1AudioProcessor::captureRig() const
     {
         if (drumSamples[(size_t) k] != nullptr)
             rig.drumSamples[k] = drumSamples[(size_t) k];
-        if (instrumentRefs[(size_t) k].isNotEmpty())
-            rig.drumInstruments[k] = instrumentRefs[(size_t) k];
+        for (const auto index : { k, layerOf (k) })
+            if (instrumentRefs[(size_t) index].isNotEmpty())
+                rig.drumInstruments[index] = instrumentRefs[(size_t) index];
     }
     rig.modulation = matrix;
     return rig;
@@ -2245,7 +2320,7 @@ void ParagonX1AudioProcessor::applyRig (const Rig& rig)
     // THE SAMPLE ENGINE: the preset's instruments loaded again (the ones it already has kept).
     {
         std::vector<std::pair<int, juce::String>> refs;
-        for (int k = 0; k < ParamIDs::numDrums; ++k)
+        for (int k = 0; k < 2 * ParamIDs::numDrums; ++k)
         {
             const auto found = rig.drumInstruments.find (k);
             const auto ref = found != rig.drumInstruments.end() ? found->second : juce::String();
@@ -2415,7 +2490,7 @@ void ParagonX1AudioProcessor::getStateInformation (juce::MemoryBlock& destData)
                                                                     { "data", synth::drums::sampleFiles::encode (*sample) } }), nullptr);
     state.appendChild (kitSamples, nullptr);
     juce::ValueTree instruments ("DrumInstruments");
-    for (int k = 0; k < ParamIDs::numDrums; ++k)
+    for (int k = 0; k < 2 * ParamIDs::numDrums; ++k)
         if (instrumentRefs[(size_t) k].isNotEmpty())
             instruments.appendChild (juce::ValueTree ("DrumInstrument", { { "slot", k + 1 }, { "ref", instrumentRefs[(size_t) k] } }), nullptr);
     if (instruments.getNumChildren() > 0)
@@ -2468,7 +2543,7 @@ void ParagonX1AudioProcessor::setStateInformation (const void* data, int sizeInB
     if (auto saved = state.getChildWithName ("DrumInstruments"); saved.isValid())
     {
         for (const auto& e : saved)
-            if (const auto slot = (int) e["slot"] - 1; slot >= 0 && slot < ParamIDs::numDrums)
+            if (const auto slot = (int) e["slot"] - 1; slot >= 0 && slot < 2 * ParamIDs::numDrums)
                 instrumentsToLoad.emplace_back (slot, e["ref"].toString());
         state.removeChild (saved, nullptr);
     }
@@ -2535,8 +2610,11 @@ void ParagonX1AudioProcessor::setStateInformation (const void* data, int sizeInB
     for (int k = 0; k < ParamIDs::numDrums; ++k)
     {
         setDrumSample (k, kitSamples[(size_t) k]);
-        setDrumInstrument (k, nullptr);
-        instrumentRefs[(size_t) k] = {};
+        for (const auto index : { k, layerOf (k) })
+        {
+            setDrumInstrument (index, nullptr);
+            instrumentRefs[(size_t) index] = {};
+        }
     }
     startLoading (instrumentsToLoad);
 

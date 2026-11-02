@@ -46,6 +46,12 @@ namespace ParamIDs
     // SIMULATED MICS AND ROOM (0.26.0, hint 33): the kit's synth drums through the mixer's mic channels, and the room
     // the room and ambience mics hear (micsim::roomNames' index; its decay, times its own; its tone). In presets and kits.
     inline constexpr auto drumsMicSim = "drumsMicSim";
+    // A DRUM'S LAYER (0.29.0, hint 34): a sample (or folder of hits) of the user's played with the drum, "drum<n>LayerLevel"
+    // (dB, -60: off) and "drum<n>LayerOut": where it plays (0: the drum's own way; 1 + n: the mixer's mic channel n, its
+    // own fader). Saved by index: only append.
+    inline const juce::StringArray layerOutNames { "With The Drum", "Kick In", "Kick Out", "Snare Top", "Snare Btm", "Hi-Hat",
+                                                   "Tom 1", "Tom 2", "Tom 3", "Cymbals", "Overheads", "Room", "Ambience", "Other",
+                                                   "User 1", "User 2", "User 3", "User 4", "User 5", "User 6", "User 7", "User 8" };
     inline constexpr auto drumsRoom = "drumsRoom";
     inline constexpr auto drumsRoomDecay = "drumsRoomDecay";
     inline constexpr auto drumsRoomTone = "drumsRoomTone";
@@ -72,7 +78,8 @@ namespace ParamIDs
                                                     "Randomize", "Adjacent", "VelToVol", "LayerLimit", "Voices",
                                                     // 0.24.0 (hint 32): THE ACOUSTIC MODELS' strike POSITION, SHELL, VARIATION
                                                     "Position", "Shell", "Variation",
-                                                    "Mics" };   // 0.26.0 (hint 33): heard through SIMULATED MICS
+                                                    "Mics",     // 0.26.0 (hint 33): heard through SIMULATED MICS
+                                                    "LayerLevel", "LayerOut" };   // 0.29.0 (hint 34): a LAYER of your own
     consteval int drumSetting (std::string_view what)
     {
         for (int i = 0; i < (int) std::size (drumSettings); ++i)

@@ -83,6 +83,9 @@ PR7-D is built in stages, each one released:
   (drumgizmo.org; GET FREE KITS... opens its page) onto every drum, its mics through the MIXER with their real bleed,
   STREAMED (0.28.0: every hit at full length, read from disk as it plays; the CrocellKit in 377 MB of memory), LIGHT
   (about 1 GB) or FULL IN MEMORY. Factory preset A07 Crocell Metal streams the CrocellKit (CC-BY 4.0, credited in ABOUT).
+- **LAYER** (0.29.0): any drum plays a sample (or folder of takes) of yours with every hit, LOAD... > A LAYER WITH THIS
+  DRUM...; LAYER level and LAYER OUT; through the mixer it gets its own USER channel ("KICK LAYER") and the drum's close
+  mics come down 10 dB, so the sample leads and the real drum's room and overheads stay.
   - **VELOCITY** (0.18.0, beside ENVELOPE on the DRUM view): the chosen drum's velocity curve (drag the end points to
     limit, double-click to bend, SOFT, GATE) and its VELOCITY GATE (the range of hits that play it).
   - **MIDI IN / E-DRUMS** (0.18.0, SETTINGS): click a note to edit it: its drum and LEARN, CC ZONES for pads that sense

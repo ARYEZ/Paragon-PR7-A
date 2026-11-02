@@ -695,7 +695,13 @@ DrumPage::DrumPage (ParagonX1AudioProcessor& p) : processor (p), display (p), en
     slotControl (instrumentControls, "LayerLimit", "LAYER LIMIT", "How many of each layer's hits are used (ALL: every one). Fewer: more repeats.");
     slotControl (instrumentControls, "Voices", "VOICES", "How many of this drum's hits ring at once; past that the oldest fades.");
 
-    for (auto* list : { &kitControls, &slotControls, &routingControls, &velocityControls, &instrumentControls, &acousticControls })
+    // ITS LAYER (0.29.0).
+    slotControl (layerControls, "LayerLevel", "LAYER", "The level of this drum's LAYER: your own sample played with every hit "
+                                                       "(LOAD... > A LAYER...). OFF: not played.");
+    slotControl (layerControls, "LayerOut", "LAYER OUT", "Where the layer plays: WITH THE DRUM (its VOLUME, PAN, INSERT and OUTPUT), or "
+                                                         "a mixer channel, with its own fader, effects and sends (a kit through the "
+                                                         "mixer gives it a USER channel of its own when it's loaded).");
+    for (auto* list : { &kitControls, &slotControls, &routingControls, &velocityControls, &instrumentControls, &acousticControls, &layerControls })
         for (auto& c : *list)
             addAndMakeVisible (*c);
 
@@ -1014,7 +1020,7 @@ void DrumPage::select (int slot)
     if (! rows[(size_t) selected]->isChosen())
         for (auto& row : rows)
             row->setChosen (row->getSlot() == selected);   // chosen from elsewhere (the sequencer): alone
-    for (auto* list : { &slotControls, &routingControls, &velocityControls, &instrumentControls, &acousticControls })
+    for (auto* list : { &slotControls, &routingControls, &velocityControls, &instrumentControls, &acousticControls, &layerControls })
         for (auto& c : *list)
         {
             const auto what = c->getParameterId().fromFirstOccurrenceOf ("drum", false, false).trimCharactersAtStart ("0123456789");
@@ -1062,6 +1068,14 @@ void DrumPage::showLoadMenu()
                                       processor.loadInstrumentSfz (slot, fc.getResult());
                               });
     });
+    // 0.29.0: A LAYER of the user's own with this drum.
+    menu.addSeparator();
+    menu.addItem ("A LAYER with this drum (your sample, or a folder of hits)...", [this] { chooseLayer(); });
+    menu.addItem ("Remove its layer", processor.getLayerRef (selected).isNotEmpty(), false, [this]
+    {
+        processor.clearLayer (selected);
+        updateDrumPanels();
+    });
     menu.addSeparator();
     menu.addItem ("A whole SFZ kit (onto every drum)...", [this] { importSfzKit(); });
     // 0.27.0: DRUMGIZMO KITS: free multi-mic kits recorded in real studios.
@@ -1108,6 +1122,23 @@ void DrumPage::importSfzKit()
         layouts.addItem ("The map I'm using now", [import, self] { if (self != nullptr) import (self->processor.getMapLayout()); });
         layouts.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&load));
     });
+}
+
+void DrumPage::chooseLayer()
+{
+    const auto slot = selected;
+    chooser = std::make_unique<juce::FileChooser> ("A layer for " + synth::drums::articulationName (slot) + ": a sample, or a folder of hits",
+                                                   juce::File(), "*.wav;*.aif;*.aiff;*.flac;*.ogg;*.mp3");
+    chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles
+                              | juce::FileBrowserComponent::canSelectDirectories,
+                          [this, slot] (const juce::FileChooser& fc)
+                          {
+                              const auto f = fc.getResult();
+                              if (! f.exists())
+                                  return;
+                              processor.loadLayer (slot, f);
+                              updateDrumPanels();
+                          });
 }
 
 void DrumPage::importDrumGizmoKit()
@@ -1171,8 +1202,16 @@ void DrumPage::updateDrumPanels()
         showingInstrument = hasInstrument;
         resized();
     }
+    const auto hasLayer = processor.getLayerRef (selected).isNotEmpty();
+    if (hasLayer != showingLayer)
+    {
+        showingLayer = hasLayer;
+        resized();
+    }
     for (auto& c : instrumentControls)
         c->setVisible (drum && ! velocityMode && showingInstrument);
+    for (auto& c : layerControls)
+        c->setVisible (drum && ! velocityMode && showingLayer);
     // THE ACOUSTIC MODELS (0.24.0): their knobs while the drum is one of them, and TONE / SNAP named for what they are.
     {
         using synth::drums::Model;
@@ -1437,12 +1476,16 @@ void DrumPage::resized()
     envelopeStrip = d.removeFromTop (96);
     d.removeFromTop (6);
     // THE SAMPLE ENGINE: a row of its controls under the picture.
-    if (showingInstrument)
+    if (showingInstrument || showingLayer)
     {
         auto row = d.removeFromBottom (ParamControl::knobHeight);
         d.removeFromBottom (6);
-        for (auto& c : instrumentControls)
-            c->setBounds (row.removeFromLeft (110));
+        if (showingInstrument)
+            for (auto& c : instrumentControls)
+                c->setBounds (row.removeFromLeft (110));
+        if (showingLayer)
+            for (auto& c : layerControls)
+                c->setBounds (row.removeFromRight (120));
     }
     display.setBounds (d);
     placeEnvelope();

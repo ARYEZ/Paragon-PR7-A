@@ -204,6 +204,25 @@ namespace synth::drums
             }
         }
 
+        std::shared_ptr<const Instrument> fromFile (const juce::File& file)
+        {
+            auto sample = sampleFiles::load (file);
+            if (sample == nullptr || sample->length() < 2)
+                return {};
+            auto inst = std::make_shared<Instrument>();
+            inst->name = file.getFileNameWithoutExtension();
+            inst->kind = Instrument::Kind::folder;
+            inst->source = file;
+            Instrument::Layer layer;
+            Instrument::Hit hit;
+            hit.sample = std::move (sample);
+            hit.files.add (file.getFullPathName());
+            layer.hits.push_back (std::move (hit));
+            inst->layers.push_back (std::move (layer));
+            finish (*inst);
+            return inst;
+        }
+
         std::shared_ptr<const Instrument> fromFolder (const juce::File& folder)
         {
             const juce::String audio ("*.wav;*.aif;*.aiff;*.flac;*.ogg");

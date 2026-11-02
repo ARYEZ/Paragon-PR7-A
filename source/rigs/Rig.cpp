@@ -106,7 +106,7 @@ std::optional<Rig> Rig::fromXml (const juce::XmlElement& xml)
     if (const auto* modulation = xml.getChildByName ("Modulation"))
         rig.modulation = ModMatrix::fromXml (*modulation);
     for (const auto* e : xml.getChildWithTagNameIterator ("DrumInstrument"))
-        if (const auto slot = e->getIntAttribute ("slot") - 1; slot >= 0 && slot < synth::drums::numSlots)
+        if (const auto slot = e->getIntAttribute ("slot") - 1; slot >= 0 && slot < 2 * synth::drums::numSlots)   // 0.29.0: then layers
             rig.drumInstruments[slot] = e->getStringAttribute ("ref");
 
     if (xml.getIntAttribute ("parameterVersion", 1) < 2)

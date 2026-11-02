@@ -35,7 +35,8 @@
 //                                    PARAGON_SNAPSHOT_MICSIM=1: the Djent Kit through SIMULATED MICS, their panel open,
 //                                    =2 its strips after a kick and snare)
 //   PARAGON_SNAPSHOT_DGKIT=<kit file> a DrumGizmo kit (0.27.0) loaded LIGHT from your computer (none ships with the
-//                                    tests): DRUMS shows the snare's layers; with PAGE=mixer its channels after a hit
+//                                    tests): DRUMS shows the snare's layers; with PAGE=mixer its channels after a hit;
+//                                    PARAGON_SNAPSHOT_LAYER=<audio file>: that sample as the kick's LAYER (0.29.0)
 //   PARAGON_SNAPSHOT_NOTES=1         the kick, snare and closed hat's keys held on the keyboard (they light)
 //   PARAGON_SNAPSHOT_MIDI=1          demo MIDI links and a knob learning (with PAGE=settings: the links list)
 TEST_CASE ("Render the editor to a PNG", "[.][snapshot]")
@@ -412,10 +413,17 @@ TEST_CASE ("Render the editor to a PNG", "[.][snapshot]")
             processor.importDrumGizmoKit (juce::File (dg), ParagonX1AudioProcessor::KitLoad::streamed);
             processor.waitForInstruments (600000);
             drums.showView (DrumPage::View::drum);
-            drums.select (2);
+            // 0.29.0: PARAGON_SNAPSHOT_LAYER=<audio file>: that sample as the kick's LAYER, the kick shown.
+            const auto layer = env ("PARAGON_SNAPSHOT_LAYER");
+            if (layer.isNotEmpty())
+            {
+                processor.loadLayer (0, juce::File (layer));
+                processor.waitForInstruments (60000);
+            }
+            drums.select (layer.isNotEmpty() ? 0 : 2);
             juce::AudioBuffer<float> buffer (2, 512);
             juce::MidiBuffer midi;
-            midi.addEvent (juce::MidiMessage::noteOn (1, 38, (juce::uint8) 110), 0);
+            midi.addEvent (juce::MidiMessage::noteOn (1, layer.isNotEmpty() ? 36 : 38, (juce::uint8) 110), 0);
             processor.processBlock (buffer, midi);
             drums.resized();
             drums.refreshPictures();
@@ -697,7 +705,13 @@ TEST_CASE ("Render the editor to a PNG", "[.][snapshot]")
                         if (auto* parameter = processor.getParameters().getParameter (id))
                             parameter->setValueNotifyingHost (dynamic_cast<juce::RangedAudioParameter*> (parameter)->convertTo0to1 (value));
             }
+        if (const auto layer = env ("PARAGON_SNAPSHOT_LAYER"); layer.isNotEmpty())
+        {
+            processor.loadLayer (0, juce::File (layer));
+            processor.waitForInstruments (60000);
+        }
         view->showPage (MainView::Page::mixer);
+        view->getMixerPage().routingChanged();
         view->getMixerPage().selectChannel (synth::mixer::snareTop);
         view->getMixerPage().showTab (MixerPage::Tab::effects);
         juce::AudioBuffer<float> buffer (2, 512);
@@ -709,6 +723,13 @@ TEST_CASE ("Render the editor to a PNG", "[.][snapshot]")
         {
             juce::MidiBuffer none;
             processor.processBlock (buffer, none);
+        }
+        if (env ("PARAGON_SNAPSHOT_LAYER").isNotEmpty())
+        {
+            const auto channel = juce::roundToInt (processor.getParameters().getRawParameterValue (ParamIDs::drum (0, "LayerOut"))->load()) - 1;
+            view->getMixerPage().selectChannel (channel);
+            view->resized();
+            view->getMixerPage().scrollToStrip (synth::mixer::stripOfChannel (channel));
         }
         view->getMixerPage().update();
     }

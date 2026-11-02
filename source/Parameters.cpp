@@ -27,6 +27,7 @@ namespace
     constexpr int pr7d0230 = 31; // PR7-D 0.23.0: the mixer's user channels
     constexpr int pr7d0240 = 32; // PR7-D 0.24.0: the acoustic models' position, shell, variation
     constexpr int pr7d0260 = 33; // PR7-D 0.26.0: simulated mics and room
+    constexpr int pr7d0290 = 34; // PR7-D 0.29.0: a drum's layer
 
     const ToText asDb = [] (float value, int) { return juce::String (value, 1) + " dB"; };
     const ToText asPercent = [] (float value, int) { return juce::String (juce::roundToInt (value * 100.0f)) + "%"; };
@@ -163,6 +164,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
             add (layout, drum (k, "Shell"), name + "Shell", { 0.0f, 1.0f }, acoustic.shell, asPercent, pr7d0240);
             add (layout, drum (k, "Variation"), name + "Variation", { 0.0f, 1.0f }, acoustic.variation, asPercent, pr7d0240);
             addSwitch (layout, drum (k, "Mics"), name + "Simulated Mics", true, pr7d0260);
+            add (layout, drum (k, "LayerLevel"), name + "Layer Level", { -60.0f, 12.0f, 0.1f }, 0.0f,
+                 [] (float v, int) { return v <= -59.95f ? juce::String ("Off") : juce::String (v, 1) + " dB"; }, pr7d0290);
+            addChoice (layout, drum (k, "LayerOut"), name + "Layer Out", layerOutNames, 0, pr7d0290);
         }
 
         // THE MIXER (0.20.0): the mic channels.

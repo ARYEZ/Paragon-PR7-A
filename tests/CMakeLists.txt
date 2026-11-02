@@ -19,6 +19,7 @@ add_executable(ParagonX1Tests
     AcousticDrumTests.cpp
     MicSimTests.cpp
     DrumGizmoTests.cpp
+    LayerTests.cpp
     DrumSeqPluginTests.cpp
     StackSizeTests.cpp
     ParameterIdTests.cpp

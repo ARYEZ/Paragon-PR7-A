@@ -1582,6 +1582,7 @@ namespace synth::drums
                                                          : 1.0f - settings.velocity + settings.velocity * hitVelocity * hitVelocity;
         // An instrument: its layers already sound soft or hard. VELOCITY TO VOLUME off: each hit as recorded; on, the
         // velocity's level too (so a soft note within a layer is a little quieter). A neighbour layer's hit matched.
+        const auto plainVelocityGain = velocityGain;   // 0.29.0: the layer's
         if (s.instrument != nullptr)
             velocityGain = (s.velocityToVolume ? velocityGain : 1.0f) * hitGain;
         // Every hit busy (48 playing): the oldest is cut, all its voices (a hit's voices share its age).
@@ -1605,6 +1606,45 @@ namespace synth::drums
         }
         noiseSeed = noiseSeed * 1664525u + 1013904223u;
         const auto age = ++ages;
+        // ITS LAYER (0.29.0): the user's sample with the hit, as a voice of the hit (same age: choked, stolen and
+        // faded with it; not counted as a hit of its own), whole, at its own pitch, the velocity's level x LAYER LEVEL,
+        // into its mixer channel (late by that channel's TIME OFFSET) or the drum's own way.
+        const auto startLayer = [&]
+        {
+            if (slotSettings.layer == nullptr || slotSettings.layerGain <= 0.0f)
+                return;
+            const auto choice = slotSettings.layer->choose (juce::jlimit (1, 127, juce::roundToInt (hitVelocity * 127.0f)), slotSettings.randomize,
+                                                            slotSettings.adjacent, 0, layerMemory[(size_t) slot]);
+            if (choice.sample == nullptr || choice.sample->length() < 2)
+                return;
+            auto part = slotSettings;
+            part.model = Model::sample;
+            part.sample = choice.sample;
+            part.instrument = nullptr;
+            part.start = 0.0f;
+            part.end = 1.0f;
+            part.reverseSource = nullptr;
+            part.pitch = 0.0f;
+            part.decay = 1.0f;
+            part.tone = 0.5f;
+            part.snap = 0.5f;
+            part.envelope = nullptr;
+            part.delay = 0.0f;
+            const auto channel = slotSettings.layerChannel >= 0 && slotSettings.layerChannel < mixer::numMicChannels ? slotSettings.layerChannel : -1;
+            if (channel >= 0)
+                part.delay = (float) settings.channels[(size_t) channel].offsetSeconds;
+            HitOptions plain;
+            plain.pan = options.pan;
+            plain.gateSamples = options.gateSamples;
+            auto* voice = freeVoice();
+            voice->start (part, slot, plainVelocityGain * choice.gain * slotSettings.layerGain, sampleRate, noiseSeed, plain);
+            voice->age = age;
+            voice->channel = channel;
+            voice->primary = false;
+            voice->micGain = 1.0f;
+            voice->bleed = false;
+            voice->releaseLeft = -1;
+        };
         if (mics == nullptr)
         {
             auto* chosen = freeVoice();
@@ -1613,6 +1653,7 @@ namespace synth::drums
             chosen->channel = -1;
             chosen->primary = true;
             chosen->releaseLeft = -1;
+            startLayer();
             return;
         }
         // THE MIXER (0.20.0): a voice per mic, into its channel, at the bleed / close-mic level the mixer gives this
@@ -1658,6 +1699,7 @@ namespace synth::drums
             voice->enableStream (settings.streamer, stream, settings.waitForDisk);
             first = false;
         }
+        startLayer();
     }
 
     double Kit::reverseSeconds (const SlotSettings& s, float notePitch, double) noexcept

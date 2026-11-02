@@ -160,10 +160,13 @@ private:
                                                 acousticControls;   // 0.24.0: POSITION, SHELL, VARIATION (the acoustic models)
     bool showingAcoustic = false;
     int labelledModel = -1;   // the model the shaping knobs' names are for
-    bool showingInstrument = false;   // the chosen drum holds an instrument (THE SAMPLE ENGINE, 0.19.0): its controls show
+    bool showingInstrument = false;
+    std::vector<std::unique_ptr<ParamControl>> layerControls;   // 0.29.0: LAYER LEVEL, LAYER OUT (while it has a layer)
+    bool showingLayer = false;   // the chosen drum holds an instrument (THE SAMPLE ENGINE, 0.19.0): its controls show
     void showLoadMenu();
     void importSfzKit();
     void importDrumGizmoKit();   // 0.27.0
+    void chooseLayer();          // 0.29.0
     DrumHitDisplay display;
     MultiPointEditor envelope;
     juce::TextButton play { "PLAY" }, load { "LOAD SAMPLE..." }, clear { "CLEAR" }, wholeFile { "WHOLE FILE" };

@@ -183,7 +183,17 @@ public:
     void loadInstrumentRef (int slot, const juce::String& ref);   // a slot's instrument by its reference (as presets keep it)
     juce::File knownKitFolder (const juce::String& name) const;
     bool isLoadingInstruments() const noexcept { return pendingLoads.load() > 0; }
-    juce::String getInstrumentRef (int slot) const { return instrumentRefs[(size_t) juce::jlimit (0, ParamIDs::numDrums - 1, slot)]; }
+    juce::String getInstrumentRef (int slot) const { return instrumentRefs[(size_t) juce::jlimit (0, 2 * ParamIDs::numDrums - 1, slot)]; }
+    // A DRUM'S LAYER (0.29.0): a sample or a folder of hits of the user's played with each of the drum's hits. It's kept
+    // as the drum's second instrument (index layerOf (slot): presets, kits and projects keep its file, as an
+    // instrument's). Loading one onto a drum whose sound comes through the mixer gives it a USER channel of its own
+    // (named "<PIECE> LAYER"), and turns the drum's own close mics down 10 dB so the layer leads (one undo step).
+    static constexpr int layerOf (int slot) noexcept { return ParamIDs::numDrums + slot; }
+    void loadLayer (int slot, const juce::File& fileOrFolder);
+    void clearLayer (int slot);
+    juce::String getLayerRef (int slot) const { return getInstrumentRef (layerOf (juce::jlimit (0, ParamIDs::numDrums - 1, slot))); }
+    std::shared_ptr<const synth::drums::Instrument> getLayer (int slot) const { return getDrumInstrument (layerOf (juce::jlimit (0, ParamIDs::numDrums - 1, slot))); }
+    int createLayerChannel (int slot);   // the USER channel it took (-1: none free)
     juce::StringArray getInstrumentProblems() const;
     bool waitForInstruments (int timeoutMs = 60000);   // the loads finished and installed (tests; snapshots)
     // Which hit an instrument slot played last (layer, hit), for the page; -1, -1: none.
@@ -594,13 +604,13 @@ private:
     std::array<std::atomic<const synth::drums::Sample*>, ParamIDs::numDrums> samplesForAudio {};
     std::vector<std::pair<std::shared_ptr<const synth::drums::Sample>, double>> retiredSamples;
     // THE SAMPLE ENGINE (0.19.0).
-    std::array<std::shared_ptr<const synth::drums::Instrument>, ParamIDs::numDrums> drumInstruments;
-    std::array<std::atomic<const synth::drums::Instrument*>, ParamIDs::numDrums> instrumentsForAudio {};
+    std::array<std::shared_ptr<const synth::drums::Instrument>, 2 * ParamIDs::numDrums> drumInstruments;   // 0.29.0: then the layers
+    std::array<std::atomic<const synth::drums::Instrument*>, 2 * ParamIDs::numDrums> instrumentsForAudio {};
     std::vector<std::pair<std::shared_ptr<const synth::drums::Instrument>, double>> retiredInstruments;   // 0.28.0: kept until its longest hit is over
     // DISK STREAMING (0.28.0): made when the first streamed instrument arrives (its rings take memory).
     std::unique_ptr<synth::drums::Streamer> diskStreamer;
     std::atomic<synth::drums::Streamer*> streamerForAudio { nullptr };
-    std::array<juce::String, ParamIDs::numDrums> instrumentRefs;   // what each slot holds or is loading
+    std::array<juce::String, 2 * ParamIDs::numDrums> instrumentRefs;   // what each slot holds or is loading (then each layer)
     std::unique_ptr<juce::ThreadPool> instrumentPool;   // made on the first load (most instances never load one)
     mutable std::mutex loadedLock;
     std::vector<std::pair<int, std::shared_ptr<const synth::drums::Instrument>>> loadedInstruments;

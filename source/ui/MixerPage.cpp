@@ -1152,6 +1152,11 @@ juce::Array<int> MixerPage::getChannelsInUse() const
                 else if (to >= 0)
                     channels.addIfNotAlreadyThere (to);
             }
+    // 0.29.0: the channels the drums' layers play into.
+    for (int k = 0; k < drums::numSlots; ++k)
+        if (processor.getLayerRef (k).isNotEmpty())
+            if (auto* out = processor.getParameters().getRawParameterValue (ParamIDs::drum (k, "LayerOut")); out != nullptr && out->load() > 0.5f)
+                channels.addIfNotAlreadyThere (juce::roundToInt (out->load()) - 1);
     // 0.26.0: SIMULATED MICS: each miked drum's mics, through the routes too.
     if (auto* on = processor.getParameters().getRawParameterValue (ParamIDs::drumsMicSim); on != nullptr && on->load() > 0.5f)
         for (int pc = 0; pc < drums::numPieces; ++pc)
