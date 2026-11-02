@@ -783,6 +783,12 @@ TEST_CASE ("TAP TO FIND page: open taps with a loop; FIND sorts by MATCH; FIND S
     auto& panel = page.getTapPanel();
     for (const auto b : { -0.04, 1.5, 4.0, 5.5 }) panel.addTap ((int) grooves::Lane::kick, b);   // beat 1 a hair early
     CHECK_THAT (panel.getRhythm().beats[(size_t) grooves::Lane::kick].back(), WithinAbs (7.96, 1e-9));
+    // 0.31.0: the same drum in the same place again (the next time round) replaces the first: still four kicks, the
+    // later one kept; and the taps may all be 40 ms late (the interface's latency).
+    panel.addTap ((int) grooves::Lane::kick, 1.55);
+    REQUIRE (panel.getRhythm().beats[(size_t) grooves::Lane::kick].size() == 4);
+    CHECK_THAT (panel.getRhythm().beats[(size_t) grooves::Lane::kick].front(), WithinAbs (1.55, 1e-9));   // (in time order)
+    CHECK (panel.getRhythm().slackBeats > 0.0);
     for (const auto b : { 1.0, 3.0, 5.0, 7.0 }) panel.addTap ((int) grooves::Lane::snare, b);
     panel.getFindButton().onClick();   // as clicking FIND
     CHECK_FALSE (t.p.isTapping());   // FIND closes it

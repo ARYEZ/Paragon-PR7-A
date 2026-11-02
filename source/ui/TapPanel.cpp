@@ -85,9 +85,9 @@ grooves::Rhythm TapPanel::getRhythm() const
     r.lengthBeats = loopBeats;
     r.beatsPerBar = beatsPerBar;
     for (const auto& t : taps)
-        r.beats[(size_t) t.lane].push_back (t.beat);
-    for (auto& b : r.beats)
-        std::sort (b.begin(), b.end());
+        r.add (t.lane, t.beat);
+    // 0.31.0: you hear the click late by your interface's latency, so taps land late: they may all be up to 40 ms late.
+    r.slackBeats = grooves::tapSlackBeats (tempo.getValue());
     return r;
 }
 
@@ -100,7 +100,16 @@ void TapPanel::addTap (int lane, double beat)
 {
     // Into the loop (a hair before its start is its end: it rounds to beat 1 on the grid).
     if (lane >= 0 && lane < grooves::numLanes)
-        taps.push_back ({ lane, std::fmod (std::fmod (beat, loopBeats) + loopBeats, loopBeats) });
+    {
+        const auto at = std::fmod (std::fmod (beat, loopBeats) + loopBeats, loopBeats);
+        // 0.31.0: a tap where this drum already has one (the same place on the grid, a later time round the loop)
+        // replaces it: playing it again corrects it rather than adding a second, slightly different hit.
+        const auto grid = getGrid();
+        const auto cells = juce::jmax (1, juce::roundToInt (loopBeats / grid));
+        const auto cellOf = [grid, cells] (double b) { return ((juce::roundToInt (b / grid) % cells) + cells) % cells; };
+        std::erase_if (taps, [&] (const auto& t) { return t.lane == lane && cellOf (t.beat) == cellOf (at); });
+        taps.push_back ({ lane, at });
+    }
     repaint();
 }
 

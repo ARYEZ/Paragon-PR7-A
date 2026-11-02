@@ -12,10 +12,11 @@ namespace grooves
         using synth::drums::notemap::Layout;
 
         // What was read from a file, kept with what it was read as (so a changed file, or folder map, is read again),
-        // and the index's format ("2": with FEEL, 0.5.0; "3": with the rhythm, 0.6.0; anything older is read again).
+        // and the index's format ("2": with FEEL, 0.5.0; "3": with the rhythm, 0.6.0; "4": the rhythm's velocities and
+        // the clap as a snare, 0.31.0; anything older is read again, once).
         juce::String stamp (const juce::File& f, Layout layout)
         {
-            return "3:" + juce::String (f.getSize()) + ":" + juce::String (f.getLastModificationTime().toMilliseconds()) + ":"
+            return "4:" + juce::String (f.getSize()) + ":" + juce::String (f.getLastModificationTime().toMilliseconds()) + ":"
                    + juce::String ((int) layout);
         }
 
@@ -154,6 +155,7 @@ namespace grooves
             std::lock_guard<std::mutex> guard (lock);
             entries = std::move (known);
             packsKnown = false;
+            matchScores.clear();
         }
     }
 
@@ -466,6 +468,7 @@ namespace grooves
                 std::lock_guard<std::mutex> guard (lock);
                 entries = std::move (known);
                 packsKnown = false;
+                matchScores.clear();
             }
             indexLoaded = true;
             sendChangeMessage();
@@ -568,6 +571,7 @@ namespace grooves
             std::lock_guard<std::mutex> guard (lock);
             entries = std::move (found);
             packsKnown = false;
+            matchScores.clear();
             indexLoaded = true;   // what's listed is newer than the index
         }
         // Written only when something changed (a file read anew, or one gone): 10,000 grooves are megabytes.
@@ -730,6 +734,15 @@ namespace grooves
             for (const auto& f : folders)
                 if (f.excluded && ! (within == f.folder || within.isAChildOf (f.folder)))
                     leftOut.push_back (f.folder);
+            if (tap != nullptr)
+            {
+                const auto key = tap->rhythm.encode() + "#" + juce::String (tap->rhythm.slackBeats, 6) + "#" + juce::String (tap->grid, 6);
+                if (key != matchKey)
+                {
+                    matchKey = key;
+                    matchScores.clear();
+                }
+            }
             for (const auto& e : entries)
             {
                 if (within != juce::File() && ! (subfolders ? e.file.isAChildOf (within) : e.file.getParentDirectory() == within))
@@ -749,7 +762,13 @@ namespace grooves
                     continue;
                 result.push_back (e);
                 if (tap != nullptr)
-                    result.back().match = e.rhythm != nullptr ? (float) match (tap->rhythm, *e.rhythm, tap->grid) : 0.0f;
+                {
+                    const auto key = e.file.getFullPathName();
+                    if (const auto known = matchScores.find (key); known != matchScores.end())
+                        result.back().match = known->second;
+                    else
+                        result.back().match = matchScores[key] = e.rhythm != nullptr ? (float) match (tap->rhythm, *e.rhythm, tap->grid) : 0.0f;
+                }
             }
         }
         const auto byName = [] (const Entry& a, const Entry& b)

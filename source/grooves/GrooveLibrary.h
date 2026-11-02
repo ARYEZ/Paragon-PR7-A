@@ -9,6 +9,7 @@
 
 #include <juce_events/juce_events.h>
 
+#include <map>
 #include <mutex>
 
 namespace grooves
@@ -232,6 +233,9 @@ namespace grooves
         std::vector<Entry> entries;
         mutable std::vector<juce::File> knownPacks;   // getPacks's, while packsKnown (both under the lock)
         mutable bool packsKnown = false;
+        // 0.31.0: each groove's match for the last tap search (filters and folders clicked during one ask again).
+        mutable juce::String matchKey;
+        mutable std::map<juce::String, float> matchScores;
         std::atomic<bool> scanning { false };
         std::atomic<int> scanned { 0 };
         std::unique_ptr<Scanner> scanner;

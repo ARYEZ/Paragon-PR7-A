@@ -1442,8 +1442,7 @@ void GroovesPage::findSimilar (int row)
     if (row < 0 || row >= (int) results.size() || results[(size_t) row].rhythm == nullptr)
         return;
     const auto& e = results[(size_t) row];
-    const auto perBar = e.numerator * 4.0 / juce::jmax (1, e.denominator);
-    findByRhythm (grooves::firstBars (*e.rhythm, 2.0 * perBar), tapPanel->getGrid(), e.name);
+    findByRhythm (grooves::searchRhythm (*e.rhythm), tapPanel->getGrid(), e.name);   // 0.31.0: up to four bars
 }
 
 bool GroovesPage::findLikeFile (const juce::File& file)
@@ -1453,7 +1452,7 @@ bool GroovesPage::findLikeFile (const juce::File& file)
     const auto g = grooves::read (file, layout);
     if (! g.has_value())
         return false;
-    findByRhythm (grooves::firstBars (grooves::rhythmOf (*g, layout), 2.0 * g->beatsPerBar()), tapPanel->getGrid(),
+    findByRhythm (grooves::searchRhythm (grooves::rhythmOf (*g, layout)), tapPanel->getGrid(),
                   file.getFileNameWithoutExtension());
     return true;
 }

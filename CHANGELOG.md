@@ -2,6 +2,43 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.31.0
+
+**FIND SIMILAR, retuned on real grooves.** You asked for an audit of FIND SIMILAR (tapping a rhythm, dropping a MIDI file, or searching with a groove's rhythm). I measured it on your two groove packs (Heavy Rock Grooves and EZX Electronic, 762 grooves) by simulating a player tapping each groove's first two bars: exactly, with a human wobble of 15-25 ms, late by 30-40 ms as audio latency makes taps, and as a sketch without the ghost notes. Then I checked whether the top result had the same main kick and snare pattern. This release fixes every weakness the audit found.
+
+**The results, top result right, before → after** (QUANTIZE 1/8, the default, unless it says otherwise):
+
+| What you do | Before | After |
+|---|---|---|
+| Drop a MIDI file (or search with a groove) | 72% | 100% |
+| Tap kick + snare like a person | 45% | 85% |
+| Tap kick + snare on 1/16 | 84% | 94% |
+| Tap kick + snare, 40 ms late (latency), 1/16 | 61% | 91% |
+| Tap kick + snare + hats or ride | 49% | 90% |
+| Tap a sketch: the main hits, no ghost notes (in the top 20) | 58% | 62% (78% on 1/16) |
+
+**What changed and why:**
+- **Taps are compared where you played them.** Before, your taps and the grooves were both rounded onto the QUANTIZE grid. On 1/8 every sixteenth sat exactly on the edge between two cells, so a few milliseconds decided where it went, and many grooves tied. Now a groove's hit counts as found when it's within half a QUANTIZE step of your tap (on 1/8: a sixteenth either way), the closest pairs first.
+- **Hits you didn't tap count lightly.** Before, every groove hit you didn't tap counted against it as much as a tap it lacked, so a groove with your backbeat plus ghost notes lost to a plain one.
+  - **Your taps are a sketch:** a groove's other hits now count a quarter.
+  - **Ghost notes count a tenth:** a ghost note is under 55% of that drum's loudest hit.
+  - **Detail finer than QUANTIZE** (sixteenths when you tap on 1/8) also counts a tenth.
+- **Latency is forgiven.** You hear the metronome late by your audio interface's delay, so taps land late. Your taps may now all be up to 40 ms late: the search tries them as played and up to 40 ms earlier, keeping the best. Only lateness is forgiven, not earliness.
+- **Grooves keep their velocities.** The groove index now stores each hit's velocity, which is how ghost notes are known. Your folders are read again once, in the background, the first time GROOVES opens (packs too).
+- **The clap counts as a snare.** Electronic grooves often put the backbeat on a clap. The pedal hat still isn't counted: it's a foot, not the hand you'd tap.
+- **Time signatures:** a groove in another bar length (3/4 against your 4/4) counts three quarters as much, so grooves in your time signature come first when they're equally close.
+- **Playing a drum again in the same place** on a later pass round the loop now replaces the earlier tap instead of adding a second, slightly different one.
+- **Dropped files and "search with its rhythm" use up to four bars** (two before).
+- **Speed:** a search over the 762 grooves takes 6-20 ms here (about a quarter of a second for 10,000). Clicking filters or folders afterwards reuses the scores, since they're remembered until you search again.
+
+**Honest limits:**
+- **Simulated taps:** the taps are simulated. A real player may be messier, or steadier.
+- **Ghost notes in your packs:** your packs' velocities are our guess (they mark accents, not velocities), so the ghost-note rule only helps with MIDI files that have real velocities.
+- **Sketches:** a sketch of only the main hits finds grooves close to that sketch first. A busier groove that contains your sketch (with double kicks, say) is usually in the top 20, not first. That's partly right, since a groove that *is* your sketch is a good answer, but tapping a little more of the detail finds it sooner.
+- **Our own design:** Toontrack doesn't publish how Tap2Find scores, so this is measured against your packs, not against theirs.
+
+**Tests:** sixteenths no longer on a knife edge at 1/8; ghost notes and loud extra hits scored as above; taps 39 ms late at 200 BPM found only with the allowance, early ones not moved; the clap as a snare; 3/4 against 4/4; velocities in the index (and an older index read as full); four bars searched; a repeated tap replacing the first.
+
 ## 0.30.0
 
 **A quicker window, GROOVES above all.** You found the whole interface sticky, the GROOVES tab worst. I measured it here with a library of 3,000 grooves (a test that opens the window, plays a groove and times every click and repaint), and found three causes:
