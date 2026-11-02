@@ -58,6 +58,9 @@ namespace synth::drums
 
         int getUnderruns() const noexcept { return underruns.load(); }   // samples the disk was late for, live
         int getActiveStreams() const noexcept;
+        // Tests: waits (up to `timeoutMs`) until every playing stream is as full as it can be, as an idle disk keeps
+        // it; true if it got there.
+        bool waitUntilFilled (int timeoutMs) noexcept;
 
     private:
         struct Stream

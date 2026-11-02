@@ -178,6 +178,7 @@ public:
     DrumGizmoImport importDrumGizmoKit (const juce::File& kitFile, KitLoad);
     int getStreamUnderruns() const noexcept { return diskStreamer != nullptr ? diskStreamer->getUnderruns() : 0; }
     int getActiveStreams() const noexcept { return diskStreamer != nullptr ? diskStreamer->getActiveStreams() : 0; }
+    bool waitForStreams (int timeoutMs = 5000) noexcept { return diskStreamer == nullptr || diskStreamer->waitUntilFilled (timeoutMs); }   // tests
     void rememberKit (const juce::String& name, const juce::File& folder);
     void loadInstrumentRef (int slot, const juce::String& ref);   // a slot's instrument by its reference (as presets keep it)
     juce::File knownKitFolder (const juce::String& name) const;

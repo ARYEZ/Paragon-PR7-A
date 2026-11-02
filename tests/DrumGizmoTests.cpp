@@ -281,13 +281,14 @@ TEST_CASE ("DISK STREAMING: a streamed kit holds only each hit's head and plays 
         REQUIRE (p->waitForInstruments());
         return p;
     };
-    // Snare and kick at once, then again 1 s later (the streams of the first freed and taken again), 3 s in all; live
-    // (not offline), each block waits a little, as a real audio callback comes at its time, so the disk thread keeps up.
+    // Snare and kick at once, then again 1 s later (the streams of the first freed and taken again), 3.5 s in all; live
+    // (not offline), each block waits until the disk thread has caught up, as an idle disk would between real audio
+    // callbacks (a busy shared build machine can't promise real-time disk reads, so the test doesn't race it).
     const auto play = [] (ParagonX1AudioProcessor& p, bool paced)
     {
         std::vector<float> out;
         juce::AudioBuffer<float> buffer (p.getTotalNumOutputChannels(), blockSize);
-        const auto blocks = (int) (3.0 * sampleRate / blockSize);
+        const auto blocks = (int) (3.5 * sampleRate / blockSize);   // past the second hit's end (3 s), so its streams are freed
         for (int b = 0; b < blocks; ++b)
         {
             juce::MidiBuffer midi;
@@ -298,7 +299,7 @@ TEST_CASE ("DISK STREAMING: a streamed kit holds only each hit's head and plays 
             p.processBlock (buffer, midi);
             out.insert (out.end(), buffer.getReadPointer (0), buffer.getReadPointer (0) + blockSize);
             if (paced)
-                juce::Thread::sleep (2);
+                p.waitForStreams();
         }
         return out;
     };

@@ -129,6 +129,38 @@ namespace synth::drums
         return n;
     }
 
+    bool Streamer::waitUntilFilled (int timeoutMs) noexcept
+    {
+        const auto until = juce::Time::getMillisecondCounter() + (juce::uint32) timeoutMs;
+        while (juce::Time::getMillisecondCounter() < until)
+        {
+            auto filled = true;
+            for (const auto& s : streams)
+            {
+                if (s->state.load (std::memory_order_acquire) != 2 || s->source == nullptr)
+                    continue;
+                // Full: all of it read, or no room for another chunk past its slowest voice.
+                const auto written = s->written.load (std::memory_order_acquire);
+                auto slowest = (juce::int64) s->source->headFrames;
+                const auto attached = s->attached.load (std::memory_order_acquire);
+                auto any = false;
+                for (int o = 0; o < maxOutputs; ++o)
+                    if ((attached & (1u << o)) != 0)
+                    {
+                        const auto r = s->read[(size_t) o].load (std::memory_order_acquire);
+                        slowest = any ? juce::jmin (slowest, r) : r;
+                        any = true;
+                    }
+                if (written < s->source->length && slowest + ringFrames - written >= chunkFrames)
+                    filled = false;
+            }
+            if (filled)
+                return true;
+            juce::Thread::sleep (1);
+        }
+        return false;
+    }
+
     juce::AudioFormatReader* Streamer::readerFor (const juce::File& file)
     {
         const auto key = file.getFullPathName();
