@@ -117,11 +117,13 @@ TEST_CASE ("The window opens as big as fits above the taskbar, up to 1824 x 1026
     CHECK (Editor::openingSize ({ 800, 600 }).x == 960);   // never below the smallest size
 }
 
-TEST_CASE ("The window opens on the DRUMS page; GROOVES, FX, PRESETS and SETTINGS cover it; the keyboard and OUTPUT stay", "[ui]")
+TEST_CASE ("The window opens on the DRUMS page; GROOVES, FX, PRESETS and SETTINGS cover it; the song strip and OUTPUT stay", "[ui]")
 {
     Window w;
-    auto* keyboard = inside<juce::MidiKeyboardComponent> (*w.view);
-    REQUIRE (keyboard != nullptr);
+    // 0.41.0: no on-screen keyboard anywhere; the SONG track has its strip.
+    CHECK (inside<juce::MidiKeyboardComponent> (*w.view) == nullptr);
+    auto* keyboard = &w.view->getSongTrack();
+    CHECK (keyboard->isVisible());
     CHECK (w.view->getPage() == MainView::Page::drums);
     CHECK (w.view->getDrumPage().isVisible());
     checkLayout (*w.view, "drums");
@@ -158,7 +160,7 @@ TEST_CASE ("The window opens on the DRUMS page; GROOVES, FX, PRESETS and SETTING
     CHECK (w.view->getDrumPage().isVisible());
 }
 
-TEST_CASE ("The on-screen keyboard plays the kit; its tinted keys follow ROOT and the sequencer's KEY", "[ui]")
+TEST_CASE ("Notes play the kit (the processor's keyboard state, as the DAW's notes); others don't", "[ui]")
 {
     Window w;
     w.processor.setPlayConfigDetails (0, 2, 48000.0, 256);
@@ -183,26 +185,5 @@ TEST_CASE ("The on-screen keyboard plays the kit; its tinted keys follow ROOT an
     CHECK (w.processor.getActiveVoices() == 0);
     w.processor.getKeyboardState().noteOff (1, 72, 0.0f);
 
-    auto& keys = w.view->getKeyboard();
-    const auto set = [&w] (const char* id, float value)
-    {
-        auto* parameter = w.processor.getParameters().getParameter (id);
-        parameter->setValueNotifyingHost (parameter->convertTo0to1 (value));
-    };
-    keys.repaint();
-    auto image = keys.createComponentSnapshot (keys.getLocalBounds());   // paints: follows the kit
-    CHECK (keys.isKitKey (36));
-    CHECK (keys.isKitKey (71));
-    CHECK_FALSE (keys.isKitKey (72));   // 36 keys from ROOT (0.36.0)
-    CHECK_FALSE (keys.isPatternKey (35));   // the sequencer isn't on KEY
-    set (ParamIDs::drumsRoot, 48.0f);
-    set (ParamIDs::dseqOn, 1.0f);
-    set (ParamIDs::dseqTrigger, 1.0f);   // KEY
-    image = keys.createComponentSnapshot (keys.getLocalBounds());
-    CHECK_FALSE (keys.isKitKey (36));
-    CHECK (keys.isKitKey (48));
-    CHECK (keys.isKitKey (67));
-    CHECK (keys.isPatternKey (44));
-    CHECK (keys.isPatternKey (47));
-    CHECK_FALSE (keys.isPatternKey (43));
+    // (0.41.0: the on-screen keyboard and its tinted keys are gone; the kit still plays from notes, as above.)
 }

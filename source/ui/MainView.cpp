@@ -28,61 +28,9 @@ namespace
 
     // In canvas pixels.
     const juce::Rectangle<int> outputArea { 1496, 68, 92, 672 };
-    const juce::Rectangle<int> keyboardArea { 12, 750, 1576, 138 };
+    const juce::Rectangle<int> stripArea { 12, 750, 1576, 138 };
     const juce::Rectangle<int> pageArea { 12, 68, 1476, 672 };   // the pages, beside the OUTPUT strip
     const juce::Rectangle<int> machineArea { 10, 66, 1580, 826 };   // THE DRUM MACHINE: everything under the header
-}
-
-//==============================================================================
-KitKeyboard::KitKeyboard (ParagonX1AudioProcessor& p, juce::MidiKeyboardState& state, Orientation orientation)
-    : juce::MidiKeyboardComponent (state, orientation), processor (p)
-{
-    followKit();
-    poll.callback = [this] { followKit(); };
-    poll.startTimerHz (4);
-}
-
-void KitKeyboard::followKit()
-{
-    const auto root = juce::roundToInt (processor.getParameters().getRawParameterValue (ParamIDs::drumsRoot)->load());
-    const auto sequencer = processor.getDrumSeqSettings();
-    const auto keys = sequencer.on && sequencer.trigger == synth::drumseq::Trigger::key
-                   && processor.getMapLayout() == synth::drums::notemap::Layout::root;
-    const auto newMap = processor.getNoteMap();
-    if (root != kitRoot || keys != patternKeys || newMap != map)
-    {
-        kitRoot = root;
-        patternKeys = keys;
-        map = newMap;
-        repaint();
-    }
-}
-
-void KitKeyboard::paint (juce::Graphics& g)
-{
-    followKit();   // as it is now (the timer only notices changes to repaint)
-    juce::MidiKeyboardComponent::paint (g);
-}
-
-void KitKeyboard::drawWhiteNote (int note, juce::Graphics& g, juce::Rectangle<float> area, bool isDown, bool isOver,
-                                 juce::Colour lineColour, juce::Colour textColour)
-{
-    juce::MidiKeyboardComponent::drawWhiteNote (note, g, area, isDown, isOver, lineColour, textColour);
-    if ((isKitKey (note) || isPatternKey (note)) && ! isDown)
-    {
-        g.setColour (ParagonColours::accent.withAlpha (isKitKey (note) ? 0.28f : 0.12f));
-        g.fillRect (area.withTrimmedTop (area.getHeight() * 0.62f).reduced (1.0f, 0.0f));
-    }
-}
-
-void KitKeyboard::drawBlackNote (int note, juce::Graphics& g, juce::Rectangle<float> area, bool isDown, bool isOver, juce::Colour noteFillColour)
-{
-    juce::MidiKeyboardComponent::drawBlackNote (note, g, area, isDown, isOver, noteFillColour);
-    if ((isKitKey (note) || isPatternKey (note)) && ! isDown)
-    {
-        g.setColour (ParagonColours::accent.withAlpha (isKitKey (note) ? 0.55f : 0.25f));
-        g.fillRect (area.withTrimmedTop (area.getHeight() * 0.7f).reduced (area.getWidth() * 0.2f, 2.0f));
-    }
 }
 
 //==============================================================================
@@ -125,7 +73,6 @@ void GainColumn::resized()
 MainView::MainView (ParagonX1AudioProcessor& processorToShow)
     : audioProcessor (processorToShow),
       outputColumn ("OUTPUT", processorToShow.getParameters(), ParamIDs::outputGain, processorToShow.getOutputMeter()),
-      keyboard (processorToShow, processorToShow.getKeyboardState(), juce::MidiKeyboardComponent::horizontalKeyboard),
       songTrack (processorToShow),
       drumPage (processorToShow),
       groovesPage (processorToShow),
@@ -176,23 +123,9 @@ MainView::MainView (ParagonX1AudioProcessor& processorToShow)
                                                                       &outputColumn })
         addAndMakeVisible (component);
 
-    // The keyboard, in the plugin's colours: dark keys lit red-orange as they're played.
-    keyboard.setColour (juce::MidiKeyboardComponent::whiteNoteColourId, juce::Colour (0xffdcd7da));
-    keyboard.setColour (juce::MidiKeyboardComponent::blackNoteColourId, juce::Colour (0xff141115));
-    keyboard.setColour (juce::MidiKeyboardComponent::keySeparatorLineColourId, juce::Colour (0xff6b6569));
-    keyboard.setColour (juce::MidiKeyboardComponent::mouseOverKeyOverlayColourId, ParagonColours::accent.withAlpha (0.25f));
-    keyboard.setColour (juce::MidiKeyboardComponent::keyDownOverlayColourId, ParagonColours::glow.withAlpha (0.85f));
-    keyboard.setColour (juce::MidiKeyboardComponent::shadowColourId, juce::Colours::black.withAlpha (0.5f));
-    keyboard.setColour (juce::MidiKeyboardComponent::upDownButtonBackgroundColourId, juce::Colour (0xff151217));
-    keyboard.setColour (juce::MidiKeyboardComponent::upDownButtonArrowColourId, ParagonColours::text);
-    keyboard.setColour (juce::MidiKeyboardComponent::textLabelColourId, ParagonColours::inkDim);
-    keyboard.setAvailableRange (24, 107);   // seven octaves shown (notes outside it from the DAW still play, in the kit's keys)
-    keyboard.setOctaveForMiddleC (notenames::middleCOctave.load());
-    keyboard.setWantsKeyboardFocus (false);   // computer-key playing would fight the DAW's own shortcuts
-    keyboard.setScrollButtonsVisible (false);  // all seven octaves fit
-    addAndMakeVisible (keyboard);
-    // THE SONG TRACK: in the keyboard's place (KEYS | SONG switches); a groove dropped on it from the list is a block.
-    addChildComponent (songTrack);
+    // THE SONG TRACK: the strip under the pages (0.41.0: the on-screen keyboard that shared it is gone, at the owner's
+    // ask); a groove dropped on it from the list is a block.
+    addAndMakeVisible (songTrack);
     songTrack.onGrooveDropped = [this] (int row, double beat) { groovesPage.addRowToSong (row, beat); };
     songTrack.onEditBlock = [this] (int block)
     {
@@ -260,18 +193,6 @@ MainView::MainView (ParagonX1AudioProcessor& processorToShow)
         if (row >= 0 && row < (int) results.size())
             songCreator.setSource (results[(size_t) row].file);
     };
-    for (auto* tab : { &keysTab, &songTab })
-    {
-        tab->setClickingTogglesState (false);
-        tab->setRadioGroupId (0x50e6);
-        tab->setColour (juce::TextButton::textColourOnId, ParagonColours::accent);   // the one showing, lit as the page tabs are
-        addAndMakeVisible (tab);
-    }
-    keysTab.setTooltip ("The on-screen keyboard: play the kit with the mouse.");
-    songTab.setTooltip ("The song track: grooves laid out as a song, played with your DAW.");
-    keysTab.onClick = [this] { showSong (false); };
-    songTab.onClick = [this] { showSong (true); };
-    keysTab.setToggleState (true, juce::dontSendNotification);
     groovesPage.onAddedToSong = [this] { showSong (true); };
 
     addAndMakeVisible (drumPage);
@@ -317,10 +238,7 @@ void MainView::updateMachine()
         progressBox.toFront (false);   // (a long job's box stays over everything)
     drumPage.setVisible (page == Page::drums && ! shown);
     outputColumn.setVisible (! shown);
-    keysTab.setVisible (! shown);
-    songTab.setVisible (! shown);
-    keyboard.setVisible (! shown && ! songShown);
-    songTrack.setVisible (! shown && songShown);
+    songTrack.setVisible (! shown);
 }
 
 void MainView::refreshRig()
@@ -358,11 +276,9 @@ void MainView::timerCallback()
     updateDragHover (juce::Time::getMillisecondCounterHiRes(), groovesPage.isDragAndDropActive() || isDragAndDropActive());
     // NOTE NAMES (0.35.1): every note's name follows SETTINGS' choice (middle C as C3 or C4).
     if (const auto* names = audioProcessor.getParameters().getRawParameterValue (ParamIDs::noteNames))
-        if (const auto octave = notenames::octaveForChoice (juce::roundToInt (names->load())); octave != notenames::middleCOctave.load()
-                                                                                                 || octave != keyboard.getOctaveForMiddleC())
+        if (const auto octave = notenames::octaveForChoice (juce::roundToInt (names->load())); octave != notenames::middleCOctave.load())
         {
             notenames::middleCOctave = octave;
-            keyboard.setOctaveForMiddleC (octave);
             repaint();
         }
     refreshRig();
@@ -483,8 +399,8 @@ void MainView::paintBackground (juce::Graphics& g)
     g.setColour (ParagonColours::panelEdge);
     g.drawHorizontalLine (juce::roundToInt (64.0f * mockScale), 0.0f, (float) getWidth());
 
-    // The keyboard's frame.
-    DockStyle::drawPanel (g, keyboardArea.toFloat().expanded (0.0f, 0.0f));
+    // The song strip's frame (the keyboard's until 0.41.0).
+    DockStyle::drawPanel (g, stripArea.toFloat().expanded (0.0f, 0.0f));
 }
 
 void MainView::resized()
@@ -506,16 +422,7 @@ void MainView::resized()
 
     outputColumn.setBounds (outputArea);
 
-    // Seven octaves from MIDI note 24, filling the strip (the width first: changing it moves the view).
-    auto keys = keyboardArea.reduced (8, 6);
-    auto switches = keys.removeFromLeft (64);
-    keys.removeFromLeft (8);
-    keysTab.setBounds (switches.removeFromTop (switches.getHeight() / 2).reduced (0, 3));
-    songTab.setBounds (switches.reduced (0, 3));
-    songTrack.setBounds (keys);
-    keyboard.setBounds (keys);
-    keyboard.setKeyWidth ((float) keys.getWidth() / 49.0f);   // seven octaves: 49 white keys
-    keyboard.setLowestVisibleKey (24);
+    songTrack.setBounds (stripArea.reduced (8, 6));   // the whole strip (0.41.0: no keyboard, no KEYS | SONG)
 
     fxPage.setBounds (pageArea);
     drumPage.setBounds (pageArea);
@@ -529,13 +436,10 @@ void MainView::resized()
     progressBox.setCentrePosition (getLocalBounds().getCentre());
 }
 
-void MainView::showSong (bool show)
+void MainView::showSong (bool)
 {
-    songShown = show;
-    songTrack.setVisible (show && ! machine.isVisible());
-    keyboard.setVisible (! show && ! machine.isVisible());
-    keysTab.setToggleState (! show, juce::dontSendNotification);
-    songTab.setToggleState (show, juce::dontSendNotification);
+    // 0.41.0: the song track is always the strip under the pages (the keyboard it switched with is gone).
+    songTrack.setVisible (! machine.isVisible());
 }
 
 void MainView::openSongCreator (const juce::File& source)

@@ -37,44 +37,14 @@ private:
     LevelMeter meter;
 };
 
-// The on-screen keyboard, with the keys the note map plays a drum on tinted (and, with the ROOT layout and the sequencer
-// on KEY, the four that start its patterns, more faintly).
-class KitKeyboard final : public juce::MidiKeyboardComponent
-{
-public:
-    KitKeyboard (ParagonX1AudioProcessor&, juce::MidiKeyboardState&, Orientation);
-    bool isKitKey (int note) const noexcept { return note >= 0 && note < 128 && map[(size_t) note] >= 0; }
-    bool isPatternKey (int note) const noexcept { return patternKeys && note >= kitRoot - 4 && note < kitRoot; }
-    void paint (juce::Graphics&) override;
-
-private:
-    void drawWhiteNote (int note, juce::Graphics&, juce::Rectangle<float> area, bool isDown, bool isOver,
-                        juce::Colour lineColour, juce::Colour textColour) override;
-    void drawBlackNote (int note, juce::Graphics&, juce::Rectangle<float> area, bool isDown, bool isOver,
-                        juce::Colour noteFillColour) override;
-    void followKit();
-
-    // Its own timer (the keyboard already has one for scrolling).
-    struct Poll final : juce::Timer
-    {
-        std::function<void()> callback;
-        void timerCallback() override { callback(); }
-    };
-    ParagonX1AudioProcessor& processor;
-    bool patternKeys = false;
-    int kitRoot = 36;
-    synth::drums::notemap::Map map = synth::drums::notemap::rootLayout (36);
-    Poll poll;
-};
-
 // Everything in the plugin window, laid out on a fixed 1600 x 900 canvas
 // (the editor scales it to the window, staying sharp: it's all vectors).
 //
 //   header:   logo | DRUMS FX PRESETS SETTINGS | < preset > | undo redo save settings
 //   DRUMS:    the kit and the chosen drum (or the sequencer)       | OUTPUT
-//   keyboard: the on-screen keyboard, always there (play the kit with the mouse)
+//   strip:    the SONG track (0.41.0: the on-screen keyboard that shared it is gone)
 //
-// FX, PRESETS and SETTINGS cover the DRUMS page; the keyboard and OUTPUT stay.
+// FX, PRESETS and SETTINGS cover the DRUMS page; the song strip and OUTPUT stay.
 class MainView final : public juce::Component,
                        public juce::DragAndDropContainer,
                        public juce::DragAndDropTarget,
@@ -99,7 +69,6 @@ public:
     GroovesPage& getGroovesPage() noexcept { return groovesPage; }
     MixerPage& getMixerPage() noexcept { return mixerPage; }
     SettingsPage& getSettingsPage() noexcept { return settingsPage; }
-    KitKeyboard& getKeyboard() noexcept { return keyboard; }
     SongTrack& getSongTrack() noexcept { return songTrack; }
     BlockEditor& getBlockEditor() noexcept { return blockEditor; }
     SongCreator& getSongCreator() noexcept { return songCreator; }
@@ -115,11 +84,11 @@ public:
     void updateDragHover (double nowMs, bool dragStillOn);
     bool isPeekingAtSequencer() const noexcept { return dragPeek; }
     juce::Rectangle<int> getDrumsTabBounds() const { return drumsTab.getBounds(); }
-    // THE SONG TRACK (0.8.0): the strip under the pages shows the keyboard or the song (KEYS | SONG beside it).
+    // THE SONG TRACK (0.8.0): the strip under the pages (since 0.41.0 only it: no keyboard, no KEYS | SONG).
     void showSong (bool);
-    bool isShowingSong() const noexcept { return songShown; }
+    bool isShowingSong() const noexcept { return songTrack.isVisible(); }   // (0.41.0: always, but under the machine)
     // THE DRUM MACHINE (0.38.0): the DRUMS page's MACHINE view, over everything under the header (the page, the
-    // keyboard or song strip and OUTPUT hidden under it while it's shown).
+    // song strip and OUTPUT hidden under it while it's shown).
     MachineView& getMachine() noexcept { return machine; }
     // 0.40.0: a long job's progress (BOUNCE, a kit loading for more than half a second), PR7-S's box over the window.
     ProgressBox& getProgressBox() noexcept { return progressBox; }
@@ -161,9 +130,7 @@ private:
                settingsButton { "Settings", Icons::Type::settings };
 
     GainColumn outputColumn;
-    KitKeyboard keyboard;
     SongTrack songTrack;
-    juce::TextButton keysTab { "KEYS" }, songTab { "SONG" };
     // What the knobs show (links, learning), as last drawn: a change repaints them.
     MidiLinks shownLinks;
     juce::String shownLearning;
@@ -178,7 +145,6 @@ private:
     BlockEditor blockEditor;   // EDIT BLOCK (0.9.0): over the pages, opened from the song track
     SongCreator songCreator;   // THE SONG CREATOR (0.10.0): over the pages too (one of the two at a time)
     MachineView machine;       // THE DRUM MACHINE (0.38.0): over everything under the header
-    bool songShown = false;    // the strip shows the song (not the keyboard), when the machine isn't over it
     ProgressBox progressBox;   // over everything while a long job runs (0.40.0)
     double loadingSince = -1.0;
     double hoverSince = -1.0;  // a drag over the DRUMS tab since then (-1: none)

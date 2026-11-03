@@ -2,6 +2,16 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.41.0
+
+**The on-screen keyboard is gone, as you asked.** The strip under the pages is now the SONG track on its own, always there, using the whole strip. The KEYS | SONG switch has gone with the keyboard.
+
+- **Playing a drum by mouse:** click it on the KIT VIEW, a pad on the DRUM MACHINE, or a row of the drum list on the DRUMS page.
+- **Your DAW, MIDI controller or e-kit** still plays the kit exactly as before.
+- **The DRUM MACHINE** still covers the strip while it's shown.
+
+**Tests:** no keyboard anywhere in the window; the song strip on every page; notes still play the kit. pluginval passes at strictness 10.
+
 ## 0.40.0
 
 **A lighter plugin, and PR7-S's progress box.** You asked for a check of the whole code for ways to run better, starting with the drum machine. Every change below was measured before and after; the sound is unchanged (every test still matches its expected sound sample for sample).

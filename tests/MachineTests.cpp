@@ -233,7 +233,7 @@ TEST_CASE ("THE DRUM MACHINE's face: over the window, its steps, columns, keys, 
     drums.showView (DrumPage::View::machine);
     CHECK (view->isShowingMachine());
     CHECK_FALSE (drums.isVisible());
-    CHECK_FALSE (view->getKeyboard().isVisible());
+    CHECK_FALSE (view->getSongTrack().isVisible());
     CHECK (machine.getBounds().getY() >= 64);
     checkInside (machine);
     view->showPage (MainView::Page::grooves);
@@ -243,7 +243,7 @@ TEST_CASE ("THE DRUM MACHINE's face: over the window, its steps, columns, keys, 
     machine.getKey ("KIT").onClick();
     CHECK_FALSE (view->isShowingMachine());
     CHECK (drums.isVisible());
-    CHECK (view->getKeyboard().isVisible());
+    CHECK (view->getSongTrack().isVisible());
     CHECK (drums.getView() == DrumPage::View::kit);
     drums.showView (DrumPage::View::machine);
 
