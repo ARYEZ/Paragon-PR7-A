@@ -714,8 +714,11 @@ void ParagonX1AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
 
     // Some hosts occasionally send more samples than they promised in
     // prepareToPlay; work through an oversized block in promised-size pieces.
+    riffFirstChunk = true;
+    riffFrom = -1.0;
     for (int start = 0; start < numSamples; start += preparedBlockSize)
         processChunk (buffer, keyboardMidi, kit, start, juce::jmin (preparedBlockSize, numSamples - start), aux.from (start));
+    runRiff (buffer, numSamples);   // RIFF MATCH: the riff with the groove preview (MAIN, after everything, as the click)
 
     runTapping (buffer, keyboardMidi, kit);   // TAP TO FIND: its taps and its metronome (after everything: the click on top)
     activeVoices = drumKit.getNumActiveVoices();
@@ -917,6 +920,7 @@ void ParagonX1AudioProcessor::retireOldData()
     std::erase_if (retiredSamples, [now] (const auto& retired) { return now - retired.second > retiredTableMs; });
     std::erase_if (retiredInstruments, [now] (const auto& retired) { return now - retired.second > retiredTableMs; });
     std::erase_if (retiredGrooves, [now] (const auto& retired) { return now - retired.second > retiredTableMs; });
+    std::erase_if (retiredRiffs, [now] (const auto& retired) { return now - retired.second > retiredTableMs; });
     std::erase_if (retiredSongs, [now] (const auto& retired) { return now - retired.second > retiredTableMs; });
 }
 
@@ -2682,7 +2686,63 @@ void ParagonX1AudioProcessor::applyGroovePreview()
 
 double ParagonX1AudioProcessor::grooveTempo (double grooveBpm) const noexcept
 {
+    // RIFF MATCH: while a riff is heard with them, the previews play at its tempo.
+    if (const auto* riff = riffForAudio.load(); riff != nullptr && riffListening.load())
+        return riff->bpm * grooveFactor.load();
     return (grooveSongTempo.load() ? juce::jmax (1.0, hostBpm.load()) : grooveBpm) * grooveFactor.load();
+}
+
+void ParagonX1AudioProcessor::setRiff (std::shared_ptr<const juce::AudioBuffer<float>> audio, double rate, double startSeconds,
+                                       double loopSeconds, double bpm)
+{
+    auto riff = std::make_shared<RiffPlayback>();
+    riff->audio = std::move (audio);
+    riff->rate = juce::jmax (1.0, rate);
+    riff->start = juce::jmax (0.0, startSeconds);
+    riff->loop = juce::jmax (0.05, loopSeconds);
+    riff->bpm = juce::jlimit (20.0, 400.0, bpm);
+    if (riffPlayback != nullptr)
+        retiredRiffs.emplace_back (riffPlayback, juce::Time::getMillisecondCounterHiRes());
+    riffPlayback = riff;
+    riffForAudio = riffPlayback.get();
+}
+
+void ParagonX1AudioProcessor::clearRiff()
+{
+    riffForAudio = nullptr;
+    if (riffPlayback != nullptr)
+        retiredRiffs.emplace_back (riffPlayback, juce::Time::getMillisecondCounterHiRes());
+    riffPlayback = nullptr;
+}
+
+void ParagonX1AudioProcessor::runRiff (juce::AudioBuffer<float>& buffer, int numSamples) noexcept
+{
+    // The riff's part, looping, from the preview's start: the preview's seconds since it began (its beats over its
+    // tempo) into the part; read between samples (linear) at the riff's own rate.
+    const auto* riff = riffForAudio.load();
+    if (riff == nullptr || riff->audio == nullptr || ! riffListening.load() || riffFrom < 0.0 || riffPerSample <= 0.0)
+        return;
+    const auto& audio = *riff->audio;
+    const auto frames = audio.getNumSamples();
+    if (frames < 2)
+        return;
+    const auto* x = audio.getReadPointer (0);
+    const auto rate = getSampleRate();
+    const auto secondsAtStart = riffFrom / (riffPerSample * rate);
+    const auto gain = riffLevel.load();
+    const auto channels = juce::jmin (2, buffer.getNumChannels(), getMainBusNumOutputChannels());
+    for (int i = 0; i < numSamples; ++i)
+    {
+        const auto t = secondsAtStart + i / rate;
+        const auto at = (riff->start + std::fmod (t, riff->loop)) * riff->rate;
+        const auto k = (int) at;
+        if (k < 0 || k + 1 >= frames)
+            continue;
+        const auto f = (float) (at - k);
+        const auto v = gain * (x[k] + f * (x[k + 1] - x[k]));
+        for (int c = 0; c < channels; ++c)
+            buffer.addSample (c, i, v);
+    }
 }
 
 int ParagonX1AudioProcessor::collectGrooveHits (int numSamples) noexcept
@@ -2712,6 +2772,13 @@ int ParagonX1AudioProcessor::collectGrooveHits (int numSamples) noexcept
     }
     const auto from = grooveBaseBeat + (double) grooveSamples * perSample;
     const auto to = grooveBaseBeat + (double) (grooveSamples + numSamples) * perSample;
+    if (riffFirstChunk)
+    {
+        // RIFF MATCH: where the preview is at the block's start (runRiff follows it).
+        riffFirstChunk = false;
+        riffFrom = from;
+        riffPerSample = perSample;
+    }
     auto count = 0;
     const auto addCycle = [&] (double cycleStart, double limit)
     {

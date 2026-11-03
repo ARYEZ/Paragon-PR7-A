@@ -581,6 +581,47 @@ TEST_CASE ("Render the editor to a PNG", "[.][snapshot]")
             if (tap == "2")
                 panel.getFindButton().onClick();
         }
+        // RIFF MATCH (0.32.0): =1 a generated guitar riff (4 bars at 120 BPM, palm-muted chugs and accents, a lead-in)
+        // in its panel; =2 FIND clicked.
+        if (const auto riff = env ("PARAGON_SNAPSHOT_RIFF"); riff.isNotEmpty())
+        {
+            grooves.clearFilters();
+            const auto file = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("Chug Riff.wav");
+            const double rate = 48000.0, bpm = 120.0, lead = 0.35;
+            juce::AudioBuffer<float> audio (1, (int) ((lead + 16 * 0.5 + 0.6) * rate));
+            audio.clear();
+            std::vector<std::pair<double, float>> notes;
+            for (int bar = 0; bar < 4; ++bar)
+                for (int s16 = 0; s16 < 16; ++s16)
+                {
+                    const auto accent = s16 == 0 || s16 == 3 || s16 == 6 || s16 == 10 || (bar % 2 == 1 && s16 == 13);
+                    if (accent || s16 % 2 == 0)
+                        notes.push_back ({ bar * 4.0 + s16 * 0.25, accent ? 1.0f : 0.35f });
+                }
+            for (size_t k = 0; k < notes.size(); ++k)
+            {
+                const auto first = (int) ((lead + notes[k].first * 60.0 / bpm) * rate);
+                const auto next = k + 1 < notes.size() ? (int) ((lead + notes[k + 1].first * 60.0 / bpm) * rate) - first : (int) (0.5 * rate);
+                for (int i = 0; first + i < audio.getNumSamples() && i < juce::jmin ((int) (0.5 * rate), next + 144); ++i)
+                {
+                    const auto t = i / rate;
+                    auto v = 0.0;
+                    for (int h = 1; h <= 8; ++h)
+                        v += std::sin (juce::MathConstants<double>::twoPi * 82.4 * h * t) / h * std::exp (-t * (3.0 + 2.0 * h));
+                    v *= notes[k].second * std::exp (-t * (notes[k].second > 0.5f ? 4.0 : 18.0)) * juce::jmin (1.0, t / 0.002) * (i < next ? 1.0 : 1.0 - (i - next) / 144.0);
+                    audio.addSample (0, first + i, (float) (std::tanh (5.0 * v) * 0.5));
+                }
+            }
+            file.deleteFile();
+            {
+                juce::WavAudioFormat wav;
+                std::unique_ptr<juce::AudioFormatWriter> w (wav.createWriterFor (new juce::FileOutputStream (file), rate, 1, 24, {}, 0));
+                w->writeFromAudioSampleBuffer (audio, 0, audio.getNumSamples());
+            }
+            grooves.loadRiff (file, true);
+            if (riff == "2")
+                grooves.getRiffPanel().getFindButton().onClick();
+        }
         // GROOVE PARTS: the playing groove's HI-HAT ticked.
         if (env ("PARAGON_SNAPSHOT_PARTS") == "1")
             grooves.toggleDrumPart ((int) grooves::DrumPart::hats);

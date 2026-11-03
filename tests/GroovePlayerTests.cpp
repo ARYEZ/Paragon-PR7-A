@@ -806,7 +806,8 @@ TEST_CASE ("TAP TO FIND page: open taps with a loop; FIND sorts by MATCH; FIND S
     const auto dropped = t.folder.getChildFile ("Elsewhere/half time.mid");
     write (dropped, { { 0, 36 }, { 2, 38 }, { 4, 36 }, { 6, 38 } });
     CHECK (page.isInterestedInFileDrag ({ dropped.getFullPathName() }));
-    CHECK_FALSE (page.isInterestedInFileDrag ({ t.folder.getChildFile ("x.wav").getFullPathName() }));
+    CHECK_FALSE (page.isInterestedInFileDrag ({ t.folder.getChildFile ("x.txt").getFullPathName() }));
+    CHECK (page.isInterestedInFileDrag ({ t.folder.getChildFile ("x.wav").getFullPathName() }));   // 0.32.0: a riff
     page.filesDropped ({ dropped.getFullPathName() }, 0, 0);
     CHECK (page.getResults()[0].name == "C Half");
 
@@ -963,4 +964,123 @@ TEST_CASE ("GROOVE PARTS page: the chosen groove's parts counted; ticking; the p
     for (const auto& n : c.notes)
         rows.insert (n.row);
     CHECK (rows == std::set<int> { SD, CH, OH });
+}
+
+//==============================================================================
+// RIFF MATCH (0.32.0)
+TEST_CASE ("RIFF MATCH: the riff is heard with the preview, from its start, looping its part, at its own tempo and rate", "[riff][groove-player]")
+{
+    Plugin t;
+    // A riff at 44.1 kHz (not the plugin's rate): silence, a click where its part starts.
+    const auto rate = 44100.0;
+    auto audio = std::make_shared<juce::AudioBuffer<float>> (1, (int) (3.0 * rate));
+    audio->clear();
+    const auto start = 0.5, loop = 0.8;   // 2 beats at 150 BPM
+    audio->setSample (0, (int) (start * rate), 1.0f);
+    t.p.setRiff (audio, rate, start, loop, 150.0);
+    t.p.setRiffLevel (1.0f);
+    const auto peakIn = [] (const std::vector<float>& x, int from, int to)
+    {
+        auto best = from;
+        for (int i = from; i < juce::jmin (to, (int) x.size()); ++i)
+            if (std::abs (x[(size_t) i]) > std::abs (x[(size_t) best]))
+                best = i;
+        return best;
+    };
+    // Nothing previewing: not heard.
+    auto out = t.play (0.3);
+    CHECK (std::abs (out[(size_t) peakIn (out, 0, (int) out.size())]) < 1.0e-6f);
+
+    // A preview (a note no drum plays: silent drums): the click at its start, then every 0.8 s, to the sample.
+    t.p.playGroove (groove ({ { 0.0, 0 } }, 90.0), 0, true);
+    out = t.play (2.0);
+    for (int k = 0; k < 3; ++k)
+    {
+        const auto expected = (int) std::lround (k * loop * sampleRate);
+        const auto at = peakIn (out, juce::jmax (0, expected - 200), expected + 200);
+        INFO ("loop " << k << ": click at " << at << ", expected " << expected);
+        CHECK (std::abs (at - expected) <= 1);
+        CHECK (std::abs (out[(size_t) at]) > 0.4f);
+    }
+    // The preview plays at the riff's tempo (150 BPM), not the groove's or the song's: 2 s is 5 beats (4-beat loop: 1).
+    CHECK_THAT (t.p.getGroovePosition(), WithinAbs (std::fmod (std::ceil (2.0 * sampleRate / blockSize) * blockSize / sampleRate * 2.5, 4.0), 1e-6));
+
+    // LISTEN off: the drums alone again (and their own tempo).
+    t.p.setRiffListening (false);
+    t.p.playGroove (groove ({ { 0.0, 0 } }, 90.0), 0, true);
+    out = t.play (1.0);
+    CHECK (std::abs (out[(size_t) peakIn (out, 0, (int) out.size())]) < 1.0e-6f);
+    t.p.setRiffListening (true);
+    // Put away: gone.
+    t.p.clearRiff();
+    t.p.playGroove (groove ({ { 0.0, 0 } }, 90.0), 0, true);
+    out = t.play (1.0);
+    CHECK (std::abs (out[(size_t) peakIn (out, 0, (int) out.size())]) < 1.0e-6f);
+    CHECK_FALSE (t.p.hasRiff());
+}
+
+TEST_CASE ("RIFF MATCH page: a riff dropped finds the groove whose kick follows it; its chip; put away", "[riff][groove-player][ui]")
+{
+    Plugin t;
+    const auto pack = t.folder.getChildFile ("Pack");
+    const auto write = [&] (const juce::File& f, std::vector<std::pair<double, int>> notes, int channel = 10, double bpm = 0.0)
+    {
+        juce::MidiMessageSequence track;
+        if (bpm > 0.0)
+            track.addEvent (juce::MidiMessage::tempoMetaEvent (juce::roundToInt (60.0e6 / bpm)));
+        for (const auto& [beat, note] : notes)
+        {
+            track.addEvent (juce::MidiMessage::noteOn (channel, note, (juce::uint8) 100).withTimeStamp (beat * 480));
+            track.addEvent (juce::MidiMessage::noteOff (channel, note).withTimeStamp (beat * 480 + 100));
+        }
+        juce::MidiFile file;
+        file.setTicksPerQuarterNote (480);
+        track.updateMatchedPairs();
+        file.addTrack (track);
+        f.getParentDirectory().createDirectory();
+        juce::FileOutputStream out (f);
+        file.writeTo (out);
+    };
+    // Three grooves: their kicks differ, their snares the same backbeat.
+    write (pack.getChildFile ("A Rock.mid"), { { 0, 36 }, { 2, 36 }, { 4, 36 }, { 6, 36 }, { 1, 38 }, { 3, 38 }, { 5, 38 }, { 7, 38 } });
+    write (pack.getChildFile ("B Push.mid"), { { 0, 36 }, { 0.75, 36 }, { 1.5, 36 }, { 2.5, 36 }, { 4, 36 }, { 4.75, 36 }, { 5.5, 36 }, { 6.5, 36 },
+                                               { 1, 38 }, { 3, 38 }, { 5, 38 }, { 7, 38 } });
+    write (pack.getChildFile ("C Floor.mid"), { { 0, 36 }, { 1, 36 }, { 2, 36 }, { 3, 36 }, { 4, 36 }, { 5, 36 }, { 6, 36 }, { 7, 36 },
+                                                { 1, 38 }, { 3, 38 }, { 5, 38 }, { 7, 38 } });
+    REQUIRE (t.p.getGrooveLibrary().addFolder (pack));
+    t.p.getGrooveLibrary().scanNow();
+    GroovesPage page (t.p);
+    page.setSize (1476, 672);
+    page.refresh();
+    REQUIRE (page.getResults().size() == 3);
+
+    // A bass riff (MIDI, at 110 BPM) on B's kick, with passing notes between.
+    const auto riffFile = t.folder.getChildFile ("Elsewhere/my bass riff.mid");
+    write (riffFile, { { 0, 40 }, { 0.75, 40 }, { 1.5, 43 }, { 2.5, 45 }, { 3.25, 45 }, { 4, 40 }, { 4.75, 40 }, { 5.5, 43 }, { 6.5, 47 }, { 7.25, 45 } },
+           1, 110.0);
+    CHECK (page.isInterestedInFileDrag ({ t.folder.getChildFile ("riff.wav").getFullPathName() }));
+    REQUIRE (page.loadRiff (riffFile, true));
+    CHECK (page.getRiffPanel().isVisible());
+    CHECK (t.p.hasRiff());
+    CHECK_THAT (page.getRiffPanel().getRiff().bpm, WithinAbs (110.0, 1e-6));
+    page.getRiffPanel().getFindButton().onClick();   // as clicking FIND
+    REQUIRE (page.isRiffSearching());
+    CHECK_FALSE (page.getRiffPanel().isVisible());
+    REQUIRE (page.getResults().size() == 3);
+    CHECK (page.getResults()[0].name == "B Push");
+    CHECK (page.getResults()[0].match > page.getResults()[1].match);
+    CHECK (page.getChips().contains ("FITS RIFF: my bass riff"));
+
+    // Two bars from its second bar on: still B (the riff repeats). Changing the part searches again at once.
+    page.getRiffPanel().setStartSeconds (4.0 * 60.0 / 110.0);
+    CHECK (page.getResults()[0].name == "B Push");
+
+    // The cross: the riff put away, its search gone, nothing heard.
+    page.putRiffAway();
+    CHECK_FALSE (page.isRiffSearching());
+    CHECK_FALSE (t.p.hasRiff());
+    CHECK_FALSE (page.getRiffPanel().hasRiff());
+    CHECK (page.getResults()[0].match < 0.0f);
+    // A file that isn't one: refused.
+    CHECK_FALSE (page.loadRiff (t.folder.getChildFile ("notes.txt"), true));
 }

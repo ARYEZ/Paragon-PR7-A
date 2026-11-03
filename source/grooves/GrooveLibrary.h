@@ -6,6 +6,7 @@
 
 #include "Groove.h"
 #include "Rhythm.h"
+#include "Riff.h"
 
 #include <juce_events/juce_events.h>
 
@@ -186,7 +187,12 @@ namespace grooves
         // SUBFOLDERS is on) whose name or folder has every word of `text`, favourites only if asked, sorted.
         // TAP TO FIND (0.6.0): with `tap`, every groove gets its match to the tapped rhythm on the `grid`, and the list
         // is sorted by it, closest first (instead of `sort`).
-        struct TapSearch { Rhythm rhythm; double grid = 0.5; };
+        struct TapSearch
+        {
+            Rhythm rhythm;
+            double grid = 0.5;
+            std::shared_ptr<const RiffQuery> riff;   // 0.32.0, RIFF MATCH: scored by riffMatch instead (rhythm unused)
+        };
         std::vector<Entry> query (const juce::File& within, const juce::String& text, bool favouritesOnly, SortOrder sort,
                                   double songBpm, int songNumerator, int songDenominator, const Filters& filters = {},
                                   const TapSearch* tap = nullptr) const;

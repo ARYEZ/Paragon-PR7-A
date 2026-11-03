@@ -5,7 +5,7 @@ cmake_minimum_required(VERSION 3.24)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS version")
 set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "macOS architectures")
 
-project(ParagonX1 VERSION 0.31.0 LANGUAGES C CXX)
+project(ParagonX1 VERSION 0.32.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -80,6 +80,7 @@ target_sources(ParagonX1
         source/grooves/Groove.cpp
         source/grooves/GrooveLibrary.cpp
         source/grooves/Rhythm.cpp
+        source/grooves/Riff.cpp
         source/grooves/SqliteReader.cpp
         source/grooves/GrooveDatabase.cpp
         source/song/Song.cpp
@@ -129,6 +130,7 @@ target_sources(ParagonX1
         source/ui/MixerPage.cpp
         source/ui/GroovesPage.cpp
         source/ui/TapPanel.cpp
+        source/ui/RiffPanel.cpp
         source/ui/SongTrack.cpp
         source/ui/BlockEditor.cpp
         source/ui/SongCreator.cpp

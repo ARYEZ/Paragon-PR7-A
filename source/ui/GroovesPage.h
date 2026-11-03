@@ -21,6 +21,7 @@
 
 #include "PluginProcessor.h"
 #include "ui/TapPanel.h"
+#include "ui/RiffPanel.h"
 
 class GroovesPage final : public juce::Component,
                           public juce::DragAndDropContainer,
@@ -65,6 +66,15 @@ public:
     void clearTap();
     bool isTapSearching() const noexcept { return tapSearch.has_value(); }
     TapPanel& getTapPanel() noexcept { return *tapPanel; }
+    // RIFF MATCH (0.32.0): a riff (audio or MIDI) read (in the background; `wait`: here and now) and set up in its
+    // panel, heard with the previews; a search with it; back to none.
+    bool loadRiff (const juce::File&, bool wait = false);
+    void openRiffPanel();
+    void findByRiff (const grooves::Riff&);
+    bool isRiffSearching() const noexcept { return tapSearch.has_value() && tapSearch->riff != nullptr; }
+    RiffPanel& getRiffPanel() noexcept { return *riffPanel; }
+    void chooseRiffFile();
+    void putRiffAway();   // the riff gone (not heard, its search cleared)
     // GROOVE PARTS (0.7.0).
     void toggleDrumPart (int part);   // -1: ALL
     unsigned getDrumParts() const noexcept { return chosenParts; }
@@ -148,6 +158,7 @@ private:
     class PartsList;
     class Chip;
     class DropZone;
+    class RiffZone;
     class Suggestions;
 
     ParagonX1AudioProcessor& processor;
@@ -163,6 +174,8 @@ private:
     // FIND SIMILAR and the filter columns.
     juce::TextButton tapButton { "TAP TO FIND..." };
     std::unique_ptr<DropZone> dropZone;
+    juce::TextButton riffButton { "LOAD RIFF..." };
+    std::unique_ptr<RiffZone> riffZone;
     std::array<std::unique_ptr<FilterColumn>, grooves::numColumns> filterColumns;
     std::array<bool, grooves::numColumns> shownFilters {};
     grooves::Filters filters;
@@ -208,6 +221,10 @@ private:
     std::unique_ptr<TapPanel> tapPanel;
     std::optional<grooves::Library::TapSearch> tapSearch;
     juce::String tapWhat;
+    // RIFF MATCH.
+    std::unique_ptr<RiffPanel> riffPanel;
+    void riffChanged (const grooves::Riff&);   // heard as it is now (and searched again when searching with it)
+    std::shared_ptr<bool> alive = std::make_shared<bool> (true);   // a background read finishing after the page went
 
     juce::String message;            // a moment's note in the status line
     double messageUntil = 0.0;

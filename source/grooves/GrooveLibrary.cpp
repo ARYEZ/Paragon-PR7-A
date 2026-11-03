@@ -736,7 +736,8 @@ namespace grooves
                     leftOut.push_back (f.folder);
             if (tap != nullptr)
             {
-                const auto key = tap->rhythm.encode() + "#" + juce::String (tap->rhythm.slackBeats, 6) + "#" + juce::String (tap->grid, 6);
+                const auto key = tap->riff != nullptr ? "riff#" + tap->riff->key
+                                                      : tap->rhythm.encode() + "#" + juce::String (tap->rhythm.slackBeats, 6) + "#" + juce::String (tap->grid, 6);
                 if (key != matchKey)
                 {
                     matchKey = key;
@@ -767,7 +768,9 @@ namespace grooves
                     if (const auto known = matchScores.find (key); known != matchScores.end())
                         result.back().match = known->second;
                     else
-                        result.back().match = matchScores[key] = e.rhythm != nullptr ? (float) match (tap->rhythm, *e.rhythm, tap->grid) : 0.0f;
+                        result.back().match = matchScores[key] = e.rhythm == nullptr ? 0.0f
+                            : tap->riff != nullptr ? (float) riffMatch (*tap->riff, *e.rhythm, e.feel)
+                            : (float) match (tap->rhythm, *e.rhythm, tap->grid);
                 }
             }
         }

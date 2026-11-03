@@ -111,7 +111,9 @@ PR7-D is built in stages, each one released:
   A-D makes the chosen groove a drum sequencer pattern. TAP TO FIND...: tap a rhythm on six pads (or your controller)
   over a two-bar loop with a metronome, and the closest grooves come first (MATCH); drop a MIDI file on the page, or
   right-click a groove (FIND SIMILAR), to search with theirs (0.31.0: retuned on two real groove packs: taps compared
-  where you played them, a sketch of the main hits allowed, 40 ms of latency forgiven). GROOVE PARTS: tick the parts of the chosen groove (kick,
+  where you played them, a sketch of the main hits allowed, 40 ms of latency forgiven). RIFF MATCH (0.32.0): drop a
+  recording of your guitar, bass or keys (or a MIDI file of one): the grooves whose kick locks to it come first, and
+  you hear it with every groove you preview, in time. GROOVE PARTS: tick the parts of the chosen groove (kick,
   snare, hi-hat...) to hear, drag or LAYER ONTO a pattern just those, over the pattern's other drums.
 - **SONG** (beside the on-screen keyboard: KEYS | SONG): grooves as blocks in a song. Drag a groove from the list (or a
   MIDI file) onto it, or right-click a groove: ADD TO SONG. Drag blocks to move them, their right edge to repeat the

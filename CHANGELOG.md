@@ -2,6 +2,46 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.32.0
+
+**RIFF MATCH: grooves that fit your riff.** Drop a recording of your guitar, bass or keys (WAV, AIFF, FLAC, OGG or MP3), or a MIDI file of one, and the grooves that would play best with it come first. You hear your riff with every groove you preview, in time. It's our own design, inspired by the riff-to-groove search in commercial drum software.
+
+**Where it is:** GROOVES, beside FIND SIMILAR: **LOAD RIFF...**, or drop the file on the RIFF MATCH box (an audio file dropped anywhere on the page works too). The riff opens in its panel:
+
+- **The waveform:** with the bars at its tempo and the notes heard in it (the strong ones tall).
+- **The part used:** lit. Click or drag on the waveform to move its start (its first beat). **BARS** sets how many (1, 2, 4 or 8).
+- **TEMPO:** the song's when it opens (a riff from your song is at its tempo), or the one in its name or MIDI file.
+  - **x2** and **/2:** steady sixteenths sound exactly like steady eighths at half the tempo, so you may need one of these.
+  - **HEARD:** offers the tempo found in the riff itself.
+- **LISTEN:** your riff with every groove you preview, from the groove's start, at the riff's tempo. **LEVEL** sets how loud it is against the drums.
+- **FIND:** the list sorted by fit (MATCH), with a **FITS RIFF** chip. Filters, folders and preview all still work. The cross on the RIFF MATCH box puts the riff away.
+
+**How it works:**
+- **An audio riff's notes:** found by spectral flux, a standard method written here, which hears each note's attack.
+  - Tested on generated clean and distorted riffs at 44.1, 48 and 96 kHz: every note found, within about 3 ms, with no false notes.
+  - Its strong notes are told from its weaker ones by their level. A heavily distorted riff squeezes its accents; below a clear difference every note counts as strong.
+- **A MIDI riff's notes:** its own notes (a chord is one hit), its velocities as how hard.
+- **The fit:** a groove fits when its kick lands on the riff's strong notes and few of its kicks land where the riff is silent.
+  - A crash on a strong note counts as meeting it, and a backbeat snare on one counts partly. A ridden crash or a snare roll doesn't count: they'd meet every note.
+  - Another feel (swung against straight) counts 0.8, another bar length 0.75.
+  - The balance between meeting the riff's accents and avoiding stray kicks was chosen by measuring (below), not guessed.
+
+**Measured on your two groove packs (705 grooves with a kick).** For each groove, a riff following its kick, with weaker notes on half the empty eighths and 10 ms of human wobble, rendered as distorted guitar:
+
+| The riff as | Top result right (the same 2-bar kick) | In the top 20 |
+|---|---|---|
+| Audio | 62% | 88% |
+| MIDI | 66% | 89% |
+
+**Honest limits:**
+- **Generated riffs:** these riffs are generated, and built from the grooves' own kicks, which is kind to the search. Real riffs aren't always played with the kick; your ears decide. Send me a riff or two and I'll measure with those.
+- **Tempo:** the song's tempo is trusted, since a riff from your song is at it. The tempo heard in a short, sparse riff was right only about four times in five (it's offered as HEARD, not used).
+- **The first beat:** it's the riff's first clear note. A riff that opens with a rest needs its start moved.
+- **Hearing the riff:** a MIDI riff is heard as plain plucked tones. Riffs longer than 5 minutes are cut there.
+- **Feel and accents:** swing is judged from where the notes fall. A riff's accents come from level only (not pitch or note length).
+
+**Tests:** notes found in clean and distorted riffs at three sample rates (count, timing, accents); tempo from what's heard, the length, the name and the song; a MIDI riff (chords, tempo, time signature, sound); the fit (a locked groove first, crashes, a ridden crash, feel, bar length); the whole path from audio; the riff heard from the preview's start, looping its part to the sample, at its tempo and its own sample rate, silent with LISTEN off; the page (a riff finds the groove that follows it, its chip, searched again when the part changes, put away).
+
 ## 0.31.0
 
 **FIND SIMILAR, retuned on real grooves.** You asked for an audit of FIND SIMILAR (tapping a rhythm, dropping a MIDI file, or searching with a groove's rhythm). I measured it on your two groove packs (Heavy Rock Grooves and EZX Electronic, 762 grooves) by simulating a player tapping each groove's first two bars: exactly, with a human wobble of 15-25 ms, late by 30-40 ms as audio latency makes taps, and as a sketch without the ghost notes. Then I checked whether the top result had the same main kick and snare pattern. This release fixes every weakness the audit found.

@@ -435,6 +435,84 @@ private:
 };
 
 //==============================================================================
+// RIFF MATCH (0.32.0): where a riff is dropped (audio or MIDI), and, once one is loaded, its part's notes (the strong
+// ones tall); click it to open its panel, the cross to put the riff away.
+class GroovesPage::RiffZone final : public juce::Component, public juce::FileDragAndDropTarget, public juce::SettableTooltipClient
+{
+public:
+    explicit RiffZone (GroovesPage& p) : page (p)
+    {
+        setTooltip ("Drop a riff here (a recording of your guitar, bass or keys, or a MIDI file of one): the grooves that fit "
+                    "it best come first. Click to open it.");
+    }
+    void paint (juce::Graphics& g) override
+    {
+        const auto r = getLocalBounds().toFloat().reduced (1.0f);
+        juce::Path outline;
+        outline.addRoundedRectangle (r, 4.0f);
+        juce::Path dashed;
+        const float dashes[] { 4.0f, 3.0f };
+        juce::PathStrokeType (1.0f).createDashedStroke (dashed, outline, dashes, 2);
+        g.setColour (hovering ? ParagonColours::accent : ParagonColours::textDim.withAlpha (0.6f));
+        g.fillPath (dashed);
+        if (! page.riffPanel->hasRiff())
+        {
+            g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
+            g.drawFittedText ("DROP A RIFF\n(AUDIO OR MIDI)", r.toNearestInt(), juce::Justification::centred, 2);
+            return;
+        }
+        const auto& riff = page.riffPanel->getRiff();
+        const auto area = r.reduced (8.0f, 6.0f).withTrimmedRight (14.0f);
+        g.setColour (page.isRiffSearching() ? ParagonColours::accent : ParagonColours::text);
+        g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
+        g.drawText (riff.name, area.withHeight (14.0f), juce::Justification::centredLeft, true);
+        const auto lane = area.withTrimmedTop (18.0f);
+        g.setColour (ParagonColours::panelEdge);
+        g.drawHorizontalLine ((int) lane.getBottom() - 1, lane.getX(), lane.getRight());
+        const auto q = grooves::queryOf (riff);
+        for (auto b = 0.0; b < q.lengthBeats - 1.0e-9; b += q.beatsPerBar)
+            g.drawVerticalLine ((int) (lane.getX() + lane.getWidth() * (float) (b / q.lengthBeats)), lane.getY(), lane.getBottom());
+        g.setColour (ParagonColours::accent);
+        for (const auto& h : q.hits)
+        {
+            const auto x = lane.getX() + lane.getWidth() * (float) (h.first / q.lengthBeats);
+            const auto height = h.second >= 0.5f ? lane.getHeight() * 0.8f : lane.getHeight() * 0.35f;
+            g.fillRect (x - 1.0f, lane.getBottom() - height, 2.0f, height);
+        }
+        const auto cx = r.getRight() - 9.0f, cy = r.getY() + 9.0f;
+        g.setColour (ParagonColours::text);
+        g.drawLine (cx - 3.5f, cy - 3.5f, cx + 3.5f, cy + 3.5f, 1.4f);
+        g.drawLine (cx - 3.5f, cy + 3.5f, cx + 3.5f, cy - 3.5f, 1.4f);
+    }
+    void mouseUp (const juce::MouseEvent& e) override
+    {
+        if (! page.riffPanel->hasRiff())
+            page.chooseRiffFile();
+        else if (e.x > getWidth() - 20 && e.y < 20)
+            page.putRiffAway();
+        else
+            page.openRiffPanel();
+    }
+    bool isInterestedInFileDrag (const juce::StringArray& files) override
+    {
+        return files.size() == 1 && grooves::isRiffFile (juce::File (files[0]));
+    }
+    void fileDragEnter (const juce::StringArray&, int, int) override { hovering = true; repaint(); }
+    void fileDragExit (const juce::StringArray&) override { hovering = false; repaint(); }
+    void filesDropped (const juce::StringArray& files, int, int) override
+    {
+        hovering = false;
+        if (! files.isEmpty())
+            page.loadRiff (juce::File (files[0]));
+        repaint();
+    }
+
+private:
+    GroovesPage& page;
+    bool hovering = false;
+};
+
+//==============================================================================
 // What SEARCH suggests as you type: filter values first (click: that filter), then grooves' names.
 class GroovesPage::Suggestions final : public juce::Component, private juce::ListBoxModel
 {
@@ -536,6 +614,12 @@ GroovesPage::GroovesPage (ParagonX1AudioProcessor& p) : processor (p), library (
     addAndMakeVisible (tapButton);
     dropZone = std::make_unique<DropZone> (*this);
     addAndMakeVisible (*dropZone);
+    riffButton.setTooltip ("Choose a riff (a recording of your guitar, bass or keys, or a MIDI file of one): the grooves that "
+                           "fit it best come first, and you hear it with every groove you preview.");
+    riffButton.onClick = [this] { chooseRiffFile(); };
+    addAndMakeVisible (riffButton);
+    riffZone = std::make_unique<RiffZone> (*this);
+    addAndMakeVisible (*riffZone);
     for (int c = 0; c < grooves::numColumns; ++c)
     {
         filterColumns[(size_t) c] = std::make_unique<FilterColumn> (*this, (grooves::Column) c);
@@ -630,6 +714,11 @@ GroovesPage::GroovesPage (ParagonX1AudioProcessor& p) : processor (p), library (
         findByRhythm (r, grid, "your taps");
     };
     addChildComponent (*tapPanel);
+    riffPanel = std::make_unique<RiffPanel> (processor);
+    riffPanel->onFind = [this] (const grooves::Riff& r) { riffPanel->setVisible (false); findByRiff (r); };
+    riffPanel->onChanged = [this] (const grooves::Riff& r) { riffChanged (r); };
+    riffPanel->onClose = [this] { riffZone->repaint(); };
+    addChildComponent (*riffPanel);
     suggestions = std::make_unique<Suggestions> (*this);
     addChildComponent (*suggestions);
 
@@ -642,6 +731,8 @@ GroovesPage::~GroovesPage()
 {
     // The window closing: the preview stops (nothing would be left to stop it with).
     processor.stopGroove();
+    processor.clearRiff();
+    *alive = false;
     library.removeChangeListener (this);
     table.removeMouseListener (this);
 }
@@ -1262,7 +1353,7 @@ void GroovesPage::rebuildChips()
     if (within != juce::File())
         specs.push_back ({ "FOLDER: " + within.getFileName(), ParagonColours::accent, [this] { browseTo ({}, true); } });
     if (tapSearch.has_value())
-        specs.push_back ({ "SIMILAR TO: " + tapWhat, ParagonColours::accent, [this] { clearTap(); } });
+        specs.push_back ({ (tapSearch->riff != nullptr ? "FITS RIFF: " : "SIMILAR TO: ") + tapWhat, ParagonColours::accent, [this] { clearTap(); } });
     if (search.getText().trim().isNotEmpty())
         specs.push_back ({ "SEARCH: " + search.getText().trim(), ParagonColours::accent, [this] { setSearch ({}); } });
     if (favouritesOnly)
@@ -1420,9 +1511,119 @@ void GroovesPage::toPattern (int pattern)
 void GroovesPage::openTapPanel()
 {
     processor.stopGroove();   // the loop and its metronome alone
+    riffPanel->setVisible (false);
     const auto perBar = processor.getHostNumerator() * 4.0 / juce::jmax (1, processor.getHostDenominator());
     tapPanel->open (processor.getHostBpm(), perBar);
     tapPanel->toFront (false);
+}
+
+//==============================================================================
+// RIFF MATCH (0.32.0)
+void GroovesPage::chooseRiffFile()
+{
+    chooser = std::make_unique<juce::FileChooser> ("Choose a riff (audio or MIDI)", juce::File(), "*.wav;*.wave;*.aif;*.aiff;*.flac;*.ogg;*.mp3;*.mid;*.midi");
+    chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles, [this] (const juce::FileChooser& c)
+    {
+        if (const auto f = c.getResult(); f.existsAsFile())
+            loadRiff (f);
+    });
+}
+
+bool GroovesPage::loadRiff (const juce::File& file, bool wait)
+{
+    if (! grooves::isRiffFile (file))
+        return false;
+    const auto bpm = processor.getHostBpm();
+    const auto num = processor.getHostNumerator(), den = processor.getHostDenominator();
+    const auto use = [this] (std::optional<grooves::Riff> riff, const juce::String& problem, const juce::File& f)
+    {
+        if (! riff.has_value())
+        {
+            message = "Couldn't use " + f.getFileName() + ": " + problem;
+            messageUntil = juce::Time::getMillisecondCounterHiRes() + 6000.0;
+            timerCallback();
+            return;
+        }
+        processor.stopGroove();   // the previews from here on in time with it (at its tempo)
+        riffPanel->setRiff (std::move (*riff));
+        riffChanged (riffPanel->getRiff());
+        openRiffPanel();
+        riffZone->repaint();
+    };
+    if (wait)
+    {
+        juce::String problem;
+        auto riff = grooves::readRiff (file, bpm, num, den, &problem);
+        const auto ok = riff.has_value();
+        use (std::move (riff), problem, file);
+        return ok;
+    }
+    message = "Listening to " + file.getFileName() + "...";
+    messageUntil = juce::Time::getMillisecondCounterHiRes() + 30000.0;
+    timerCallback();
+    juce::Thread::launch ([file, bpm, num, den, use, alive = alive]
+    {
+        auto problem = std::make_shared<juce::String>();
+        auto riff = std::make_shared<std::optional<grooves::Riff>> (grooves::readRiff (file, bpm, num, den, problem.get()));
+        juce::MessageManager::callAsync ([file, use, alive, riff, problem]
+        {
+            if (*alive)
+                use (std::move (*riff), *problem, file);
+        });
+    });
+    return true;
+}
+
+void GroovesPage::openRiffPanel()
+{
+    if (! riffPanel->hasRiff())
+        return;
+    tapPanel->close();
+    message = {};
+    messageUntil = 0.0;
+    riffPanel->setVisible (true);
+    riffPanel->toFront (false);
+    timerCallback();
+}
+
+void GroovesPage::riffChanged (const grooves::Riff& r)
+{
+    processor.setRiff (r.audio, r.sampleRate, r.startSeconds, r.loopSeconds(), r.bpm);
+    if (isRiffSearching())
+        findByRiff (r);
+    riffZone->repaint();
+}
+
+void GroovesPage::findByRiff (const grooves::Riff& r)
+{
+    auto query = std::make_shared<grooves::RiffQuery> (grooves::queryOf (r));
+    if (query->hits.empty())
+    {
+        message = "No notes in the part chosen: move its start, or choose more bars";
+        messageUntil = juce::Time::getMillisecondCounterHiRes() + 5000.0;
+        timerCallback();
+        return;
+    }
+    grooves::Library::TapSearch searchWith;
+    searchWith.riff = std::move (query);
+    tapSearch = searchWith;
+    tapWhat = r.name;
+    headerSort = 0;   // the best fits first
+    table.getHeader().setSortColumnId (0, true);
+    requery();
+    table.scrollToEnsureRowIsOnscreen (0);
+    riffZone->repaint();
+}
+
+void GroovesPage::putRiffAway()
+{
+    const auto searching = isRiffSearching();
+    processor.clearRiff();
+    riffPanel->setVisible (false);
+    riffPanel->clear();
+    if (searching)
+        clearTap();
+    riffZone->repaint();
 }
 
 void GroovesPage::findByRhythm (const grooves::Rhythm& rhythm, double grid, const juce::String& what)
@@ -1503,7 +1704,7 @@ bool GroovesPage::isInterestedInFileDrag (const juce::StringArray& files)
     // search with.
     return std::any_of (files.begin(), files.end(), [] (const juce::String& f)
     {
-        return juce::File (f).hasFileExtension ("mid;midi") || juce::File (f).isDirectory();
+        return juce::File (f).hasFileExtension ("mid;midi") || juce::File (f).isDirectory() || grooves::isAudioRiff (juce::File (f));
     });
 }
 
@@ -1526,6 +1727,12 @@ void GroovesPage::filesDropped (const juce::StringArray& files, int x, int y)
                         return;
                     }
                 }
+    // RIFF MATCH (0.32.0): an audio file is a riff (a MIDI one a groove to search with, unless dropped on RIFF MATCH).
+    if (! files.isEmpty() && grooves::isAudioRiff (juce::File (files[0])))
+    {
+        loadRiff (juce::File (files[0]));
+        return;
+    }
     if (! files.isEmpty() && juce::File (files[0]).hasFileExtension ("mid;midi") && ! findLikeFile (juce::File (files[0])))
     {
         message = "That file has no notes to search with";
@@ -1998,6 +2205,8 @@ void GroovesPage::paintPanels (juce::Graphics& g)
         if (c->isVisible())
             filtersArea = filtersArea.isEmpty() ? c->getBounds() : filtersArea.getUnion (c->getBounds());
     panel (tapButton.getBounds().getUnion (dropZone->getBounds()).withTrimmedTop (-18));
+    panel (riffButton.getBounds().getUnion (riffZone->getBounds()).withTrimmedTop (-18));
+    drawLabel (g, "RIFF MATCH", riffButton.getBounds().withY (riffButton.getY() - 20).withHeight (16));
     panel (filtersArea);
     panel (browserColumns.front()->getBounds().getUnion (browserColumns.back()->getBounds()));   // the whole browser, its empty columns too
     panel (table.getBounds());
@@ -2042,6 +2251,11 @@ void GroovesPage::resized()
         tapButton.setBounds (find.removeFromTop (34));
         find.removeFromTop (6);
         dropZone->setBounds (find.reduced (0, 2));
+        strip.removeFromLeft (14);
+        auto riff = strip.removeFromLeft (170).reduced (4, 0);   // RIFF MATCH, beside it
+        riffButton.setBounds (riff.removeFromTop (34));
+        riff.removeFromTop (6);
+        riffZone->setBounds (riff.reduced (0, 2));
         strip.removeFromLeft (14);
     }
     strip.setY (strip.getY() - 20);
@@ -2099,5 +2313,6 @@ void GroovesPage::resized()
 
     // TAP TO FIND's panel over the filters and the list while open.
     tapPanel->setBounds (table.getBounds().getUnion (tapButton.getBounds()).expanded (4));
+    riffPanel->setBounds (tapPanel->getBounds());
     rebuildChips();
 }
