@@ -1080,6 +1080,8 @@ void DrumPage::showLoadMenu()
     menu.addItem ("A whole SFZ kit (onto every drum)...", [this] { importSfzKit(); });
     // 0.27.0: DRUMGIZMO KITS: free multi-mic kits recorded in real studios.
     menu.addItem ("A DrumGizmo kit (onto every drum)...", [this] { importDrumGizmoKit(); });
+    // 0.33.0: a multi-mic sample library's folder of named WAVs (e.g. "..._KICK_DYN_KICK_V01_RR1.wav").
+    menu.addItem ("A sample pack: a multi-mic library's folder (onto every drum)...", [this] { importSamplePack(); });
     menu.addItem ("Get free kits (drumgizmo.org)...", []
     {
         juce::URL ("https://drumgizmo.org/wiki/doku.php?id=kits").launchInDefaultBrowser();
@@ -1139,6 +1141,34 @@ void DrumPage::chooseLayer()
                               processor.loadLayer (slot, f);
                               updateDrumPanels();
                           });
+}
+
+void DrumPage::importSamplePack()
+{
+    chooser = std::make_unique<juce::FileChooser> ("A multi-mic sample library's folder (its top folder, or its INDIVIDUAL MICS)", juce::File());
+    chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories, [this] (const juce::FileChooser& fc)
+    {
+        const auto folder = fc.getResult();
+        if (! folder.isDirectory())
+            return;
+        const auto result = processor.importSamplePack (folder);
+        if (result.slots.empty())
+        {
+            juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "No drums found",
+                                                   "None of its files' names could be read as drum sounds. A pack's files are named piece, "
+                                                   "articulation, mic, then _V<layer>_RR<round> (e.g. JAD_DJENT_SNR_DYN1_V03_RR2.wav).");
+            return;
+        }
+        juce::String text;
+        for (const auto& [slot, files] : result.slots)
+            text << synth::drums::slotDefaults[(size_t) slot].key << " " << synth::drums::articulationName (slot) << ": " << files << " files\n";
+        if (! result.userChannels.isEmpty())
+            text << "\nIts extra mics, each on a USER channel in the MIXER: " << result.userChannels.joinIntoString (", ") << "\n";
+        if (! result.unused.isEmpty())
+            text << "\nNot used (no drum for them): " << result.unused.joinIntoString (", ").substring (0, 400) << "\n";
+        text << "\nStreamed from disk as it plays. Save it as a preset to keep it (the preset remembers where the pack is).";
+        juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Sample pack: " + result.name, text);
+    });
 }
 
 void DrumPage::importDrumGizmoKit()

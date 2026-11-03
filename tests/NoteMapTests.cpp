@@ -95,7 +95,8 @@ TEST_CASE ("NOTE MAP: the groove libraries' layout plays every note of the owner
 TEST_CASE ("NOTE MAP: General MIDI's drums on their notes", "[notemap]")
 {
     const auto map = generalMidi();
-    const std::pair<int, Slot> expected[] = { { 35, BD }, { 36, BD }, { 37, RIM }, { 38, SD }, { 39, CLP }, { 40, SD2 }, { 41, LT },
+    const std::pair<int, Slot> expected[] = { { 35, BD }, { 36, BD }, { 37, RIM }, { 38, SD }, { 39, CLP }, { 40, SD2 }, { 41, T4 },   // 0.33.0: the low floor tom, tom 4
+                                             
                                               { 42, CH }, { 43, LT }, { 44, PH }, { 45, MT }, { 46, OH }, { 47, MT }, { 48, HT },
                                               { 49, CY }, { 50, HT }, { 51, RD }, { 52, CHN }, { 53, RB }, { 54, TMB }, { 55, SPL },
                                               { 57, CR2 }, { 59, RD }, { 69, SHK }, { 70, SHK } };

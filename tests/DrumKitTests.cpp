@@ -84,7 +84,7 @@ TEST_CASE ("DRUMS in the plugin: the kit's 12 keys play the drums, each its own;
 
     // A key outside the kit plays nothing at all (PR7-K played its synth there).
     Plugin outside;
-    const auto out = outside.play ({ { 60, 0.0 }, { 30, 0.1 } }, 0.5);
+    const auto out = outside.play ({ { 36 + synth::drums::numSlots, 0.0 }, { 30, 0.1 } }, 0.5);
     CHECK (peakOf (out[0]) == 0.0);
     CHECK (peakOf (out[1]) == 0.0);
 }

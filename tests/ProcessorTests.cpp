@@ -129,7 +129,7 @@ TEST_CASE ("The keyboard maps the kit: the 23 keys from ROOT play it, in order; 
     for (int slot = 0; slot < synth::drums::numSlots; ++slot)
         CHECK (peakFor (36, 36 + slot) > 0.01f);
     CHECK (peakFor (36, 35) == 0.0f);   // below the kit (no sequencer on KEY)
-    CHECK (peakFor (36, 59) == 0.0f);   // above it
+    CHECK (peakFor (36, 36 + synth::drums::numSlots) == 0.0f);   // above it
     CHECK (peakFor (48, 36) == 0.0f);   // ROOT moved up: the old kick key is silent...
     CHECK (peakFor (48, 48) > 0.01f);   // ...and its new one plays
 

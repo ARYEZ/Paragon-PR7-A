@@ -10,8 +10,10 @@ namespace
                                                               "crash", "crash2", "ride", "china", "splash", "tambourine" };
 
     // Each slot's piece (synth::drums::slotDefaults' order): BD, RIM, SD, CLP, SD2, LT, CH, MT, PH, HT, OH, CY,
-    // RD, RB, CR2, CHN, SPL, HH, TMB, SHK, then 0.17.0's RE (the ride's edge), HO1 and HO3 (the hat's openness).
-    constexpr int slotPieces[] = { 0, 1, 1, -1, 1, 4, 5, 3, 5, 2, 5, 6, 8, 8, 7, 9, 10, 5, 11, -1, 8, 5, 5 };
+    // RD, RB, CR2, CHN, SPL, HH, TMB, SHK, then 0.17.0's RE (the ride's edge), HO1 and HO3 (the hat's openness), then
+    // 0.33.0's T4 (no tom 4 in the picture), HSH (the hat), the chokes (their cymbals).
+    constexpr int slotPieces[] = { 0, 1, 1, -1, 1, 4, 5, 3, 5, 2, 5, 6, 8, 8, 7, 9, 10, 5, 11, -1, 8, 5, 5,
+                                   -1, 5, 6, 7, 9, 10 };
     static_assert (std::size (slotPieces) == synth::drums::numSlots);
 
     // 0.17.0: the ride's edge, a ring round the outside of its bow in the click map (the renders have bow and bell

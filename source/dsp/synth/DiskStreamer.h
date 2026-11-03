@@ -28,10 +28,17 @@ namespace synth::drums
     {
         juce::File file;
         double sampleRate = 48000.0;
-        juce::int64 length = 0;                 // frames in the file
+        juce::int64 length = 0;                 // frames in the file (the longest, with `files`)
         int headFrames = 0;                     // frames each mic's sample holds in memory (from the start)
-        struct Part { int fileChannel = 0; int output = 0; int channel = 0; float gain = 1.0f; };
+        // 0.33.0: a hit whose mics are each their own file (a sample pack's "_OH", "_RM"...): `files` (when set; else
+        // `file` alone), each part reading its `fileIndex`. A file shorter than the rest is silent past its end.
+        std::vector<juce::File> files;
+        struct Part { int fileChannel = 0; int output = 0; int channel = 0; float gain = 1.0f; int fileIndex = 0; };
         std::vector<Part> parts;                // file channel (from 0) -> a mic's (output's) channel, at a gain
+        const juce::File& fileAt (int index) const noexcept
+        {
+            return index >= 0 && index < (int) files.size() ? files[(size_t) index] : file;
+        }
         int numOutputs = 0;
     };
 
@@ -81,7 +88,7 @@ namespace synth::drums
         std::unique_ptr<Thread> thread;
         bool fill (Stream&, bool untilFull);
         std::mutex readersLock;
-        std::map<juce::String, std::unique_ptr<juce::AudioFormatReader>> readers;   // open files (the last 64)
+        std::map<juce::String, std::unique_ptr<juce::AudioFormatReader>> readers;   // open files (the last 192)
         std::vector<juce::String> readerOrder;
         juce::AudioFormatManager formats;
         juce::AudioBuffer<float> chunk;

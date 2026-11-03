@@ -11,10 +11,10 @@ namespace grooves
         {
             switch (slot)
             {
-                case CH: return PowerHand::closedHat;
+                case CH: case HSH: return PowerHand::closedHat;
                 case OH: case HH: case HO1: case HO3: return PowerHand::openHat;
                 case RD: case RB: case RE: return PowerHand::ride;
-                case CY: case CR2: case CHN: case SPL: return PowerHand::crash;
+                case CY: case CR2: case CHN: case SPL: case C1C: case C2C: case CHC: case SPC: return PowerHand::crash;
                 case TMB: case SHK: return PowerHand::percussion;
                 default: return PowerHand::none;   // the feet (kick, pedal hat), snares, toms, the clap
             }
@@ -28,11 +28,11 @@ namespace grooves
         {
             case BD: return (int) DrumPart::kick;
             case SD: case SD2: case RIM: return (int) DrumPart::snare;
-            case CH: case OH: case HH: case HO1: case HO3: return (int) DrumPart::hats;
+            case CH: case OH: case HH: case HO1: case HO3: case HSH: return (int) DrumPart::hats;
             case PH: return (int) DrumPart::pedal;
             case RD: case RB: case RE: return (int) DrumPart::ride;
-            case LT: case MT: case HT: return (int) DrumPart::toms;
-            case CY: case CR2: case CHN: case SPL: return (int) DrumPart::crash;
+            case LT: case MT: case HT: case T4: return (int) DrumPart::toms;
+            case CY: case CR2: case CHN: case SPL: case C1C: case C2C: case CHC: case SPC: return (int) DrumPart::crash;
             case CLP: case TMB: case SHK: return (int) DrumPart::percussion;
             default: return -1;
         }

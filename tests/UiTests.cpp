@@ -192,8 +192,8 @@ TEST_CASE ("The on-screen keyboard plays the kit; its tinted keys follow ROOT an
     keys.repaint();
     auto image = keys.createComponentSnapshot (keys.getLocalBounds());   // paints: follows the kit
     CHECK (keys.isKitKey (36));
-    CHECK (keys.isKitKey (58));
-    CHECK_FALSE (keys.isKitKey (59));   // 23 keys from ROOT (0.17.0)
+    CHECK (keys.isKitKey (64));
+    CHECK_FALSE (keys.isKitKey (65));   // 29 keys from ROOT (0.33.0)
     CHECK_FALSE (keys.isPatternKey (35));   // the sequencer isn't on KEY
     set (ParamIDs::drumsRoot, 48.0f);
     set (ParamIDs::dseqOn, 1.0f);

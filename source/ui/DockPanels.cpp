@@ -127,7 +127,7 @@ void NoteMapList::Row::resized()
 SettingsPage::SettingsPage (ParagonX1AudioProcessor& p)
     : processor (p),
       mapChoice (p.getParameters(), ParamIDs::drumsMap, "MAP",
-                 "Which notes play which drum. ROOT: the 23 keys from ROOT, in order. GROOVE LIBRARY: the layout popular drum "
+                 "Which notes play which drum. ROOT: the 29 keys from ROOT, in order. GROOVE LIBRARY: the layout popular drum "
                  "software's groove libraries are written in. GENERAL MIDI: the General MIDI drum map. CUSTOM: your own (change "
                  "any note in the list). Not part of a preset: it suits your controller and grooves."),
       channelChoice (p.getParameters(), ParamIDs::drumsMidiChannel, "CHANNEL",
@@ -322,7 +322,7 @@ void SettingsPage::paint (juce::Graphics& g)
 
     const auto root = juce::roundToInt (processor.getParameters().getRawParameterValue (ParamIDs::drumsRoot)->load());
     const auto note = [] (int n) { return juce::MidiMessage::getMidiNoteName (n, true, true, 4); };
-    section (keysArea, "MIDI IN / E-DRUMS", "Which notes from your DAW or controller play which drum. ROOT: the 23 keys from ROOT (now "
+    section (keysArea, "MIDI IN / E-DRUMS", "Which notes from your DAW or controller play which drum. ROOT: the 29 keys from ROOT (now "
                                                 + note (root) + " to " + note (root + synth::drums::numSlots - 1)
                                                 + "), and with the sequencer on KEY the four below start its patterns. Click a note's "
                                                   "number to edit it on the right. Grooves and the song aren't changed by any of this.");

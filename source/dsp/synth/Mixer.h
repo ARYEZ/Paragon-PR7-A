@@ -202,7 +202,7 @@ namespace synth::mixer
     // BLEED FROM INSTRUMENTS (the mixer's properties): each channel's level for each piece of the kit (the drums
     // grouped as the articulation list groups them), its polarity, and whether it's on at all. A piece's own close
     // channel calls it its CLOSE MIC AUDIO.
-    inline constexpr int numPieces = 14;   // drums::numPieces (kept in step by a test)
+    inline constexpr int numPieces = 15;   // drums::numPieces (kept in step by a test)
     struct BleedCell
     {
         float gainDb = 0.0f;           // -60 (off) to +12

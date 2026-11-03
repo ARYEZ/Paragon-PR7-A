@@ -34,6 +34,8 @@
 //                                    PARAGON_SNAPSHOT_MIXERROUTE=1: ROUTE MICS on the snare, =2 the user channels;
 //                                    PARAGON_SNAPSHOT_MICSIM=1: the Djent Kit through SIMULATED MICS, their panel open,
 //                                    =2 its strips after a kick and snare)
+//   PARAGON_SNAPSHOT_PACK=<folder> a sample pack (0.33.0) imported: the DRUM view on its kick, or with PAGE=mixer its
+//     channels, scrolled to its USER channels.
 //   PARAGON_SNAPSHOT_DGKIT=<kit file> a DrumGizmo kit (0.27.0) loaded LIGHT from your computer (none ships with the
 //                                    tests): DRUMS shows the snare's layers; with PAGE=mixer its channels after a hit;
 //                                    PARAGON_SNAPSHOT_LAYER=<audio file>: that sample as the kick's LAYER (0.29.0)
@@ -407,6 +409,20 @@ TEST_CASE ("Render the editor to a PNG", "[.][snapshot]")
             drums.resized();
             drums.refreshPictures();
         }
+        // 0.33.0: a sample pack's folder (PARAGON_SNAPSHOT_PACK): the DRUM view on its kick, a hit played.
+        if (const auto packFolder = env ("PARAGON_SNAPSHOT_PACK"); packFolder.isNotEmpty() && page != "mixer")
+        {
+            processor.importSamplePack (juce::File (packFolder));
+            processor.waitForInstruments (600000);
+            drums.showView (DrumPage::View::drum);
+            drums.select (0);
+            juce::AudioBuffer<float> buffer (2, 512);
+            juce::MidiBuffer midi;
+            midi.addEvent (juce::MidiMessage::noteOn (1, 36, (juce::uint8) 110), 0);
+            processor.processBlock (buffer, midi);
+            drums.resized();
+            drums.refreshPictures();
+        }
         // 0.27.0: a DrumGizmo kit from this computer (PARAGON_SNAPSHOT_DGKIT): the snare's layers, a hit played.
         if (const auto dg = env ("PARAGON_SNAPSHOT_DGKIT"); dg.isNotEmpty() && page != "mixer")
         {
@@ -731,7 +747,30 @@ TEST_CASE ("Render the editor to a PNG", "[.][snapshot]")
     // 0.20.0: THE MIXER with a multi-mic SFZ kit of our own (kick, snare, hat; close mics, overheads, room), a hit
     // just played, the snare top chosen, a little less kick in its bleed.
     const auto micSimShot = env ("PARAGON_SNAPSHOT_MICSIM").getIntValue();
-    if (const auto dg = env ("PARAGON_SNAPSHOT_DGKIT"); page == "mixer" && dg.isNotEmpty())
+    // 0.33.0: a sample pack (PARAGON_SNAPSHOT_PACK=<folder>) in THE MIXER: kick, snare and tom 4 hit, scrolled to its
+    // USER channels (its extra mics), KICK SUB chosen.
+    if (const auto packFolder = env ("PARAGON_SNAPSHOT_PACK"); page == "mixer" && packFolder.isNotEmpty())
+    {
+        processor.importSamplePack (juce::File (packFolder));
+        processor.waitForInstruments (600000);
+        view->showPage (MainView::Page::mixer);
+        view->getMixerPage().routingChanged();
+        juce::AudioBuffer<float> buffer (2, 512);
+        juce::MidiBuffer midi;
+        for (const auto note : { 36, 38, 36 + synth::drums::notemap::T4 })
+            midi.addEvent (juce::MidiMessage::noteOn (1, note, (juce::uint8) 115), 0);
+        processor.processBlock (buffer, midi);
+        for (int b = 0; b < 4; ++b)
+        {
+            juce::MidiBuffer none;
+            processor.processBlock (buffer, none);
+        }
+        view->getMixerPage().selectChannel (synth::mixer::numChannels);
+        view->resized();
+        view->getMixerPage().scrollToStrip (synth::mixer::stripOfChannel (synth::mixer::numChannels));
+        view->getMixerPage().update();
+    }
+    else if (const auto dg = env ("PARAGON_SNAPSHOT_DGKIT"); page == "mixer" && dg.isNotEmpty())
     {
         processor.importDrumGizmoKit (juce::File (dg), ParagonX1AudioProcessor::KitLoad::streamed);
         processor.waitForInstruments (600000);

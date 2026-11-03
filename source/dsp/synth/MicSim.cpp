@@ -28,7 +28,7 @@ namespace synth::micsim
             { mixer::other,       {  0.0f,  0.30f, 1.30f }, {}, false, 0.30f, 0.30f },
         }};
 
-        bool isExtra (int piece) noexcept { return piece >= 11; }   // the clap, tambourine, shaker
+        bool isExtra (int piece) noexcept { return piece >= 11 && piece <= 13; }   // the clap, tambourine, shaker
 
         float distance (Point a, Point b) noexcept
         {

@@ -169,8 +169,9 @@ namespace synth::drums
         std::unique_ptr<juce::AudioFormatReader> reader (formats.createReaderFor (file));
         if (reader == nullptr)
             return nullptr;
-        // At most 64 files open: the one used longest ago closes.
-        if (readerOrder.size() >= 64)
+        // At most 192 files open (0.33.0: a pack's hit can be 7 files, one a mic; macOS allows 256 a program by
+        // default): the one used longest ago closes.
+        if (readerOrder.size() >= 192)
         {
             readers.erase (readerOrder.front());
             readerOrder.erase (readerOrder.begin());
@@ -208,19 +209,8 @@ namespace synth::drums
 
         {
             const std::scoped_lock readerLock (readersLock);
-            auto* reader = readerFor (source.file);
-            if (reader == nullptr)
-            {
-                // The file's gone: silence from here (the hit ends at its head's end, in effect).
-                s.written.store (source.length, std::memory_order_release);
-                return false;
-            }
-            const auto channels = (int) reader->numChannels;
-            if (chunk.getNumChannels() < channels || chunk.getNumSamples() < chunkFrames)
-                chunk.setSize (juce::jmax (channels, chunk.getNumChannels()), chunkFrames, false, false, true);
-            chunk.clear();
-            reader->read (&chunk, 0, frames, written, true, true);
-            // Into each mic's ring, as the recipe says.
+            // Into each mic's ring, as the recipe says: cleared, then each file read once (one, or one a mic) and its
+            // parts added.
             const auto start = (size_t) ((written - source.headFrames) & (ringFrames - 1));
             for (int o = 0; o < source.numOutputs && o < maxOutputs; ++o)
                 for (int c = 0; c < 2; ++c)
@@ -229,14 +219,37 @@ namespace synth::drums
                     for (int i = 0; i < frames; ++i)
                         ring[(start + (size_t) i) & (ringFrames - 1)] = 0.0f;
                 }
-            for (const auto& part : source.parts)
+            const auto numFiles = juce::jmax (1, (int) source.files.size());
+            auto anyRead = false;
+            for (int f = 0; f < numFiles; ++f)
             {
-                if (part.fileChannel < 0 || part.fileChannel >= channels || part.output < 0 || part.output >= maxOutputs)
+                if (std::none_of (source.parts.begin(), source.parts.end(), [f] (const StreamSource::Part& p) { return p.fileIndex == f; }))
                     continue;
-                const auto* from = chunk.getReadPointer (part.fileChannel);
-                auto* ring = s.ring.data() + ((size_t) part.output * 2 + (size_t) juce::jlimit (0, 1, part.channel)) * ringFrames;
-                for (int i = 0; i < frames; ++i)
-                    ring[(start + (size_t) i) & (ringFrames - 1)] += from[i] * part.gain;
+                auto* reader = readerFor (source.fileAt (f));
+                if (reader == nullptr)
+                    continue;   // gone: that mic silent from here
+                anyRead = true;
+                const auto channels = (int) reader->numChannels;
+                if (chunk.getNumChannels() < channels || chunk.getNumSamples() < chunkFrames)
+                    chunk.setSize (juce::jmax (channels, chunk.getNumChannels()), chunkFrames, false, false, true);
+                chunk.clear();
+                if (written < reader->lengthInSamples)
+                    reader->read (&chunk, 0, (int) juce::jmin<juce::int64> (frames, reader->lengthInSamples - written), written, true, true);
+                for (const auto& part : source.parts)
+                {
+                    if (part.fileIndex != f || part.fileChannel < 0 || part.fileChannel >= channels || part.output < 0 || part.output >= maxOutputs)
+                        continue;
+                    const auto* from = chunk.getReadPointer (part.fileChannel);
+                    auto* ring = s.ring.data() + ((size_t) part.output * 2 + (size_t) juce::jlimit (0, 1, part.channel)) * ringFrames;
+                    for (int i = 0; i < frames; ++i)
+                        ring[(start + (size_t) i) & (ringFrames - 1)] += from[i] * part.gain;
+                }
+            }
+            if (! anyRead)
+            {
+                // Every file's gone: silence from here (the hit ends at its head's end, in effect).
+                s.written.store (source.length, std::memory_order_release);
+                return false;
             }
         }
         s.written.store (written + frames, std::memory_order_release);

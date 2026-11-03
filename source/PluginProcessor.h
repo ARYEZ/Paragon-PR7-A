@@ -176,6 +176,15 @@ public:
     // How much of a kit: LIGHT (trimmed, in memory), FULL (all of it in memory), STREAMED (all of it, from disk; 0.28.0).
     enum class KitLoad { light, full, streamed };
     DrumGizmoImport importDrumGizmoKit (const juce::File& kitFile, KitLoad);
+    // 0.33.0: A SAMPLE PACK (a folder of a multi-mic library's named WAVs: samplepack::scan) onto every drum it has,
+    // streamed, its extra mics on USER channels (named, their levels set: our guesses). What went where, for a summary.
+    struct SamplePackImport
+    {
+        juce::String name;
+        std::vector<std::pair<int, int>> slots;   // slot, how many files
+        juce::StringArray userChannels, unused;
+    };
+    SamplePackImport importSamplePack (const juce::File& folder);
     int getStreamUnderruns() const noexcept { return diskStreamer != nullptr ? diskStreamer->getUnderruns() : 0; }
     int getActiveStreams() const noexcept { return diskStreamer != nullptr ? diskStreamer->getActiveStreams() : 0; }
     bool waitForStreams (int timeoutMs = 5000) noexcept { return diskStreamer == nullptr || diskStreamer->waitUntilFilled (timeoutMs); }   // tests

@@ -2,6 +2,55 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.33.0
+
+**Your Just Add Drums "Djent Drums" library as a kit, and six new drums for it.** You chose the library's individual mics, so each one mixes on its own channel, plus all of its sounds. A new **LOAD... > A SAMPLE PACK...** reads a multi-mic library's folder by its file names and puts every sound on its drum, every velocity layer and round robin in place, and every mic on its mixer channel, streamed from disk.
+
+**Using it:** DRUMS > LOAD... > **A sample pack: a multi-mic library's folder (onto every drum)...**, and choose the library's top folder (`JUST ADD DJENT DRUMS (WAV & ONE-SHOTS) 071025`) or its `INDIVIDUAL MICS` folder. A summary lists what went where. Then save it as a preset: the preset remembers where the library is, never its audio.
+
+**What goes where** (from the file names you sent: `JAD_DJENT_<PIECE>_<ARTICULATION>_<MIC>_V<layer>_RR<round>.wav`):
+
+| The library's | PR7-D's |
+|---|---|
+| KICK | BD |
+| SNR, SNR CROSS (cross stick) | SD, RIM |
+| TOM 1, 2, 3, 4 | HT, MT, LT, **T4** (new) |
+| HATS CLOSED, OPEN HALF, OPEN, PEDAL, SHOULDER | CH, HH, OH, PH, **HSH** (new) |
+| RIDE TIP, BELL, CRASH | RD, RB, RE |
+| CRASH 1, CRASH 2, CHINA, SPLASH | CY, CR2, CHN, SPL |
+| ...and each one's CHOKE | **C1C, C2C, CHC, SPC** (new) |
+
+**The mics:**
+- **Named channels:**
+  - **Overheads and room:** OH → OVERHEADS, RM (and the cymbals' RM CLOSE) → ROOM.
+  - **Kick:** DYN → KICK IN, CON → KICK OUT.
+  - **Snare (and the cross stick):** DYN1 → SNARE TOP, BTM → SNARE BOTTOM.
+  - **Toms 1–3:** DYN → TOM 1–3.
+  - **Cymbals and hats:** the hats' close mic → HI-HAT, the cymbals' SPOT → CYMBALS.
+- **Its own USER channel each,** named, for the extra mics: KICK FX, KICK SUB, KICK TRIGGER, SNARE FX, SNARE TOP 2, TOM 4.
+  - **Starting levels:** FX and TRIGGER start 12 dB down, SUB 6 dB down. These are my guesses, and you mix from there.
+- **Levels:** as recorded, so the library's own balance between its drums and mics is kept.
+
+**The six new drums** (slots 24–29), for this library and any kit that has them:
+- **T4 (Tom 4):** the lowest tom, with its own mixer piece (TOM 4). General MIDI's note 41 (low floor tom) now plays it.
+- **HSH (the hi-hat's shoulder):** the stick's side on the hat's edge, now in the hi-hat's articulations.
+- **The chokes (C1C, C2C, CHC, SPC):** a choke stops what's still ringing of its cymbal, then plays its own sound (hit and grabbed).
+
+**Under the hood:**
+- **Streaming:** disk streaming now reads hits whose mics are each their own file (this library's way), not only one file holding every mic (DrumGizmo's way). Up to 192 files are kept open; a kit like this plays 18+ hits at once, each up to 7 files.
+- **A fix found on the way:** a drum's mic going straight to a USER channel read its bleed setting from past the end of the bleed table, and counted as bleed. It now counts as the drum's own sound.
+- **Your older presets, kits and projects** load with the six new drums off, so they sound as they did (their notes play the nearest drum instead).
+  - **Layers kept:** a drum's layer (0.29.0) was saved under a number that moved with the new drums. Older files are read the old way, so your kick layer stays your kick's layer.
+
+**Honest limits:**
+- **Not heard here:** I have only the library's file names, not its audio. The import was tested on a pack made here with the same names and folders: every drum, mic channel, layer and round robin, the stream past each hit's head, presets. Your ears decide the mix.
+- **No rimshot slot:** the library plays its rimshot as the snare's hardest layer (its page says so), so SD2 is switched off and plays the snare.
+- **The kit view's picture** has no fourth tom (it's a fixed render). Tom 4 plays from its keys and notes.
+- **GROOVE LIBRARY layout:** it has no notes for the shoulder, Tom 4 or the chokes yet. ROOT and CUSTOM layouts play them. Tell me which notes your grooves use for them and I'll add them.
+- **The pre-mixed one-shots** (BEEF MEISTER, NATURAL, DRY, BEEF MISTRESS) aren't imported. You chose the individual mics.
+
+**Tests:** our naming rules (every sound and mic word in the library's pattern); a pack scanned (its INDIVIDUAL MICS only, the extra mics in a fixed order, stray files left out); imported and played (each mic alone on its channel at its pitch, the USER channels and their levels, past the 0.2 s head from disk, velocity layers, round robins in turn); a preset keeping and reloading it; the chokes stopping their cymbal; an older preset (the new drums off, the kick's layer kept); every test that counted 23 drums now counts 29.
+
 ## 0.32.0
 
 **RIFF MATCH: grooves that fit your riff.** Drop a recording of your guitar, bass or keys (WAV, AIFF, FLAC, OGG or MP3), or a MIDI file of one, and the grooves that would play best with it come first. You hear your riff with every groove you preview, in time. It's our own design, inspired by the riff-to-groove search in commercial drum software.

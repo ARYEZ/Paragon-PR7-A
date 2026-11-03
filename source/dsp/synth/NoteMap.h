@@ -7,7 +7,7 @@
 
 // THE NOTE MAP (PR7-D 0.2.0): which MIDI note plays which drum.
 //
-//   ROOT          the 23 keys from ROOT play the slots in order (C the kick ... the first 12 as on General MIDI kits'
+//   ROOT          the 29 keys from ROOT play the slots in order (C the kick ... the first 12 as on General MIDI kits'
 //                 octave, as PR7-K played them); the four keys under ROOT start the sequencer's patterns on KEY.
 //   GROOVE LIBRARY  the extended layout of popular drum software's groove libraries, so their MIDI grooves play as
 //                 written: several notes per drum (its articulations), from note 1 to 127. Inspired by that layout,
@@ -27,8 +27,9 @@ namespace synth::drums::notemap
 
     // The slots by name (slotDefaults' order).
     enum Slot : std::int8_t { BD, RIM, SD, CLP, SD2, LT, CH, MT, PH, HT, OH, CY, RD, RB, CR2, CHN, SPL, HH, TMB, SHK,
-                              RE, HO1, HO3 };   // 0.17.0
-    static_assert (HO3 == numSlots - 1);
+                              RE, HO1, HO3,              // 0.17.0
+                              T4, HSH, C1C, C2C, CHC, SPC };   // 0.33.0
+    static_assert (SPC == numSlots - 1);
     // A note that plays the hi-hat at the pedal's openness (CC 4): KitSettings::hatPedal.
     inline constexpr std::int8_t PEDAL = KitSettings::hatPedal;
 
@@ -124,7 +125,8 @@ namespace synth::drums::notemap
         set (m, SD, { 38 });
         set (m, CLP, { 39 });
         set (m, SD2, { 40 });
-        set (m, LT, { 41, 43 });
+        set (m, LT, { 43 });
+        set (m, T4, { 41 });   // 0.33.0: the low floor tom (it played LT before; T4's stand-in is LT)
         set (m, CH, { 42 });
         set (m, MT, { 45, 47 });
         set (m, PH, { 44 });

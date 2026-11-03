@@ -28,6 +28,7 @@ namespace
     constexpr int pr7d0240 = 32; // PR7-D 0.24.0: the acoustic models' position, shell, variation
     constexpr int pr7d0260 = 33; // PR7-D 0.26.0: simulated mics and room
     constexpr int pr7d0290 = 34; // PR7-D 0.29.0: a drum's layer
+    constexpr int pr7d0330 = 35; // PR7-D 0.33.0: drums 24 to 29 (every setting of theirs)
 
     const ToText asDb = [] (float value, int) { return juce::String (value, 1) + " dB"; };
     const ToText asPercent = [] (float value, int) { return juce::String (juce::roundToInt (value * 100.0f)) + "%"; };
@@ -115,58 +116,60 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
         }
         for (int k = 0; k < numDrums; ++k)
         {
-            // PR7-K's 12 drums keep their version hints; the 8 PR7-D added take 0.2.0's, the 3 after them 0.17.0's.
-            const auto added = k >= 12, articulation = k >= 20;
+            // PR7-K's 12 drums keep their version hints; the 8 PR7-D added take 0.2.0's, the 3 after them 0.17.0's;
+            // 0.33.0's six take its hint for every setting (`newer` below).
+            const auto added = k >= 12, articulation = k >= 20, newer = k >= 23;
+            const auto at = [newer] (int hint) { return newer ? pr7d0330 : hint; };
             const auto hint = articulation ? pr7d0170 : added ? pr7d020 : stage6a;
             const auto hintStart = articulation ? pr7d0170 : added ? pr7d020 : stage6aStart;
             const auto hintEditor = articulation ? pr7d0170 : added ? pr7d020 : stage6c;
             const auto& d = synth::drums::slotDefaults[(size_t) k];
             const auto name = "Drum " + juce::String (k + 1) + " ";
-            addChoice (layout, drum (k, "Model"), name + "Model", synth::drums::modelNames, (int) d.model, hint);
-            add (layout, drum (k, "Level"), name + "Volume", { -48.0f, 12.0f, 0.1f }, 0.0f, asLevel, hint);
-            add (layout, drum (k, "Pan"), name + "Pan", { -1.0f, 1.0f }, 0.0f, asPan, hint);
-            add (layout, drum (k, "Pitch"), name + "Pitch", { -24.0f, 24.0f, 0.01f }, d.pitch, asPitch, hint);
-            add (layout, drum (k, "Decay"), name + "Decay", { 0.0f, 1.0f }, d.decay, asPercent, hint);
-            add (layout, drum (k, "Tone"), name + "Tone", { 0.0f, 1.0f }, d.tone, asPercent, hint);
-            add (layout, drum (k, "Snap"), name + "Snap", { 0.0f, 1.0f }, d.snap, asPercent, hint);
-            addSwitch (layout, drum (k, "Mute"), name + "Mute", false, hint);
-            addSwitch (layout, drum (k, "Solo"), name + "Solo", false, hint);
-            addChoice (layout, drum (k, "Choke"), name + "Choke", synth::drums::chokeNames, d.choke, hint);
-            addChoice (layout, drum (k, "Insert"), name + "Insert", insertBusNames, 0, hint);
-            add (layout, drum (k, "SendDelay"), name + "Send Delay", { 0.0f, 1.0f }, 1.0f, asPercent, hint);
-            add (layout, drum (k, "SendReverb"), name + "Send Reverb", { 0.0f, 1.0f }, 1.0f, asPercent, hint);
-            add (layout, drum (k, "SampleStart"), name + "Sample Start", { 0.0f, 1.0f }, 0.0f, asShare, hintStart);
-            add (layout, drum (k, "SampleEnd"), name + "Sample End", { 0.0f, 1.0f }, 1.0f, asShare, hintStart);
+            addChoice (layout, drum (k, "Model"), name + "Model", synth::drums::modelNames, (int) d.model, at (hint));
+            add (layout, drum (k, "Level"), name + "Volume", { -48.0f, 12.0f, 0.1f }, 0.0f, asLevel, at (hint));
+            add (layout, drum (k, "Pan"), name + "Pan", { -1.0f, 1.0f }, 0.0f, asPan, at (hint));
+            add (layout, drum (k, "Pitch"), name + "Pitch", { -24.0f, 24.0f, 0.01f }, d.pitch, asPitch, at (hint));
+            add (layout, drum (k, "Decay"), name + "Decay", { 0.0f, 1.0f }, d.decay, asPercent, at (hint));
+            add (layout, drum (k, "Tone"), name + "Tone", { 0.0f, 1.0f }, d.tone, asPercent, at (hint));
+            add (layout, drum (k, "Snap"), name + "Snap", { 0.0f, 1.0f }, d.snap, asPercent, at (hint));
+            addSwitch (layout, drum (k, "Mute"), name + "Mute", false, at (hint));
+            addSwitch (layout, drum (k, "Solo"), name + "Solo", false, at (hint));
+            addChoice (layout, drum (k, "Choke"), name + "Choke", synth::drums::chokeNames, d.choke, at (hint));
+            addChoice (layout, drum (k, "Insert"), name + "Insert", insertBusNames, 0, at (hint));
+            add (layout, drum (k, "SendDelay"), name + "Send Delay", { 0.0f, 1.0f }, 1.0f, asPercent, at (hint));
+            add (layout, drum (k, "SendReverb"), name + "Send Reverb", { 0.0f, 1.0f }, 1.0f, asPercent, at (hint));
+            add (layout, drum (k, "SampleStart"), name + "Sample Start", { 0.0f, 1.0f }, 0.0f, asShare, at (hintStart));
+            add (layout, drum (k, "SampleEnd"), name + "Sample End", { 0.0f, 1.0f }, 1.0f, asShare, at (hintStart));
             // THE SAMPLE EDITOR (6c).
-            add (layout, drum (k, "Gain"), name + "Gain", { -24.0f, 24.0f, 0.1f }, 0.0f, asDb, hintEditor);
-            addSwitch (layout, drum (k, "Mono"), name + "Mono", false, hintEditor);
-            add (layout, drum (k, "Delay"), name + "Delay", delayRange, 0.0f, asDrumDelay, hintEditor);
-            add (layout, drum (k, "LowPass"), name + "Low Pass", logRange (20.0, 20000.0), 20000.0f, asLowPass, hintEditor);
-            add (layout, drum (k, "HighPass"), name + "High Pass", logRange (20.0, 20000.0), 20.0f, asHighPass, hintEditor);
-            addChoice (layout, drum (k, "Output"), name + "Output", outputNames, 0, articulation ? pr7d0170 : pr7d030);
+            add (layout, drum (k, "Gain"), name + "Gain", { -24.0f, 24.0f, 0.1f }, 0.0f, asDb, at (hintEditor));
+            addSwitch (layout, drum (k, "Mono"), name + "Mono", false, at (hintEditor));
+            add (layout, drum (k, "Delay"), name + "Delay", delayRange, 0.0f, asDrumDelay, at (hintEditor));
+            add (layout, drum (k, "LowPass"), name + "Low Pass", logRange (20.0, 20000.0), 20000.0f, asLowPass, at (hintEditor));
+            add (layout, drum (k, "HighPass"), name + "High Pass", logRange (20.0, 20000.0), 20.0f, asHighPass, at (hintEditor));
+            addChoice (layout, drum (k, "Output"), name + "Output", outputNames, 0, at (articulation ? pr7d0170 : pr7d030));
             // ARTICULATIONS (0.17.0).
-            addSwitch (layout, drum (k, "On"), name + "On", true, pr7d0170);
-            addChoice (layout, drum (k, "MuteTail"), name + "Mute Tail", synth::drums::muteTailNames, 0, pr7d0170);
+            addSwitch (layout, drum (k, "On"), name + "On", true, at (pr7d0170));
+            addChoice (layout, drum (k, "MuteTail"), name + "Mute Tail", synth::drums::muteTailNames, 0, at (pr7d0170));
             // THE VELOCITY GATE (0.18.0): the velocities (as they come in) that play it.
             const ToText asVelocity = [] (float v, int) { return juce::String (juce::roundToInt (v)); };
-            add (layout, drum (k, "VelMin"), name + "Velocity Gate Low", { 0.0f, 127.0f, 1.0f }, 0.0f, asVelocity, pr7d0180);
-            add (layout, drum (k, "VelMax"), name + "Velocity Gate High", { 0.0f, 127.0f, 1.0f }, 127.0f, asVelocity, pr7d0180);
+            add (layout, drum (k, "VelMin"), name + "Velocity Gate Low", { 0.0f, 127.0f, 1.0f }, 0.0f, asVelocity, at (pr7d0180));
+            add (layout, drum (k, "VelMax"), name + "Velocity Gate High", { 0.0f, 127.0f, 1.0f }, 127.0f, asVelocity, at (pr7d0180));
             // THE SAMPLE ENGINE (0.19.0): HIT VARIATION (an instrument's hits), LAYER LIMIT, VOICES (every drum).
-            addSwitch (layout, drum (k, "Randomize"), name + "Randomize Hits", true, pr7d0190);
-            addSwitch (layout, drum (k, "Adjacent"), name + "Adjacent Layers", true, pr7d0190);
-            addSwitch (layout, drum (k, "VelToVol"), name + "Velocity To Volume", true, pr7d0190);
+            addSwitch (layout, drum (k, "Randomize"), name + "Randomize Hits", true, at (pr7d0190));
+            addSwitch (layout, drum (k, "Adjacent"), name + "Adjacent Layers", true, at (pr7d0190));
+            addSwitch (layout, drum (k, "VelToVol"), name + "Velocity To Volume", true, at (pr7d0190));
             add (layout, drum (k, "LayerLimit"), name + "Layer Limit", { 0.0f, 99.0f, 1.0f }, 0.0f,
-                 [] (float v, int) { return v < 0.5f ? juce::String ("All") : juce::String (juce::roundToInt (v)); }, pr7d0190);
+                 [] (float v, int) { return v < 0.5f ? juce::String ("All") : juce::String (juce::roundToInt (v)); }, at (pr7d0190));
             add (layout, drum (k, "Voices"), name + "Voices", { 1.0f, 48.0f, 1.0f }, (float) synth::drums::Kit::maxPerSlot,
-                 [] (float v, int) { return juce::String (juce::roundToInt (v)); }, pr7d0190);
+                 [] (float v, int) { return juce::String (juce::roundToInt (v)); }, at (pr7d0190));
             const synth::drums::SlotSettings acoustic;
-            add (layout, drum (k, "Position"), name + "Position", { 0.0f, 1.0f }, acoustic.position, asPercent, pr7d0240);
-            add (layout, drum (k, "Shell"), name + "Shell", { 0.0f, 1.0f }, acoustic.shell, asPercent, pr7d0240);
-            add (layout, drum (k, "Variation"), name + "Variation", { 0.0f, 1.0f }, acoustic.variation, asPercent, pr7d0240);
-            addSwitch (layout, drum (k, "Mics"), name + "Simulated Mics", true, pr7d0260);
+            add (layout, drum (k, "Position"), name + "Position", { 0.0f, 1.0f }, acoustic.position, asPercent, at (pr7d0240));
+            add (layout, drum (k, "Shell"), name + "Shell", { 0.0f, 1.0f }, acoustic.shell, asPercent, at (pr7d0240));
+            add (layout, drum (k, "Variation"), name + "Variation", { 0.0f, 1.0f }, acoustic.variation, asPercent, at (pr7d0240));
+            addSwitch (layout, drum (k, "Mics"), name + "Simulated Mics", true, at (pr7d0260));
             add (layout, drum (k, "LayerLevel"), name + "Layer Level", { -60.0f, 12.0f, 0.1f }, 0.0f,
-                 [] (float v, int) { return v <= -59.95f ? juce::String ("Off") : juce::String (v, 1) + " dB"; }, pr7d0290);
-            addChoice (layout, drum (k, "LayerOut"), name + "Layer Out", layerOutNames, 0, pr7d0290);
+                 [] (float v, int) { return v <= -59.95f ? juce::String ("Off") : juce::String (v, 1) + " dB"; }, at (pr7d0290));
+            addChoice (layout, drum (k, "LayerOut"), name + "Layer Out", layerOutNames, 0, at (pr7d0290));
         }
 
         // THE MIXER (0.20.0): the mic channels.

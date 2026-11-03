@@ -26,13 +26,21 @@ namespace ParamIDs
     // THE NOTE MAP (PR7-D 0.2.0, version hint 24): which notes play which drum (notemap::layoutNames). Global, like
     // OUTPUT: it suits the player's controller and grooves, not a sound, so presets leave it alone.
     inline constexpr auto drumsMap      = "drumsMap";
-    inline constexpr int numDrums = 23;   // 12 until PR7-D 0.2.0 (drum13 to drum20: version hint 24), 20 until 0.17.0
-                                          // (drum21 to drum23, the articulations: hint 26)
+    inline constexpr int numDrums = 29;   // 12 until PR7-D 0.2.0 (drum13 to drum20: version hint 24), 20 until 0.17.0
+                                          // (drum21 to drum23, the articulations: hint 26), 23 until 0.33.0 (drum24 to
+                                          // drum29: tom 4, the hat's shoulder, the chokes: hint 35)
     // THE HI-HAT PEDAL (0.17.0, hint 26): the CC 4 values where the hat's openness steps begin (closed, open 1, open 2,
     // open 3; below the last, open 4). Global, like the note map: they suit the player's pedal, not a sound.
     // Presets, kits and projects saved before 0.17.0 load with the three drums it added switched off (their notes play
     // the drums they played before, through the stand-ins), so they sound as they did.
     inline const juce::StringArray articulationsAddedOff { "drum21On", "drum22On", "drum23On" };
+    // The same for 0.33.0's six (older presets, kits and projects: off, so their notes play the stand-ins).
+    // A drum's layer (0.29.0) is saved as instrument numDrums + slot: files from before 0.33.0 counted 23 drums.
+    inline constexpr int instrumentIndexFrom (int saved, bool before033) noexcept
+    {
+        return before033 && saved >= 23 && saved < 46 ? numDrums + (saved - 23) : saved;
+    }
+    inline const juce::StringArray slotsAdded033Off { "drum24On", "drum25On", "drum26On", "drum27On", "drum28On", "drum29On" };
     inline const juce::StringArray drumsPedalSteps { "drumsPedal1", "drumsPedal2", "drumsPedal3", "drumsPedal4" };
     // THE MIXER (0.20.0, hint 29): each mic channel's settings, "mix<n>" plus a setting (n = 1 to 13, mixer::Channel + 1).
     // OUTPUT is global, like the drums' (notInRigs).

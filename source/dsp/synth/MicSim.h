@@ -33,7 +33,7 @@ namespace synth::micsim
     // Where things stand: x to the drummer's right, y forward, z up (metres).
     struct Point { float x = 0.0f, y = 0.0f, z = 0.0f; };
     // A piece's place (THE PIECES' order, drums::pieces).
-    inline constexpr int numPieces = 14;
+    inline constexpr int numPieces = 15;
     inline constexpr std::array<Point, numPieces> piecePlaces {{
         {  0.0f,  0.45f, 0.30f },   // KICK (its beater)
         { -0.15f, 0.35f, 0.65f },   // SNARE
@@ -49,6 +49,7 @@ namespace synth::micsim
         {  0.0f,  0.30f, 1.00f },   // CLAP (in front of the kit)
         { -0.45f, 0.40f, 1.10f },   // TAMBOURINE (on the hi-hat's stand)
         {  0.0f,  0.30f, 1.00f },   // SHAKER
+        {  0.85f, 0.10f, 0.45f },   // TOM 4 (0.33.0: beyond floor tom 2)
     }};
 
     // The mics a piece plays through (every channel but OTHER for the kit's drums and cymbals; the clap, tambourine
@@ -57,7 +58,7 @@ namespace synth::micsim
     // Whether a piece is heard in a mic channel (the same, without making a list: for the audio thread).
     inline bool hears (int piece, int channel) noexcept
     {
-        if (piece >= 11)
+        if (piece >= 11 && piece <= 13)
             return channel == mixer::other || mixer::hearsWholeKit (channel);
         return channel != mixer::other && channel >= 0 && channel < mixer::numChannels;
     }
@@ -99,7 +100,7 @@ namespace synth::micsim
     class Simulator
     {
     public:
-        static constexpr int numSlots = 23;
+        static constexpr int numSlots = 29;
         static constexpr int maxFilters = 3;
 
         void prepare (double sampleRate, int blockSize);

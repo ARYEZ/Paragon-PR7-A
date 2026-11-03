@@ -322,7 +322,7 @@ TEST_CASE ("ARTICULATIONS: the list on the KIT VIEW: the chosen drum's piece, AL
     // The hat: its steps in order; a mark can't pass its neighbour.
     page.clickRow (CH, {});
     CHECK (list.getPiece() == pieceOfSlot (OH));
-    CHECK (list.describeRows().size() == 6);
+    CHECK (list.describeRows().size() == 7);   // (0.33.0: and its shoulder)
     list.setPedalStep (1, 120);   // open 1's mark dragged past closed's (102): stops just under it
     CHECK (p.processor.getKitSettings().pedalSteps[1] == 101);
     list.setPedalStep (1, 80);

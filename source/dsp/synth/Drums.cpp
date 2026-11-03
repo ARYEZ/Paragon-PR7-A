@@ -1533,6 +1533,15 @@ namespace synth::drums
         if (s.model == Model::sample && ! reversing && (s.sample == nullptr || s.sample->length() < 2))
             return;
 
+        // 0.33.0: a choke articulation (hit, then grabbed) stops what's ringing of its cymbal first.
+        if (isChoke (slot))
+        {
+            const auto piece = pieceOfSlot (slot);
+            for (auto& v : voices)
+                if (v.active && v.fadeStep <= 0.0f && piece >= 0 && pieceOfSlot (v.slot) == piece)
+                    v.fadeOut (0.03);
+        }
+
         // CHOKE: this hit stops the other slots in its group, quickly but without a click.
         if (s.choke > 0)
             for (auto& v : voices)
@@ -1678,9 +1687,12 @@ namespace synth::drums
             const auto channel = mixer::routedChannel (settings.micRoutes, pieceOfSlot (slot), source);
             if (channel < 0)
                 continue;
-            const auto direct = isDirect (slot, source);
+            // 0.33.0: a mic of the drum's own that has a USER channel to itself (a sample pack's sub kick, trigger, tom 4)
+            // is its direct sound, with no BLEED FROM INSTRUMENTS cell (that table has the 13 named channels).
+            const auto own = source >= mixer::numChannels;
+            const auto direct = own || isDirect (slot, source);
             const auto& ch = settings.channels[(size_t) channel];
-            auto gain = settings.bleed != nullptr ? (*settings.bleed)[(size_t) source][(size_t) piece].gain() : 1.0f;
+            auto gain = settings.bleed != nullptr && ! own ? (*settings.bleed)[(size_t) source][(size_t) piece].gain() : 1.0f;
             if (! direct)
                 gain *= ch.bleedOn ? ch.bleedGain : 0.0f;
             if (std::abs (gain) < 1.0e-9f || mic.sample == nullptr)

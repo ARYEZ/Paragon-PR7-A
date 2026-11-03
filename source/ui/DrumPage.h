@@ -165,7 +165,8 @@ private:
     bool showingLayer = false;   // the chosen drum holds an instrument (THE SAMPLE ENGINE, 0.19.0): its controls show
     void showLoadMenu();
     void importSfzKit();
-    void importDrumGizmoKit();   // 0.27.0
+    void importDrumGizmoKit();
+    void importSamplePack();   // 0.33.0   // 0.27.0
     void chooseLayer();          // 0.29.0
     DrumHitDisplay display;
     MultiPointEditor envelope;

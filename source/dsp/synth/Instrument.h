@@ -49,7 +49,7 @@ namespace synth::drums
         juce::String name;
 
         // Where it came from, to load it again (presets and projects keep this, not the audio).
-        enum class Kind { sfz, folder, drumGizmo };   // 0.27.0: a DrumGizmo kit's instrument(s)
+        enum class Kind { sfz, folder, drumGizmo, samplePack };   // 0.27.0: a DrumGizmo kit's instrument(s); 0.33.0: a sample pack's
         Kind kind = Kind::folder;
         juce::File source;                          // the .sfz file, or the folder
         int note = -1;                              // SFZ: the note whose regions it is (-1: all of the file's)

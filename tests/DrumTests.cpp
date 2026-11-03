@@ -317,7 +317,7 @@ TEST_CASE ("DRUMS: the kit's keys: C to B from its root, one-shots, nothing outs
     CHECK_FALSE (rig.kit.isSounding (0));
 
     Rig outside;
-    outside.play (0.2, { { 35, 1.0f, 0.0 }, { 59, 1.0f, 0.0 } });   // just under the kit, and just over its 23 keys
+    outside.play (0.2, { { 35, 1.0f, 0.0 }, { 36 + numSlots, 1.0f, 0.0 } });   // just under the kit, and just over its keys
     CHECK (outside.kit.getNumActiveVoices() == 0);
     CHECK (Rig::peak (outside.left) == 0.0f);
 
@@ -512,15 +512,17 @@ TEST_CASE ("DRUMS: at most 48 hits sound at once, the oldest cut first (as befor
         s.choke = 0;     // the hats would stop each other
         s.mono = false;
     }
+    // (0.33.0's chokes left out: a choke stops its cymbal, which this isn't about.)
     std::vector<std::tuple<int, float, double>> notes;
     for (int step = 0; step < 3; ++step)
         for (int k = 0; k < numSlots; ++k)
-            notes.emplace_back (36 + k, 1.0f, step * 0.1);
+            if (! isChoke (k))
+                notes.emplace_back (36 + k, 1.0f, step * 0.1);
     rig.play (0.3, notes);
     CHECK (rig.kit.getNumActiveVoices() == Kit::maxHits);
-    // The 21 cut were the first round's (drums 1-21); every drum still sounds through a later hit.
+    // The ones cut were the first round's; every drum still sounds through a later hit.
     for (int k = 0; k < numSlots; ++k)
-        CHECK (rig.kit.isSounding (k));
+        CHECK (rig.kit.isSounding (k) == ! isChoke (k));
 }
 
 namespace

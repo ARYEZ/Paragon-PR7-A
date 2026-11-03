@@ -18,7 +18,7 @@
 // plugin, the MIDI export and the tests alike, so they can't disagree.
 namespace synth::drumseq
 {
-    inline constexpr int numPatterns = 4, numRows = 23, maxBeats = 16, maxNotes = 1024;   // a row per drum slot (12 until PR7-D 0.2.0)
+    inline constexpr int numPatterns = 4, numRows = 29, maxBeats = 16, maxNotes = 1024;   // a row per drum slot (12 until PR7-D 0.2.0)
     inline const juce::StringArray patternNames { "A", "B", "C", "D" };
 
     // Saved by index: only ever append.

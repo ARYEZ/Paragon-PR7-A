@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "dsp/synth/DrumGizmo.h"
+#include "dsp/synth/SamplePack.h"
 #include "dsp/synth/Instrument.h"
 
 #include <map>
@@ -24,7 +25,8 @@ namespace
     const juce::Identifier modulationKey { "Modulation" };
     const juce::Identifier midiLinksKey { "MidiLinks" };
     const juce::Identifier noteMapKey { "NoteMap" };
-    constexpr int parameterVersion = 2;   // 2: 0.17.0 (the articulations: older projects load with drums 21 to 23 off)
+    constexpr int parameterVersion = 3;   // 2: 0.17.0 (the articulations: older projects load with drums 21 to 23 off)
+                                          // 3: 0.33.0 (drums 24 to 29 off; layers' instrument numbers moved)
 }
 
 //==============================================================================
@@ -1071,8 +1073,9 @@ void ParagonX1AudioProcessor::startLoading (std::vector<std::pair<int, juce::Str
         instrumentPool = std::make_unique<juce::ThreadPool> (1);
     instrumentPool->addJob ([this, refs, generation, alive]
     {
-        // Each SFZ file read once, whatever number of its notes the slots take.
+        // Each SFZ file read once, whatever number of its notes the slots take (and each sample pack's names).
         std::map<juce::String, synth::drums::instruments::Sfz> files;
+        std::map<juce::String, synth::drums::samplepack::PackInfo> packs;
         std::vector<std::pair<int, std::shared_ptr<const synth::drums::Instrument>>> done;
         juce::StringArray problems;
         for (const auto& [slot, ref] : refs)
@@ -1090,7 +1093,8 @@ void ParagonX1AudioProcessor::startLoading (std::vector<std::pair<int, juce::Str
                 const auto known = knownKitFolder (kitName);
                 if (known == juce::File())
                 {
-                    problems.add ("the " + kitName + " kit isn't on this computer yet: DRUMS > LOAD... > GET FREE KITS..., then LOAD... > A DRUMGIZMO KIT...");
+                    problems.add (parts[0] == "pack" ? "the " + kitName + " sample pack isn't on this computer yet (or was moved): DRUMS > LOAD... > A SAMPLE PACK..."
+                                                     : "the " + kitName + " kit isn't on this computer yet: DRUMS > LOAD... > GET FREE KITS..., then LOAD... > A DRUMGIZMO KIT...");
                     done.emplace_back (slot, nullptr);
                     continue;
                 }
@@ -1109,6 +1113,14 @@ void ParagonX1AudioProcessor::startLoading (std::vector<std::pair<int, juce::Str
             }
             else if (parts[0] == "file")
                 instrument = synth::drums::instruments::fromFile (source);   // 0.29.0: one hit (a layer's)
+            else if (parts[0] == "pack")
+            {
+                // 0.33.0: a sample pack's slot: "pack|<slot>|<folder>" (its names read once a load).
+                auto it = packs.find (source.getFullPathName());
+                if (it == packs.end())
+                    it = packs.emplace (source.getFullPathName(), synth::drums::samplepack::scan (source)).first;
+                instrument = synth::drums::samplepack::load (it->second, parts[1].getIntValue(), problems);
+            }
             else if (parts[0] == "folder")
                 instrument = synth::drums::instruments::fromFolder (source);
             else
@@ -1264,6 +1276,57 @@ ParagonX1AudioProcessor::DrumGizmoImport ParagonX1AudioProcessor::importDrumGizm
         if (assigned.slots.count (slot) == 0)
             setParameterNow (ParamIDs::drum (slot, "On"), 0.0f);
     rememberKit (info.name, kitFile.getParentDirectory());
+    startLoading (refs);
+    markModified();
+    requestCheckpoint();
+    return result;
+}
+
+ParagonX1AudioProcessor::SamplePackImport ParagonX1AudioProcessor::importSamplePack (const juce::File& folder)
+{
+    SamplePackImport result;
+    const auto info = synth::drums::samplepack::scan (folder);
+    result.name = info.name;
+    result.unused = info.unused;
+    result.userChannels = info.userChannels;
+    if (! info.valid())
+        return result;
+    // Every drum it has: SAMPLE, on, its sounds (streamed); the hat's steps and the rimshot it has none of: off (they
+    // play the nearest it has: a pack's rimshot is often its snare's hardest layer).
+    std::vector<std::pair<int, juce::String>> refs;
+    for (const auto& [slot, files] : info.slots)
+    {
+        result.slots.emplace_back (slot, (int) files.size());
+        setDrumSample (slot, nullptr);
+        makeSlotPlaySample (slot);
+        setParameterNow (ParamIDs::drum (slot, "On"), 1.0f);
+        setParameterNow (ParamIDs::drum (slot, "LayerOut"), 0.0f);   // (a layer's USER channel may be one of the pack's now)
+        refs.emplace_back (slot, "pack|" + juce::String (slot) + "|{kit:" + info.name + "}/");
+    }
+    using namespace synth::drums::notemap;
+    for (const auto slot : { HO1, HO3, SD2, RE, HH, HSH, C1C, C2C, CHC, SPC, T4 })
+        if (info.slots.count (slot) == 0)
+            setParameterNow (ParamIDs::drum (slot, "On"), 0.0f);
+    // Its USER channels: fresh, named; a trigger or effect mic starts 12 dB down, a sub kick 6 (our guesses: they're
+    // blended in to taste), the rest at 0 dB.
+    auto m = matrix;
+    for (int u = 0; u < info.userChannels.size() && u < synth::mixer::numUserChannels; ++u)
+    {
+        const auto channel = synth::mixer::numChannels + u;
+        for (const auto* what : ParamIDs::mixSettings)
+            if (auto* parameter = parameters.getParameter (ParamIDs::mix (channel, what)))
+            {
+                parameter->beginChangeGesture();
+                parameter->setValueNotifyingHost (parameter->getDefaultValue());
+                parameter->endChangeGesture();
+            }
+        const auto& name = info.userChannels[u];
+        const auto level = name.contains ("TRIGGER") || name.contains ("FX") ? -12.0f : name.contains ("SUB") ? -6.0f : 0.0f;
+        setParameterNow (ParamIDs::mix (channel, "Level"), level);
+        m.userChannelNames[(size_t) u] = name.substring (0, 24);
+    }
+    setModMatrix (m);
+    rememberKit (info.name, folder);
     startLoading (refs);
     markModified();
     requestCheckpoint();
@@ -1484,6 +1547,12 @@ juce::Array<int> ParagonX1AudioProcessor::getUserChannelsInUse() const
     for (const auto to : matrix.micRoutes)
         if (synth::mixer::isUserChannel (to))
             used.addIfNotAlreadyThere (to);
+    // 0.33.0: and the USER channels a drum's own sounds use (a sample pack's extra mics).
+    for (int k = 0; k < ParamIDs::numDrums; ++k)
+        if (const auto& instrument = drumInstruments[(size_t) k]; instrument != nullptr)
+            for (const auto c : instrument->micChannels())
+                if (synth::mixer::isUserChannel (c))
+                    used.addIfNotAlreadyThere (c);
     // 0.29.0: and the drums' layers' channels.
     for (int k = 0; k < ParamIDs::numDrums; ++k)
         if (auto* out = parameters.getRawParameterValue (ParamIDs::drum (k, "LayerOut")))
@@ -1926,7 +1995,7 @@ juce::Array<juce::File> ParagonX1AudioProcessor::listDrumSequences() const { ret
 std::unique_ptr<juce::XmlElement> ParagonX1AudioProcessor::captureDrumKit() const
 {
     auto xml = std::make_unique<juce::XmlElement> ("DrumKit");
-    xml->setAttribute ("version", 2);   // 2: 0.17.0 (older kits load with drums 21 to 23 off)
+    xml->setAttribute ("version", 3);   // 2: 0.17.0 (older kits load with drums 21 to 23 off); 3: 0.33.0 (24 to 29)
     for (auto* parameter : AudioProcessor::getParameters())
         if (auto* ranged = dynamic_cast<juce::RangedAudioParameter*> (parameter); ranged != nullptr && isKitParameter (ranged->paramID))
         {
@@ -2000,6 +2069,9 @@ bool ParagonX1AudioProcessor::applyDrumKit (const juce::XmlElement& xml)
     if (xml.getIntAttribute ("version", 1) < 2)
         for (const auto& id : ParamIDs::articulationsAddedOff)
             values[id] = 0.0f;
+    if (xml.getIntAttribute ("version", 1) < 3)
+        for (const auto& id : ParamIDs::slotsAdded033Off)
+            values[id] = 0.0f;
     for (auto* parameter : AudioProcessor::getParameters())
         if (auto* ranged = dynamic_cast<juce::RangedAudioParameter*> (parameter); ranged != nullptr && isKitParameter (ranged->paramID))
         {
@@ -2029,8 +2101,9 @@ bool ParagonX1AudioProcessor::applyDrumKit (const juce::XmlElement& xml)
     {
         std::vector<std::pair<int, juce::String>> refs;
         std::array<bool, 2 * ParamIDs::numDrums> has {};
+        const auto before033 = xml.getIntAttribute ("version", 1) < 3;
         for (const auto* e : xml.getChildWithTagNameIterator ("DrumInstrument"))
-            if (const auto slot = e->getIntAttribute ("slot") - 1; slot >= 0 && slot < 2 * ParamIDs::numDrums)
+            if (const auto slot = ParamIDs::instrumentIndexFrom (e->getIntAttribute ("slot") - 1, before033); slot >= 0 && slot < 2 * ParamIDs::numDrums)
             {
                 refs.emplace_back (slot, e->getStringAttribute ("ref"));
                 has[(size_t) slot] = true;
@@ -2546,8 +2619,9 @@ void ParagonX1AudioProcessor::setStateInformation (const void* data, int sizeInB
     std::vector<std::pair<int, juce::String>> instrumentsToLoad;
     if (auto saved = state.getChildWithName ("DrumInstruments"); saved.isValid())
     {
+        const auto before033 = (int) state.getProperty (parameterVersionKey, 1) < 3;
         for (const auto& e : saved)
-            if (const auto slot = (int) e["slot"] - 1; slot >= 0 && slot < 2 * ParamIDs::numDrums)
+            if (const auto slot = ParamIDs::instrumentIndexFrom ((int) e["slot"] - 1, before033); slot >= 0 && slot < 2 * ParamIDs::numDrums)
                 instrumentsToLoad.emplace_back (slot, e["ref"].toString());
         state.removeChild (saved, nullptr);
     }
@@ -2595,9 +2669,13 @@ void ParagonX1AudioProcessor::setStateInformation (const void* data, int sizeInB
         state.removeChild (saved, nullptr);
     }
     installSong (std::move (newSong));
-    // Before 0.17.0: the articulations it added start off, so the project sounds as it did.
+    // Before 0.17.0: the articulations it added start off, so the project sounds as it did (0.33.0's drums likewise).
+    juce::StringArray startOff;
     if ((int) state.getProperty (parameterVersionKey, 1) < 2)
-        for (const auto& id : ParamIDs::articulationsAddedOff)
+        startOff.addArray (ParamIDs::articulationsAddedOff);
+    if ((int) state.getProperty (parameterVersionKey, 1) < 3)
+        startOff.addArray (ParamIDs::slotsAdded033Off);
+    for (const auto& id : startOff)
         {
             auto param = state.getChildWithProperty ("id", id);
             if (! param.isValid())

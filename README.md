@@ -46,9 +46,9 @@ PR7-D is built in stages, each one released:
     hat step by step on its pedal note (note 7 in Groove Library, or any note set to HI-HAT (PEDAL) in a Custom map);
     drag the marks to set where each step begins. Cymbals: **MUTE TAIL**, grab it to stop it ringing, by letting the
     key go (NOTE OFF) or by pressing a pad harder (AFTERTOUCH).
-  - **The kit:** 23 drums: kick, rim, snare, clap, a second snare, three toms, closed, pedal and open hat, cymbal,
-    ride, ride bell, second crash, china, splash, half-open hat, tambourine, shaker, and (0.17.0) the ride's edge and
-    two more hi-hat openness steps. Each is one of our own drum synths
+  - **The kit:** 29 drums: kick, rim, snare, clap, a second snare, three toms, closed, pedal and open hat, cymbal,
+    ride, ride bell, second crash, china, splash, half-open hat, tambourine, shaker, (0.17.0) the ride's edge and
+    two more hi-hat openness steps, and (0.33.0) a fourth tom, the hi-hat's shoulder and four cymbal chokes. Each is one of our own drum synths
     (kick, snare, clap, hats, tom, rim, cowbell, cymbal, ride, bell, tambourine, shaker) or a **SAMPLE** you load (drop
     an audio file on its row).
   - **LOAD...** (the DRUM view; 0.19.0: THE SAMPLE ENGINE): one audio file; a folder of hits (velocity layers and
@@ -83,6 +83,10 @@ PR7-D is built in stages, each one released:
   (drumgizmo.org; GET FREE KITS... opens its page) onto every drum, its mics through the MIXER with their real bleed,
   STREAMED (0.28.0: every hit at full length, read from disk as it plays; the CrocellKit in 377 MB of memory), LIGHT
   (about 1 GB) or FULL IN MEMORY. Factory preset A07 Crocell Metal streams the CrocellKit (CC-BY 4.0, credited in ABOUT).
+- **SAMPLE PACKS** (0.33.0): LOAD... > A SAMPLE PACK... reads a multi-mic library's folder by its file names (piece,
+  articulation, mic, then _V<layer>_RR<round>, as Just Add Drums' libraries name them) and puts every sound on its drum
+  and every mic on its MIXER channel (its extra mics on USER channels), streamed. Six more drums for kits that have
+  them: TOM 4, the hi-hat's SHOULDER, and crash 1 / crash 2 / china / splash CHOKES (a choke stops its cymbal).
 - **LAYER** (0.29.0): any drum plays a sample (or folder of takes) of yours with every hit, LOAD... > A LAYER WITH THIS
   DRUM...; LAYER level and LAYER OUT; through the mixer it gets its own USER channel ("KICK LAYER") and the drum's close
   mics come down 10 dB, so the sample leads and the real drum's room and overheads stay.
@@ -91,7 +95,7 @@ PR7-D is built in stages, each one released:
   - **MIDI IN / E-DRUMS** (0.18.0, SETTINGS): click a note to edit it: its drum and LEARN, CC ZONES for pads that sense
     where they're hit, one VELOCITY curve for everything coming in, the HI-HAT pedal's steps and CALIBRATE; the MIDI
     CHANNEL; presets of all of it for each kit you use; and the MIDI MONITOR (what came in and what it played).
-  - **Which notes play them:** the MAP in SETTINGS. **Root** puts the 23 on the keys from **ROOT** (C2 at first);
+  - **Which notes play them:** the MAP in SETTINGS. **Root** puts the 29 on the keys from **ROOT** (C2 at first);
     **Groove Library** and **General MIDI** follow those layouts, so grooves made for them play as written; **Custom**
     is your own, note by note.
   - **OUTPUT** sends a drum to one of the plugin's 16 stereo outputs (MAIN, OUT 2 to 16), to mix it on its own

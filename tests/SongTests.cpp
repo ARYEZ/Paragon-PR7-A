@@ -522,7 +522,7 @@ TEST_CASE ("SONG 0.9: remove drums, paste drums (repeated to fill), quantize, ve
         b.hits.push_back ({ e * 0.5, CH, e % 2 == 0 ? 0.8f : 0.4f });
     std::stable_sort (b.hits.begin(), b.hits.end(), [] (const song::Hit& x, const song::Hit& y) { return x.beat < y.beat; });
     CHECK (song::slotsIn (b) == (bit (BD) | bit (SD) | bit (CH)));
-    CHECK (song::slotsOf (1u << (int) grooves::DrumPart::hats) == (bit (CH) | bit (OH) | bit (HH) | bit (HO1) | bit (HO3)));
+    CHECK (song::slotsOf (1u << (int) grooves::DrumPart::hats) == (bit (CH) | bit (OH) | bit (HH) | bit (HO1) | bit (HO3) | bit (HSH)));
 
     auto removed = b;
     song::removeDrums (removed, song::slotsOf (1u << (int) grooves::DrumPart::hats));

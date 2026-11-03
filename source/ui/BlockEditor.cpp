@@ -8,7 +8,8 @@ namespace
     constexpr int headerHeight = 40, footerHeight = 44, namesWidth = 170;
     const char* const drumNames[] = { "Kick", "Rim", "Snare", "Clap", "Snare 2", "Low Tom", "Closed Hat", "Mid Tom", "Pedal Hat",
                                       "High Tom", "Open Hat", "Crash", "Ride", "Ride Bell", "Crash 2", "China", "Splash",
-                                      "Half Hat", "Tambourine", "Shaker", "Ride Edge", "Hat Open 1", "Hat Open 3" };
+                                      "Half Hat", "Tambourine", "Shaker", "Ride Edge", "Hat Open 1", "Hat Open 3",
+                                      "Tom 4", "Hat Shoulder", "Crash Choke", "Crash 2 Choke", "China Choke", "Splash Choke" };
     static_assert (std::size (drumNames) == synth::drums::numSlots);
 
     juce::String drumName (int slot)
