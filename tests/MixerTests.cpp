@@ -636,6 +636,7 @@ TEST_CASE ("MIXER page 0.21.0: bus strips, MICS / BUSES, the OUTPUT and SEND but
 //==============================================================================
 // THE MIXER's EFFECTS (0.22.0)
 #include "MixerEffects.h"
+#include "dsp/effects/Mars.h"
 
 namespace
 {
@@ -757,6 +758,118 @@ TEST_CASE ("MIXER EFFECTS: GATE (threshold, range, its side chain's filters), DR
     CHECK (after() < 1.0e-5);
     setEffect (p, mixer::snareTop, 0, effectOf (mixerfx::mod));
     CHECK (after() > 1.0e-3);
+}
+
+TEST_CASE ("MIXER EFFECTS 0.35.0: SATURATION (MARS): harmonics at an even level, MIX, bands by their crossovers, LEVEL, QUALITY, presets",
+           "[mixer][mixerfx][saturation]")
+{
+    SnareTop t;
+    auto& p = t.p;
+    const auto dry = t.level();
+    REQUIRE (dry > 0.05);
+    REQUIRE (t.level (900.0) < dry * 0.001);
+    using mixerfx::saturationBandsAt;
+    const auto band = [] (int b, int what) { return saturationBandsAt + b * mixerfx::saturationPerBand + what; };   // what: 0 STYLE .. 4 LEVEL
+
+    // The defaults (one band, warm tape, DRIVE 30%): harmonics, the sine's own level kept within 3 dB.
+    setEffect (p, mixer::snareTop, 0, effectOf (mixerfx::saturation));
+    CHECK (p.processor->getMixerEffectType (mixer::snareTop, 0) == mixerfx::saturation);
+    const auto warm = t.level (900.0);
+    INFO ("900 Hz at 30%: " << warm << ", the sine " << t.level() << " of " << dry);
+    CHECK (warm > dry * 0.001);
+    CHECK (juce::Decibels::gainToDecibels (t.level() / dry) == Catch::Approx (0.0).margin (3.0));
+    // DRIVE 100%: more harmonics, the level still kept (within 3 dB).
+    setEffect (p, mixer::snareTop, 0, effectOf (mixerfx::saturation, { { band (0, 1), 100.0f } }));
+    const auto hot = t.level (900.0);
+    INFO ("900 Hz at 100%: " << hot);
+    CHECK (hot > warm * 2.0);
+    CHECK (juce::Decibels::gainToDecibels (t.level() / dry) == Catch::Approx (0.0).margin (3.0));
+    // Every style makes something of it and none blows up.
+    for (int style = 0; style < effects::Mars::numStyles; ++style)
+    {
+        setEffect (p, mixer::snareTop, 0, effectOf (mixerfx::saturation, { { band (0, 0), (float) style }, { band (0, 1), 70.0f } }));
+        const auto out = p.play (38, 0.3);
+        const auto level = rms (out[0], (size_t) (0.05 * sampleRate), (size_t) (0.25 * sampleRate));
+        INFO (effects::Mars::styleNames[style] << ": " << level);
+        CHECK (std::isfinite (level));
+        CHECK (level > dry * 0.05);
+        CHECK (level < dry * 6.0);
+    }
+    // The slot's MIX 0: dry again, no harmonics.
+    setEffect (p, mixer::snareTop, 0, effectOf (mixerfx::saturation, { { band (0, 1), 100.0f }, { 3, 0.0f } }));
+    t.level();
+    CHECK (t.level() == Catch::Approx (dry).epsilon (0.03));
+    CHECK (t.level (900.0) < dry * 0.002);
+
+    // Three bands, crossovers at 1 kHz and 5 kHz: the 300 Hz sine is in band 1. Band 1 clean (its MIX 0) and band 3
+    // driven hard: hardly any harmonics; band 1 driven: plenty.
+    setEffect (p, mixer::snareTop, 0, effectOf (mixerfx::saturation, { { 0, 2.0f }, { 1, 1000.0f }, { 2, 5000.0f },
+                                                                       { band (0, 3), 0.0f }, { band (2, 1), 100.0f } }));
+    t.level();
+    const auto cleanLow = t.level (900.0);
+    setEffect (p, mixer::snareTop, 0, effectOf (mixerfx::saturation, { { 0, 2.0f }, { 1, 1000.0f }, { 2, 5000.0f },
+                                                                       { band (0, 1), 100.0f } }));
+    t.level();
+    const auto drivenLow = t.level (900.0);
+    INFO ("900 Hz with band 1 clean: " << cleanLow << ", driven: " << drivenLow);
+    CHECK (drivenLow > cleanLow * 5.0);
+    // Band 1's LEVEL -6 dB (clean): the sine 6 dB down.
+    setEffect (p, mixer::snareTop, 0, effectOf (mixerfx::saturation, { { 0, 2.0f }, { 1, 1000.0f }, { 2, 5000.0f },
+                                                                       { band (0, 3), 0.0f }, { band (0, 4), -6.0f } }));
+    t.level();
+    CHECK (juce::Decibels::gainToDecibels (t.level() / dry) == Catch::Approx (-6.0).margin (0.6));
+
+    // QUALITY 1x and 8x both work (harmonics, finite).
+    for (const auto quality : { 0.0f, 2.0f })
+    {
+        setEffect (p, mixer::snareTop, 0, effectOf (mixerfx::saturation, { { 4, quality }, { band (0, 1), 100.0f } }));
+        CHECK (t.level (900.0) > dry * 0.01);
+    }
+
+    // A preset keeps all 20 values (12 before 0.35.0: the slot grew).
+    auto fx = effectOf (mixerfx::saturation, { { 0, 1.0f }, { band (2, 4), -9.5f } });
+    setEffect (p, mixer::kickIn, 2, fx);
+    const auto back = ModMatrix::fromXml (*p.processor->getModMatrix().toXml());
+    CHECK (back.effect (mixer::kickIn, 2) == fx);
+    CHECK (back.effect (mixer::kickIn, 2).values[(size_t) band (2, 4)] == Catch::Approx (-9.5f));
+    CHECK (mixerfx::paramsOf (mixerfx::saturation).size() == (size_t) mixer::maxFxValues);
+    CHECK (mixerfx::valueText (mixerfx::saturation, band (0, 0), 5.0f) == "Warm Tape");
+}
+
+TEST_CASE ("MIXER EFFECTS 0.35.0: SATURATION's CPU, on every mic channel of a multi-mic kit hit every sixteenth note",
+           "[mixer][mixerfx][saturation][performance]")
+{
+    TempFolder temp;
+    Plugin p (temp.folder.getChildFile ("Presets"));
+    p.processor->importSfzKit (writeKit (temp.folder), drums::notemap::Layout::generalMidi);
+    REQUIRE (p.processor->waitForInstruments());
+    p.set (ParamIDs::drumsMap, (float) drums::notemap::Layout::generalMidi);
+    const auto measure = [&] (float bands, float quality)
+    {
+        auto m = p.processor->getModMatrix();
+        for (int strip = 0; strip < mixer::numStrips; ++strip)
+            m.effect (strip, 0) = effectOf (mixerfx::saturation, { { 0, bands }, { 4, quality } });
+        p.processor->setModMatrix (m);
+        p.processor->prepareToPlay (sampleRate, blockSize);
+        juce::AudioBuffer<float> buffer (2, blockSize);
+        const auto blocks = (int) (4.0 * sampleRate / blockSize);
+        const auto started = juce::Time::getMillisecondCounterHiRes();
+        for (int b = 0; b < blocks; ++b)
+        {
+            juce::MidiBuffer midi;
+            if (b % (int) (0.125 * sampleRate / blockSize) == 0)
+            {
+                midi.addEvent (juce::MidiMessage::noteOn (10, 36, (juce::uint8) 110), 0);
+                midi.addEvent (juce::MidiMessage::noteOn (10, 38, (juce::uint8) 110), 0);
+            }
+            p.processor->processBlock (buffer, midi);
+        }
+        return (juce::Time::getMillisecondCounterHiRes() - started) / 4000.0 * 100.0;
+    };
+    const auto oneBand = measure (0.0f, 1.0f), threeBands = measure (2.0f, 1.0f), superb = measure (2.0f, 2.0f);
+    WARN ("SATURATION on 4 sounding mic channels: 1 band 4x " << oneBand << "%, 3 bands 4x " << threeBands
+          << "%, 3 bands 8x " << superb << "% of one core");
+    CHECK (threeBands < 90.0);   // (measured ~30% here: CI runners are slower)
 }
 
 TEST_CASE ("MIXER EFFECTS: TRANSIENT's ATTACK lifts each hit's front, SUSTAIN its ring", "[mixer][mixerfx]")

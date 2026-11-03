@@ -30,7 +30,7 @@
 //   PARAGON_SNAPSHOT_PAGE=fx         THE RACK (PARAGON_SNAPSHOT_RACK=1: at work on a beat, the sends and bus A too; PARAGON_SNAPSHOT_FX=eq|dominion|comp|limiter|sends|delay|reverb|modfx|mod|mod2|lofi|inserts|insdrive|insglitch|insmod|inslofi: that view, the inserts' on bus PARAGON_SNAPSHOT_BUS=1-4)
 //   PARAGON_SNAPSHOT_PAGE=mixer      THE MIXER (0.20.0) with a multi-mic kit, a hit just played
 //                                    (PARAGON_SNAPSHOT_MIXERBUS=1: buses and sends, the snare top's SENDS; =2 the buses;
-//                                    PARAGON_SNAPSHOT_MIXERFX=1: effects on the snare top, its EFFECTS tab;
+//                                    PARAGON_SNAPSHOT_MIXERFX=1: effects on the snare top, its EFFECTS tab (=3: SATURATION);
 //                                    PARAGON_SNAPSHOT_MIXERROUTE=1: ROUTE MICS on the snare, =2 the user channels;
 //                                    PARAGON_SNAPSHOT_MICSIM=1: the Djent Kit through SIMULATED MICS, their panel open,
 //                                    =2 its strips after a kick and snare)
@@ -960,6 +960,20 @@ TEST_CASE ("Render the editor to a PNG", "[.][snapshot]")
             transientFx.values[1] = -25.0f;
             transientFx.on = false;
             withFx.effect (snareTop, 3) = transientFx;
+            if (mixerFx == 3)
+            {
+                // 0.35.0: =3 SATURATION (MARS) in the snare top's 4th slot, three bands, chosen.
+                auto sat = mixerfx::defaultSlot (mixerfx::saturation);
+                sat.values[0] = 2.0f;
+                sat.values[1] = 180.0f;
+                sat.values[2] = 4500.0f;
+                sat.values[3] = 70.0f;
+                const auto at = [] (int b, int what) { return (size_t) (mixerfx::saturationBandsAt + b * mixerfx::saturationPerBand + what); };
+                sat.values[at (0, 0)] = 9.0f;  sat.values[at (0, 1)] = 45.0f; sat.values[at (0, 2)] = 30.0f;
+                sat.values[at (1, 0)] = 6.0f;  sat.values[at (1, 1)] = 60.0f; sat.values[at (1, 3)] = 80.0f;
+                sat.values[at (2, 0)] = 1.0f;  sat.values[at (2, 1)] = 25.0f; sat.values[at (2, 4)] = -3.0f;
+                withFx.effect (snareTop, 3) = sat;
+            }
             withFx.effect (numChannels, 0) = mixerfx::defaultSlot (mixerfx::drive);
             withFx.effect (numChannels, 1) = mixerfx::defaultSlot (mixerfx::mod);
             processor.setModMatrix (withFx);
@@ -967,7 +981,7 @@ TEST_CASE ("Render the editor to a PNG", "[.][snapshot]")
             auto& mixerPage = view->getMixerPage();
             mixerPage.selectStrip (snareTop);
             mixerPage.showTab (MixerPage::Tab::effects);
-            mixerPage.chooseEffectSlot (mixerFx == 2 ? 1 : 2);
+            mixerPage.chooseEffectSlot (mixerFx == 3 ? 3 : mixerFx == 2 ? 1 : 2);
         }
         // 0.23.0: PARAGON_SNAPSHOT_MIXERROUTE=1 ROUTE MICS open on the snare, its room mic on a channel of its own, the
         // hi-hat's overheads on another, its kick mic off; =2 the strips with those two user channels.

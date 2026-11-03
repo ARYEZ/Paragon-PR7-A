@@ -163,7 +163,7 @@ namespace synth::mixer
     // effects; ours: an EQ, a compressor, a gate, a transient shaper and the plugin's own drive, lo-fi and mod), in
     // order, before the strip's pan and fader. A slot's settings are its type's values by index (MixerEffects.h lists
     // them); presets keep them, not as parameters.
-    inline constexpr int numFxSlots = 4, maxFxValues = 12;
+    inline constexpr int numFxSlots = 4, maxFxValues = 20;   // (0.35.0: 20 for SATURATION; 12 before)
     struct FxSlot
     {
         int type = 0;              // MixerEffects.h's fxTypeNames index (0: empty)

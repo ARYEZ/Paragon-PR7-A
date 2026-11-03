@@ -3,6 +3,7 @@
 #include "dsp/effects/Compressor.h"
 #include "dsp/effects/Drive.h"
 #include "dsp/effects/LoFi.h"
+#include "dsp/effects/Mars.h"
 #include "dsp/effects/Modulation.h"
 #include "dsp/eq/ParametricEq.h"
 
@@ -131,8 +132,35 @@ namespace mixerfx
             knob ("DEPTH", 0.0f, 100.0f, 50.0f, "%"),
             knob ("MIX", 0.0f, 100.0f, 50.0f, "%"),
         };
+        static const std::vector<Param> saturationParams = []
+        {
+            std::vector<Param> p {
+                choice ("BANDS", { "1", "2", "3" }, 0),
+                knob ("X 1", 40.0f, 2000.0f, 200.0f, "Hz", true),
+                knob ("X 2", 500.0f, 12000.0f, 3000.0f, "Hz", true),
+                knob ("MIX", 0.0f, 100.0f, 100.0f, "%"),
+                choice ("QUALITY", { "1x", "4x", "8x" }, 1),
+            };
+            for (int b = 1; b <= saturationBands; ++b)
+            {
+                const auto n = " " + juce::String (b);
+                auto style = choice ("STYLE", effects::Mars::styleNames, (int) effects::Mars::Style::warmTape);
+                style.name << n;
+                auto drive = knob ("DRIVE", 0.0f, 100.0f, 30.0f, "%");
+                drive.name << n;
+                auto dyn = knob ("DYN", -100.0f, 100.0f, 0.0f, "%");
+                dyn.name << n;
+                auto mix = knob ("MIX", 0.0f, 100.0f, 100.0f, "%");
+                mix.name << n;
+                auto level = knob ("LEVEL", -24.0f, 12.0f, 0.0f, "dB");
+                level.name << n;
+                p.insert (p.end(), { style, drive, dyn, mix, level });
+            }
+            return p;
+        }();
         switch (type)
         {
+            case saturation:  return saturationParams;
             case eq:          return eqParams;
             case compressor:  return compParams;
             case gate:        return gateParams;
@@ -475,6 +503,58 @@ namespace mixerfx
             float dcCoefficient = 0.0f;
         };
 
+        // SATURATION (0.35.0): MARS, one a side (it's mono, as in PR7-X; each side's DYNAMICS its own).
+        class SaturationEffect final : public SlotEffect
+        {
+        public:
+            SaturationEffect() : SlotEffect (saturation) {}
+
+        private:
+            void prepareEffect (double rate, int block) override
+            {
+                for (auto& m : mars)
+                    m.prepare (rate, block);
+            }
+            // (reset only follows prepare, which clears MARS: nothing more.)
+            void processEffect (float* l, float* r, int n, const Values& v) noexcept override
+            {
+                using effects::Mars;
+                settings.on = true;
+                settings.numBands = juce::jlimit (1, saturationBands, juce::roundToInt (v[0]) + 1);
+                const auto x1 = juce::jlimit (20.0f, 18000.0f, v[1]);
+                settings.crossoverHz = { x1, juce::jmax (x1 * 1.25f, juce::jlimit (20.0f, 18000.0f, v[2])), 16000.0f };
+                settings.slope = Mars::Slope::db24;
+                settings.inputDb = settings.outputDb = 0.0f;
+                settings.mix = juce::jlimit (0.0f, 1.0f, v[3] / 100.0f);
+                settings.quality = (Mars::Quality) juce::jlimit (0, 2, juce::roundToInt (v[4]));
+                for (int b = 0; b < Mars::maxBands; ++b)
+                {
+                    auto& band = settings.bands[(size_t) b];
+                    if (b >= saturationBands)
+                    {
+                        band = settings.bands[0];
+                        continue;
+                    }
+                    const auto* at = v.data() + saturationBandsAt + b * saturationPerBand;
+                    band.on = true;
+                    band.style = (Mars::Style) juce::jlimit (0, Mars::numStyles - 1, juce::roundToInt (at[0]));
+                    band.drive = juce::jlimit (0.0f, 1.0f, at[1] / 100.0f);
+                    band.dynamics = juce::jlimit (-1.0f, 1.0f, at[2] / 100.0f);
+                    band.mix = juce::jlimit (0.0f, 1.0f, at[3] / 100.0f);
+                    band.levelDb = juce::jlimit (-24.0f, 12.0f, at[4]);
+                }
+                float* channels[] = { l, r };
+                for (size_t c = 0; c < 2; ++c)
+                {
+                    float* one[] = { channels[c] };
+                    mars[c].process (juce::dsp::AudioBlock<float> (one, 1, (size_t) n), settings);
+                }
+            }
+
+            std::array<effects::Mars, 2> mars;
+            effects::Mars::Settings settings;
+        };
+
         class LoFiEffect final : public SlotEffect
         {
         public:
@@ -524,6 +604,7 @@ namespace mixerfx
     {
         switch (type)
         {
+            case saturation:  return std::make_unique<SaturationEffect>();
             case eq:          return std::make_unique<EqEffect>();
             case compressor:  return std::make_unique<CompressorEffect>();
             case gate:        return std::make_unique<GateEffect>();

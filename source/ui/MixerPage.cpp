@@ -610,8 +610,8 @@ public:
         a.removeFromTop (24);
         output.setBounds (a.removeFromTop (24).withTrimmedLeft (70));
         a.removeFromTop (8);
-        const auto columns = 4;
-        const auto w = a.getWidth() / columns;
+        const auto columns = (size_t) mixerfx::columnsFor (builtFor);
+        const auto w = a.getWidth() / (int) columns;
         const auto& params = mixerfx::paramsOf (builtFor);
         for (size_t i = 0; i < params.size(); ++i)
         {
@@ -664,14 +664,26 @@ public:
         g.setColour (ParagonColours::textDim);
         g.drawText ("OUTPUT", a.removeFromTop (24), juce::Justification::centredLeft, false);
         a.removeFromTop (8);
-        const auto columns = 4;
-        const auto w = a.getWidth() / columns;
+        const auto columns = (size_t) mixerfx::columnsFor (fx.type);
+        const auto w = a.getWidth() / (int) columns;
         const auto& params = mixerfx::paramsOf (fx.type);
         g.setFont (juce::FontOptions (9.5f, juce::Font::bold));
         for (size_t i = 0; i < params.size(); ++i)
         {
             const auto cell = juce::Rectangle<int> (a.getX() + (int) (i % columns) * w, a.getY() + (int) (i / columns) * cellHeight, w, 14);
             g.drawText (params[i].name, cell, juce::Justification::centred, false);
+            // 0.35.0: a menu too narrow for its choice (SATURATION's styles): the whole name under it.
+            if (params[i].choices.size() > 0 && w < 110)
+            {
+                const auto text = mixerfx::valueText (fx.type, (int) i, fx.values[i]);
+                if (text.length() > 3)
+                {
+                    juce::Graphics::ScopedSaveState keep (g);
+                    g.setFont (juce::FontOptions (10.0f));
+                    g.setColour (ParagonColours::accent);
+                    g.drawFittedText (text, cell.translated (0, 58).withHeight (26).reduced (2, 0), juce::Justification::centredTop, 2);
+                }
+            }
         }
     }
 
@@ -702,7 +714,7 @@ private:
             {
                 auto menu = std::make_unique<juce::ComboBox>();
                 menu->addItemList (param.choices, 1);
-                menu->onChange = [this] { if (! refreshing) commit (true); };
+                menu->onChange = [this] { if (! refreshing) { commit (true); repaint(); } };
                 addAndMakeVisible (*menu);
                 menus[i] = std::move (menu);
                 continue;

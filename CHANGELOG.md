@@ -2,6 +2,24 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.35.0
+
+**SATURATION: PR7-X's MARS in every mixer strip.** A new effect type, **Saturation**, sits beside Drive in every channel's, bus's and USER channel's four effect slots. It's MARS, the multiband saturator from PR7-X (inspired by FabFilter Saturn 2; our own design), with the same code and sound. Drive is one kind of distortion with a tone knob; MARS colours a drum properly. Warm a kick's low end without fuzzing its click, put tape on the snare's body, or give the room mics some grit.
+
+**What it has** (5 controls a row in PROPERTIES > EFFECTS):
+- **BANDS** 1, 2 or 3, split at **X 1** and **X 2** (the crossovers; the bands add back up flat).
+- **Each band:** **STYLE** (21: clean / warm / saturated / broken tube, four tapes, three transformers, five amps, and FX styles like Smudge, Foldback and Destroy), **DRIVE** (the level stays even as you turn it up), **DYN** (left: a gate / expander; right: compression that pumps), **MIX** (that band's clean against saturated) and **LEVEL**.
+- **The whole slot:** **MIX** (parallel saturation), **QUALITY** (oversampling 1x / 4x / 8x: less harshness on hard drive, more CPU), and the slot's own ON and OUTPUT.
+- **Left out of MARS:** its tone knobs per band (use an EQ slot), feedback and modulation.
+
+**CPU** (measured here, 3 bands is the heavy one): about 3% of a core per sounding channel for 1 band at 4x, 7.5% for 3 bands at 4x, 16% for 3 bands at 8x. A strip only works while it has sound (and 3 s of tail), so a quiet channel costs nothing. Put it on a few channels or a bus rather than all 37.
+
+**Also:** a slot now holds 20 settings (12 before). Older presets load as they were.
+
+**Tests:** harmonics appear and the level stays within 3 dB from 30% to 100% DRIVE; all 21 styles play and none blows up; MIX 0 is dry again; with 3 bands, a 300 Hz sine in band 1 picks up harmonics only when band 1 is driven; band 1's LEVEL -6 dB measured; QUALITY 1x and 8x; a preset keeps all 20 settings; the CPU above. pluginval passes at strictness 10.
+
+**Not checked:** listening. The styles are PR7-X's, tuned there, not by ear on drums here.
+
 ## 0.34.0
 
 **16 USER channels, and each cymbal on its own channel.** You noticed your Djent Drums cymbals only came through the overheads and one shared CYMBALS channel. The library gives every cymbal its own spot mic (Crash 1, Crash 2, China, Splash and the Ride each have a SPOT file), and PR7-D played them all, but on one channel: you couldn't fader, EQ or compress the china apart from the crashes.

@@ -18,12 +18,21 @@
 //   TRANSIENT   ours: ATTACK lifts or softens each hit's front, SUSTAIN its ring, from envelope followers' differences;
 //   DRIVE       the plugin's drive pedals (one a side, a DC blocker after, as on the insert buses);
 //   LO-FI       the plugin's lo-fi;
-//   MOD         the plugin's modulation (chorus, flanger, phaser...).
+//   MOD         the plugin's modulation (chorus, flanger, phaser...);
+//   SATURATION  (0.35.0) MARS, PR7-X 0.22.2's multiband saturator (inspired by FabFilter Saturn 2, our own design),
+//               unchanged, one engine a side: up to 3 bands, each its STYLE (21: tubes, tapes, transformers, amps,
+//               FX), DRIVE (its level kept even automatically), DYNAMICS (gate <-> compress), MIX and LEVEL; the
+//               whole slot's MIX and QUALITY (oversampling). Not here: MARS's tone, feedback and modulation.
 // Each slot also has ON (a click-free bypass) and OUTPUT.
 namespace mixerfx
 {
-    enum Type { none, eq, compressor, gate, transient, drive, loFi, mod };
-    inline const juce::StringArray typeNames { "None", "EQ", "Compressor", "Gate", "Transient", "Drive", "Lo-Fi", "Mod" };   // saved: only append
+    enum Type { none, eq, compressor, gate, transient, drive, loFi, mod, saturation };
+    inline const juce::StringArray typeNames { "None", "EQ", "Compressor", "Gate", "Transient", "Drive", "Lo-Fi", "Mod",
+                                               "Saturation" };   // saved: only append
+    // SATURATION's values: BANDS, X 1, X 2, MIX, QUALITY, then per band STYLE, DRIVE, DYN, MIX, LEVEL (5 a row).
+    inline constexpr int saturationBandsAt = 5, saturationPerBand = 5, saturationBands = 3;
+    // How many of a type's settings sit in a row of its editor.
+    inline int columnsFor (int type) noexcept { return type == saturation ? 5 : 4; }
 
     // A type's settings, in the order of FxSlot::values.
     struct Param
