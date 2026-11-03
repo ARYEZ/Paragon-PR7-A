@@ -142,7 +142,7 @@ namespace synth::drums::samplepack
         return -1;
     }
 
-    PackInfo scan (const juce::File& folder)
+    PackInfo scan (const juce::File& folder, bool cymbalChannels)
     {
         PackInfo info;
         info.name = folder.getFileName();
@@ -185,7 +185,15 @@ namespace synth::drums::samplepack
         }
 
         std::vector<Parsed> parsed;
-        std::set<juce::String> extra;
+        std::set<juce::String> extra, cymbals;
+        // 0.34.0, `cymbalChannels`: each cymbal's own close (spot) mic on a USER channel of its own, named for the cymbal
+        // (CRASH 1, CRASH 2, CHINA, SPLASH, RIDE; its articulations and choke with it), instead of all on CYMBALS.
+        const auto ownCymbal = [cymbalChannels] (const Parsed& p)
+        {
+            return cymbalChannels && homeChannel (p.slot) == mixer::cymbals && channelFor (p.mic, p.slot) == mixer::cymbals;
+        };
+        const auto channelOf = [&] (const Parsed& p) { return ownCymbal (p) ? -1 : channelFor (p.mic, p.slot); };
+        const auto nameOf = [&] (const Parsed& p) { return ownCymbal (p) ? pieceName (p.slot) : userName (p.mic, p.slot); };
         for (size_t i = 0; i < named.size(); ++i)
         {
             const auto& tokens = named[i].second;
@@ -209,24 +217,26 @@ namespace synth::drums::samplepack
                 info.unused.addIfNotAlreadyThere (sound.joinIntoString (" "));
                 continue;
             }
-            if (channelFor (p.mic, p.slot) == -1)
-                extra.insert (userName (p.mic, p.slot));
+            if (channelOf (p) == -1)
+                (ownCymbal (p) ? cymbals : extra).insert (nameOf (p));
             parsed.push_back (std::move (p));
         }
-        // The USER channels: their names in order (so the same pack always gives the same channels), at most 8.
-        for (const auto& name : extra)
-        {
-            if (info.userChannels.size() < mixer::numUserChannels)
-                info.userChannels.add (name);
-            else
-                info.unused.addIfNotAlreadyThere (name + " (no USER channel left)");
-        }
+        // The USER channels: their names in order (so the same pack always gives the same channels), at most
+        // numUserChannels; 0.34.0's cymbal channels after the rest (so the others keep 0.33.0's numbers).
+        for (const auto* names : { &extra, &cymbals })
+            for (const auto& name : *names)
+            {
+                if (info.userChannels.size() < mixer::numUserChannels)
+                    info.userChannels.add (name);
+                else
+                    info.unused.addIfNotAlreadyThere (name + " (no USER channel left)");
+            }
         for (auto& p : parsed)
         {
-            auto channel = channelFor (p.mic, p.slot);
+            auto channel = channelOf (p);
             if (channel == -1)
             {
-                const auto u = info.userChannels.indexOf (userName (p.mic, p.slot));
+                const auto u = info.userChannels.indexOf (nameOf (p));
                 if (u < 0)
                     continue;
                 channel = mixer::numChannels + u;

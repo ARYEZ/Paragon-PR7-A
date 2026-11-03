@@ -2,6 +2,20 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.34.0
+
+**16 USER channels, and each cymbal on its own channel.** You noticed your Djent Drums cymbals only came through the overheads and one shared CYMBALS channel. The library gives every cymbal its own spot mic (Crash 1, Crash 2, China, Splash and the Ride each have a SPOT file), and PR7-D played them all, but on one channel: you couldn't fader, EQ or compress the china apart from the crashes.
+
+**Now:**
+- **16 USER channels** (was 8). Each is a full strip like the others: fader, pan, mute / solo / polarity, its 4 effect slots (EQ, compressor, gate, transient, drive, lo-fi, mod), 2 sends, its own output to the DAW, and routing to a bus.
+- **A sample pack's cymbals each get a channel:** importing a pack (LOAD... > A sample pack...) puts each cymbal's spot mic on a USER channel named for it: **CRASH 1, CRASH 2, CHINA, SPLASH, RIDE**. The ride's tip, bell and crash share RIDE, and each choke plays on its cymbal's channel. Their OH and RM CLOSE mics still go to OVERHEADS and ROOM.
+- **Your Djent Drums import:** KICK FX, KICK SUB, KICK TRIGGER, SNARE FX, SNARE TOP 2 and TOM 4 stay on USER 1-6 as before; the five cymbals are USER 7-11, leaving 5 free for ROUTE MICS.
+- **The hats** were already on their own HI-HAT channel, and still are.
+
+**To get it:** import the library again (DRUMS > LOAD... > A sample pack...). Presets and projects saved with 0.33.0's import still load exactly as they were, with the cymbals on CYMBALS, so nothing you've mixed changes by itself.
+
+**Tests:** the import with the cymbals on their own channel (the crash's spot mic heard only there, its choke too, its OH still on OVERHEADS); 0.33.0's USER 1-4 keeping their numbers; a 0.33.0 import still on CYMBALS; USER 16 playing what's routed to it, through its fader (-6 dB measured) and an effect in its strip (-6 dB). pluginval passes at strictness 10.
+
 ## 0.33.2
 
 **The folder you open is read first, and the status line shows the scan working.** You saw GROOVES sit at "0 grooves (checking for new ones)" for five minutes on your Folk Metal folder.

@@ -145,7 +145,7 @@ namespace synth::mixer
     // 0.23.0, USER CHANNELS: 8 more mic channels, made by ROUTE INSTRUMENT MICROPHONES (a mic of a piece given a
     // channel of its own). A MIC CHANNEL is 0-12 (the named ones) or 13-20 (USER 1-8). As strips they come after the
     // buses, so the buses' strips (and presets' sends and effects on them) keep their numbers.
-    inline constexpr int numUserChannels = 8, numMicChannels = numChannels + numUserChannels;
+    inline constexpr int numUserChannels = 16, numMicChannels = numChannels + numUserChannels;
     inline constexpr int firstUserStrip = numChannels + numBuses;
     inline constexpr int numStrips = numChannels + numBuses + numUserChannels;   // the channels, the buses, the user channels
     inline constexpr bool isUserChannel (int channel) noexcept { return channel >= numChannels && channel < numMicChannels; }

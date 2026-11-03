@@ -1113,12 +1113,15 @@ void ParagonX1AudioProcessor::startLoading (std::vector<std::pair<int, juce::Str
             }
             else if (parts[0] == "file")
                 instrument = synth::drums::instruments::fromFile (source);   // 0.29.0: one hit (a layer's)
-            else if (parts[0] == "pack")
+            else if (parts[0] == "pack" || parts[0] == "pack2")
             {
-                // 0.33.0: a sample pack's slot: "pack|<slot>|<folder>" (its names read once a load).
-                auto it = packs.find (source.getFullPathName());
+                // 0.33.0: a sample pack's slot: "pack|<slot>|<folder>" (its names read once a load). 0.34.0's imports are
+                // "pack2|...": each cymbal's spot mic on its own USER channel.
+                const auto cymbalChannels = parts[0] == "pack2";
+                const auto key = source.getFullPathName() + (cymbalChannels ? "#2" : "");
+                auto it = packs.find (key);
                 if (it == packs.end())
-                    it = packs.emplace (source.getFullPathName(), synth::drums::samplepack::scan (source)).first;
+                    it = packs.emplace (key, synth::drums::samplepack::scan (source, cymbalChannels)).first;
                 instrument = synth::drums::samplepack::load (it->second, parts[1].getIntValue(), problems);
             }
             else if (parts[0] == "folder")
@@ -1285,7 +1288,7 @@ ParagonX1AudioProcessor::DrumGizmoImport ParagonX1AudioProcessor::importDrumGizm
 ParagonX1AudioProcessor::SamplePackImport ParagonX1AudioProcessor::importSamplePack (const juce::File& folder)
 {
     SamplePackImport result;
-    const auto info = synth::drums::samplepack::scan (folder);
+    const auto info = synth::drums::samplepack::scan (folder, true);
     result.name = info.name;
     result.unused = info.unused;
     result.userChannels = info.userChannels;
@@ -1301,7 +1304,7 @@ ParagonX1AudioProcessor::SamplePackImport ParagonX1AudioProcessor::importSampleP
         makeSlotPlaySample (slot);
         setParameterNow (ParamIDs::drum (slot, "On"), 1.0f);
         setParameterNow (ParamIDs::drum (slot, "LayerOut"), 0.0f);   // (a layer's USER channel may be one of the pack's now)
-        refs.emplace_back (slot, "pack|" + juce::String (slot) + "|{kit:" + info.name + "}/");
+        refs.emplace_back (slot, "pack2|" + juce::String (slot) + "|{kit:" + info.name + "}/");
     }
     using namespace synth::drums::notemap;
     for (const auto slot : { HO1, HO3, SD2, RE, HH, HSH, C1C, C2C, CHC, SPC, T4 })

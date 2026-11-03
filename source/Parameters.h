@@ -59,7 +59,9 @@ namespace ParamIDs
     // own fader). Saved by index: only append.
     inline const juce::StringArray layerOutNames { "With The Drum", "Kick In", "Kick Out", "Snare Top", "Snare Btm", "Hi-Hat",
                                                    "Tom 1", "Tom 2", "Tom 3", "Cymbals", "Overheads", "Room", "Ambience", "Other",
-                                                   "User 1", "User 2", "User 3", "User 4", "User 5", "User 6", "User 7", "User 8" };
+                                                   "User 1", "User 2", "User 3", "User 4", "User 5", "User 6", "User 7", "User 8",
+                                                   "User 9", "User 10", "User 11", "User 12", "User 13", "User 14", "User 15",
+                                                   "User 16" };   // (0.34.0: USER 9-16)
     inline constexpr auto drumsRoom = "drumsRoom";
     inline constexpr auto drumsRoomDecay = "drumsRoomDecay";
     inline constexpr auto drumsRoomTone = "drumsRoomTone";
@@ -306,7 +308,7 @@ namespace ParamIDs
         juce::StringArray ids { outputGain, bypass, limitUnity, limitDelta, drumsMap, delayOutput, reverbOutput };
         ids.addArray (drumsPedalSteps);
         ids.add (drumsMidiChannel);
-        for (int c = 0; c < 21; ++c)   // the mic channels (0.23.0: USER 1-8 too)
+        for (int c = 0; c < 29; ++c)   // the mic channels (0.23.0: USER 1-8 too; 0.34.0: USER 9-16)
             ids.add (mix (c, "Output"));
         for (int b = 0; b < 8; ++b)
             ids.add (mixBus (b, "Output"));

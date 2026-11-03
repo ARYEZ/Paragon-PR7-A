@@ -8,6 +8,7 @@
 
 #include "dsp/synth/NoteMap.h"
 #include "dsp/synth/SamplePack.h"
+#include "MixerEffects.h"
 #include "rigs/Rig.h"
 
 namespace
@@ -202,12 +203,13 @@ TEST_CASE ("SAMPLE PACK: imported onto the kit and played: each mic on its chann
     const auto result = p.processor->importSamplePack (top);
     REQUIRE (p.processor->waitForInstruments());
     CHECK (result.slots.size() == 8);
-    CHECK (result.userChannels.size() == 4);
+    CHECK (result.userChannels.size() == 5);   // 0.34.0: the crash's own channel after 0.33.0's four
     CHECK (p.processor->getMixerChannelName (synth::mixer::numChannels + 0) == "KICK SUB");
     CHECK (p.get (ParamIDs::mix (synth::mixer::numChannels + 0, "Level")) == Catch::Approx (-6.0f).margin (0.01));   // a sub kick
     CHECK (p.get (ParamIDs::mix (synth::mixer::numChannels + 1, "Level")) == Catch::Approx (-12.0f).margin (0.01));  // a trigger
     CHECK (p.get (ParamIDs::mix (synth::mixer::numChannels + 2, "Level")) == Catch::Approx (0.0f).margin (0.01));    // snare top 2
-    CHECK (p.processor->getUserChannelsInUse().size() == 4);
+    CHECK (p.processor->getMixerChannelName (synth::mixer::numChannels + 4) == "CRASH 1");
+    CHECK (p.processor->getUserChannelsInUse().size() == 5);
     CHECK (p.get (ParamIDs::drum (HO1, "On")) < 0.5f);   // what it has none of: off (their stand-ins play)
     CHECK (p.get (ParamIDs::drum (T4, "On")) > 0.5f);
 
@@ -227,6 +229,12 @@ TEST_CASE ("SAMPLE PACK: imported onto the kit and played: each mic on its chann
     p.soloOnly (synth::mixer::numChannels + 3);
     out = p.play (T4, 127, 0.3);
     CHECK (levelAt (out, 400.0, 0, 4800) > 0.02);
+    // 0.34.0: the crash's spot mic (400 Hz) on its own channel, CRASH 1 (USER 5), and its choke with it; not on CYMBALS.
+    p.soloOnly (synth::mixer::numChannels + 4);
+    CHECK (levelAt (p.play (CY, 127, 0.3), 400.0, 0, 4800) > 0.02);
+    CHECK (levelAt (p.play (C1C, 127, 0.3), 400.0, 0, 4800) > 0.02);
+    p.soloOnly (synth::mixer::cymbals);
+    CHECK (levelAt (p.play (CY, 127, 0.3), 400.0, 0, 4800) < 0.001);
 
     // Velocity layers: a soft note the quiet layer (V01: a third of V03's level, as written).
     p.soloOnly (synth::mixer::kickIn);
@@ -250,7 +258,7 @@ TEST_CASE ("SAMPLE PACK: a preset keeps it (where the pack is), and loads it aga
     p.processor->importSamplePack (top);
     REQUIRE (p.processor->waitForInstruments());
     const auto ref = p.processor->getInstrumentRef (BD);
-    CHECK (ref.startsWith ("pack|0|{kit:TEST DJENT PACK}"));
+    CHECK (ref.startsWith ("pack2|0|{kit:TEST DJENT PACK}"));   // (0.34.0: cymbals on their own channels)
     REQUIRE (p.processor->saveCurrentRigAs ("Pack Kit"));
     const RigLibrary::Entry* entry = nullptr;
     for (const auto& e : p.processor->getRigLibrary().getEntries())
@@ -264,6 +272,74 @@ TEST_CASE ("SAMPLE PACK: a preset keeps it (where the pack is), and loads it aga
     REQUIRE (p.processor->getDrumInstrument (BD) != nullptr);
     CHECK (p.processor->getDrumInstrument (BD)->layers.size() == 3);
     CHECK (p.processor->getMixerChannelName (synth::mixer::numChannels + 1) == "KICK TRIGGER");
+    CHECK (p.processor->getMixerChannelName (synth::mixer::numChannels + 4) == "CRASH 1");
+}
+
+TEST_CASE ("SAMPLE PACK 0.34.0: a 0.33.0 import (\"pack|\") still plays its cymbals on CYMBALS; the scan with and without", "[samplepack]")
+{
+    Plugin p;
+    const auto top = makePack (p.temp.folder);
+    using synth::drums::samplepack::scan;
+    const auto before = scan (top), now = scan (top, true);
+    CHECK (before.userChannels.size() == 4);
+    REQUIRE (now.userChannels.size() == 5);
+    for (int u = 0; u < 4; ++u)
+        CHECK (now.userChannels[u] == before.userChannels[u]);   // the others keep their numbers
+    CHECK (now.userChannels[4] == "CRASH 1");
+    const auto channelsOf = [] (const synth::drums::samplepack::PackInfo& info, int slot)
+    {
+        std::set<int> c;
+        for (const auto& f : info.slots.at (slot))
+            c.insert (f.channel);
+        return c;
+    };
+    CHECK (channelsOf (before, CY).count (synth::mixer::cymbals) == 1);
+    CHECK (channelsOf (now, CY).count (synth::mixer::cymbals) == 0);
+    CHECK (channelsOf (now, CY).count (synth::mixer::numChannels + 4) == 1);
+    CHECK (channelsOf (now, CY).count (synth::mixer::overheads) == 1);   // its OH stays OVERHEADS
+    CHECK (channelsOf (now, C1C).count (synth::mixer::numChannels + 4) == 1);
+
+    // Loaded by a 0.33.0 reference: the crash's spot on CYMBALS.
+    p.processor->importSamplePack (top);
+    REQUIRE (p.processor->waitForInstruments());
+    p.processor->loadInstrumentRef (CY, "pack|" + juce::String (CY) + "|{kit:TEST DJENT PACK}/");
+    REQUIRE (p.processor->waitForInstruments());
+    p.soloOnly (synth::mixer::cymbals);
+    CHECK (levelAt (p.play (CY, 127, 0.3), 400.0, 0, 4800) > 0.02);
+}
+
+TEST_CASE ("THE MIXER 0.34.0: 16 USER channels, each with its fader, effects, sends and output", "[samplepack][mixer]")
+{
+    CHECK (synth::mixer::numUserChannels == 16);
+    CHECK (synth::mixer::numMicChannels == 29);
+    CHECK (ParamIDs::layerOutNames.size() == 1 + synth::mixer::numMicChannels);
+    for (int c = 0; c < synth::mixer::numMicChannels; ++c)
+        CHECK (ParamIDs::notInRigs.contains (ParamIDs::mix (c, "Output")));
+    CHECK (synth::mixer::stripOfChannel (synth::mixer::numMicChannels - 1) == synth::mixer::numStrips - 1);
+    CHECK (synth::mixer::channelOfStrip (synth::mixer::numStrips - 1) == synth::mixer::numMicChannels - 1);
+    // USER 16 plays what's routed to it, through its own fader and an effect in its strip.
+    Plugin p;
+    const auto top = makePack (p.temp.folder);
+    p.processor->importSamplePack (top);
+    REQUIRE (p.processor->waitForInstruments());
+    const auto user16 = synth::mixer::numMicChannels - 1;
+    // The kick's KICK IN mic (its 400 Hz) routed to USER 16.
+    p.processor->setMicRoute (synth::drums::pieceOfSlot (BD), synth::mixer::kickIn, user16);
+    p.soloOnly (user16);
+    const auto at0 = rms (p.play (BD, 127, 0.3), 0, 4800);
+    CHECK (at0 > 0.02);
+    testkit::set (*p.processor, ParamIDs::mix (user16, "Level"), -6.0f);
+    const auto at6 = rms (p.play (BD, 127, 0.3), 0, 4800);
+    CHECK (juce::Decibels::gainToDecibels (at6 / at0) == Catch::Approx (-6.0).margin (0.3));
+    auto m = p.processor->getModMatrix();
+    auto& slot = m.effect (synth::mixer::stripOfChannel (user16), 0);
+    slot = mixerfx::defaultSlot ((int) mixerfx::Type::eq);
+    slot.outputDb = -6.0f;
+    p.processor->setModMatrix (m);
+    p.play (BD, 127, 0.3);   // (the effect's OUTPUT glides to its level as it starts)
+    p.play (BD, 127, 0.3);   // (and the kick's other round)
+    const auto withFx = rms (p.play (BD, 127, 0.3), 0, 4800);
+    CHECK (juce::Decibels::gainToDecibels (withFx / at6) == Catch::Approx (-6.0).margin (0.5));
 }
 
 TEST_CASE ("0.33.0's DRUMS: tom 4, the hat's shoulder, the chokes; a choke stops its cymbal; older files load as they were", "[samplepack][articulations]")

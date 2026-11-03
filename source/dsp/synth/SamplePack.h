@@ -38,12 +38,14 @@ namespace synth::drums::samplepack
         juce::File folder;                         // where its files were found (its INDIVIDUAL MICS folder, if it has one)
         std::map<int, std::vector<File>> slots;    // by slot
         juce::StringArray userChannels;            // USER 1, 2... : their names ("KICK SUB", "SNARE TOP 2"...)
-        juce::StringArray unused;                  // names our rules didn't place (a sound, or a mic past USER 8)
+        juce::StringArray unused;                  // names our rules didn't place (a sound, or a mic past the last USER channel)
         bool valid() const noexcept { return ! slots.empty(); }
     };
 
     // The folder's files, by name only (no audio read): what goes where.
-    PackInfo scan (const juce::File& folder);
+    // `cymbalChannels` (0.34.0, new imports): each cymbal's spot mic on a USER channel of its own (else on CYMBALS, as
+    // 0.33.0's imports, which load as they were made).
+    PackInfo scan (const juce::File& folder, bool cymbalChannels = false);
 
     // A slot's sounds as an instrument (streamed; `headSeconds` of each in memory): null if it has none, or none
     // could be read (why in `problems`).

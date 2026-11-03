@@ -29,6 +29,7 @@ namespace
     constexpr int pr7d0260 = 33; // PR7-D 0.26.0: simulated mics and room
     constexpr int pr7d0290 = 34; // PR7-D 0.29.0: a drum's layer
     constexpr int pr7d0330 = 35; // PR7-D 0.33.0: drums 24 to 29 (every setting of theirs)
+    constexpr int pr7d0340 = 36; // PR7-D 0.34.0: the mixer's USER 9 to 16
 
     const ToText asDb = [] (float value, int) { return juce::String (value, 1) + " dB"; };
     const ToText asPercent = [] (float value, int) { return juce::String (juce::roundToInt (value * 100.0f)) + "%"; };
@@ -177,7 +178,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
         {
             // 0.23.0: USER 1-8 after the named channels (their own version hint).
             const auto user = synth::mixer::isUserChannel (c);
-            const auto hint020 = user ? pr7d0230 : pr7d0200, hint021 = user ? pr7d0230 : pr7d0210;
+            const auto userHint = c - synth::mixer::numChannels >= 8 ? pr7d0340 : pr7d0230;   // (0.34.0: USER 9-16)
+            const auto hint020 = user ? userHint : pr7d0200, hint021 = user ? userHint : pr7d0210;
             const auto name = "Mix " + (user ? "user " + juce::String (c - synth::mixer::numChannels + 1) : synth::mixer::channelNames[c].toLowerCase()) + " ";
             const ToText asFader = [] (float v, int) { return v <= -59.95f ? juce::String ("-inf") : juce::String (v, 1) + " dB"; };
             add (layout, mix (c, "Level"), name + "Level", { -60.0f, 12.0f, 0.1f }, 0.0f, asFader, hint020);
