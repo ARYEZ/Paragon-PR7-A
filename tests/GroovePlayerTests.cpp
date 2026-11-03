@@ -800,6 +800,79 @@ TEST_CASE ("GROOVES 0.33.1: a scan lists grooves as it reads them, not only when
     CHECK (paths.size() == (size_t) count);
 }
 
+TEST_CASE ("GROOVES 0.33.2: a folder opened with new files is read first; already checked this session, it's still found", "[grooves][groove-player]")
+{
+    Plugin t;
+    const auto root = t.folder.getChildFile ("User MIDI");
+    const auto write = [] (const juce::File& f)
+    {
+        juce::MidiMessageSequence track;
+        for (int beat = 0; beat < 8; ++beat)
+        {
+            track.addEvent (juce::MidiMessage::noteOn (10, beat % 2 == 0 ? 36 : 38, (juce::uint8) 100).withTimeStamp (beat * 480));
+            track.addEvent (juce::MidiMessage::noteOff (10, beat % 2 == 0 ? 36 : 38).withTimeStamp (beat * 480 + 60));
+        }
+        track.updateMatchedPairs();
+        juce::MidiFile file;
+        file.setTicksPerQuarterNote (480);
+        file.addTrack (track);
+        f.getParentDirectory().createDirectory();
+        juce::FileOutputStream out (f);
+        file.writeTo (out);
+    };
+    write (root.getChildFile ("A Pack/Groove.mid"));
+    const auto settings = t.folder.getChildFile ("Test Grooves.xml"), index = t.folder.getChildFile ("Test Groove Index.xml");
+    {
+        grooves::Library first (settings, index);
+        REQUIRE (first.addFolder (root));
+        while (first.isScanning())
+            juce::Thread::sleep (2);
+        REQUIRE (first.getNumEntries() == 1);
+    }
+    // Copied in while the DAW is open: many in a pack the walk comes to first, a few in the folder being looked at.
+    for (int i = 0; i < 1500; ++i)
+        write (root.getChildFile ("A Pack/Fills/Fill " + juce::String (i) + ".mid"));
+    const auto folk = root.getChildFile ("Loudnoise/Fast Grooves/Folk Metal");
+    for (int i = 1; i <= 5; ++i)
+        write (folk.getChildFile ("130bpm - Galloping Folk Skank 0" + juce::String (i) + ".mid"));
+
+    // Another PR7-D in the same DAW session: these folders were checked already, so opening the page only lists.
+    grooves::Library library (settings, index);
+    library.scan (true);
+    while (library.isScanning())
+        juce::Thread::sleep (2);
+    CHECK (library.getNumEntries() == 1);
+    CHECK (library.getNumLooked() == 0);
+    // Opening Folk Metal: it has files the list hasn't, so it's scanned, that folder first.
+    CHECK (library.hasUnlisted (folk));
+    CHECK_FALSE (library.hasUnlisted (root.getChildFile ("Nothing here")));
+    grooves::Library::showFreshEveryMs = 0.0;
+    library.setFocus (folk);
+    library.scan();
+    auto readWhenFolkCame = -1;
+    const auto until = juce::Time::getMillisecondCounterHiRes() + 30000.0;
+    while (juce::Time::getMillisecondCounterHiRes() < until)
+    {
+        const auto read = library.getNumScanned();
+        if (library.query (folk, {}, false, grooves::Sort::name, 120.0, 4, 4).size() == 5)
+        {
+            readWhenFolkCame = read;
+            break;
+        }
+        juce::Thread::sleep (1);
+    }
+    while (library.isScanning())
+        juce::Thread::sleep (2);
+    grooves::Library::showFreshEveryMs = 500.0;
+    REQUIRE (readWhenFolkCame >= 0);
+    CHECK (readWhenFolkCame < 300);   // Folk Metal's 5 came in before the 1,500 fills were read (a little slack: polling)
+    CHECK (library.getNumEntries() == 1 + 1500 + 5);
+    CHECK (library.getNumScanned() == 1505);   // each read once
+    CHECK (library.getNumLooked() >= 1506);
+    CHECK_FALSE (library.hasUnlisted (folk));
+    CHECK_FALSE (library.hasUnlisted (root));
+}
+
 TEST_CASE ("TAP TO FIND page: open taps with a loop; FIND sorts by MATCH; FIND SIMILAR; a MIDI file dropped; CLEAR TAP", "[tap][groove-player][ui]")
 {
     Plugin t;

@@ -423,6 +423,7 @@ namespace grooves
             return;   // listed, and checked this session (by this PR7-D or another)
         scanning = true;
         scanned = 0;
+        looked = 0;
         scanner = std::make_unique<Scanner> (*this, check);
         scanner->startThread (juce::Thread::Priority::low);
     }
@@ -432,6 +433,7 @@ namespace grooves
         stopScan();
         scanning = true;
         scanned = 0;
+        looked = 0;
         read (nullptr, true);
         scanning = false;
         sendChangeMessage();
@@ -513,13 +515,17 @@ namespace grooves
             sendChangeMessage();
         };
         juce::XmlElement index ("GrooveIndex");
-        for (int f = 0; f < (int) folders.size(); ++f)
+        // 0.33.2: the folder the page is showing is walked first (then every linked folder, skipping what it read), so
+        // the grooves you're looking at come in first however big the rest is.
+        const auto walk = [&] (int f, const juce::File& from)
         {
             const auto& linked = folders[(size_t) f];
             // CUSTOM and ROOT files: their power hand from the factory layout (the plugin's own map can change any time).
             const auto map = layoutFor (f, synth::drums::notemap::grooveLibrary(), 36);
             const auto add = [&] (const juce::File& file, const juce::String& key, auto readIt, const db::Contents::Item* item = nullptr)
             {
+                if (seen.count (file.getFullPathName()) > 0)
+                    return;   // (walked already: the folder shown first)
                 Entry e;
                 auto isNew = false;
                 if (const auto known = before.find (file.getFullPathName()); known != before.end() && known->second.first == key)
@@ -552,10 +558,11 @@ namespace grooves
                 }
                 found.push_back (std::move (e));
             };
-            for (const auto& item : juce::RangedDirectoryIterator (linked.folder, true, juce::String ("*.mid;*.midi;") + db::wildcard, juce::File::findFiles))
+            for (const auto& item : juce::RangedDirectoryIterator (from, true, juce::String ("*.mid;*.midi;") + db::wildcard, juce::File::findFiles))
             {
                 if ((stop != nullptr && stop->load()) || (int) found.size() >= maxFiles)
                     break;
+                ++looked;
                 const auto file = item.getFile();
                 if (! file.hasFileExtension ("mid;midi"))
                 {
@@ -591,7 +598,18 @@ namespace grooves
                 }
                 add (file, stamp (file, linked.layout), [&] { return grooves::read (file, map); });
             }
-        }
+        };
+        const auto first = getFocus();
+        if (first.isDirectory())
+            for (int f = 0; f < (int) folders.size(); ++f)
+                if (first == folders[(size_t) f].folder || first.isAChildOf (folders[(size_t) f].folder))
+                {
+                    walk (f, first);
+                    showFresh();
+                    break;
+                }
+        for (int f = 0; f < (int) folders.size(); ++f)
+            walk (f, folders[(size_t) f].folder);
         indexFile.getParentDirectory().createDirectory();
         if (stop != nullptr && stop->load())
         {
@@ -621,6 +639,41 @@ namespace grooves
         lastChecked = juce::Time::getCurrentTime();
         std::lock_guard<std::mutex> guard (sessionLock);
         checkedThisSession[indexFile.getFullPathName()] = foldersChecked() + "#" + indexStamp (indexFile);
+    }
+
+    void Library::setFocus (const juce::File& folder)
+    {
+        std::lock_guard<std::mutex> guard (focusLock);
+        focus = folder;
+    }
+
+    juce::File Library::getFocus() const
+    {
+        std::lock_guard<std::mutex> guard (focusLock);
+        return focus;
+    }
+
+    bool Library::hasUnlisted (const juce::File& folder, int upTo) const
+    {
+        // MIDI files in `folder` (and its subfolders, the first `upTo`) the list doesn't have: new since the last check.
+        if (! folder.isDirectory())
+            return false;
+        std::set<juce::String> listed;
+        {
+            std::lock_guard<std::mutex> guard (lock);
+            for (const auto& e : entries)
+                if (e.file.isAChildOf (folder))
+                    listed.insert (e.file.getFullPathName());
+        }
+        auto count = 0;
+        for (const auto& item : juce::RangedDirectoryIterator (folder, true, "*.mid;*.midi", juce::File::findFiles))
+        {
+            if (listed.count (item.getFile().getFullPathName()) == 0)
+                return true;
+            if (++count >= upTo)
+                break;
+        }
+        return false;
     }
 
     std::vector<Entry> Library::getEntries() const
@@ -708,22 +761,14 @@ namespace grooves
         for (size_t i = 0; i < list.size(); ++i)
         {
             auto& e = list[i];
-            if (keepValues && e.cached != nullptr && e.cached->nameRank == rank[i])
-                continue;   // (0.33.1) worked out before, in the same place
-            auto c = std::make_shared<Entry::Cached>();
+            e.nameRank = rank[i];
             if (keepValues && e.cached != nullptr)
-            {
-                c->values = e.cached->values;
-                c->haystack = e.cached->haystack;
-            }
-            else
-            {
-                e.cached = nullptr;
-                for (int col = 0; col < numColumns; ++col)
-                    c->values[(size_t) col] = valuesOf (e, (Column) col);
-                c->haystack = (e.name + " " + e.family + " " + e.file.getParentDirectory().getParentDirectory().getFileName()).toLowerCase();
-            }
-            c->nameRank = rank[i];
+                continue;   // (0.33.1) worked out before
+            e.cached = nullptr;
+            auto c = std::make_shared<Entry::Cached>();
+            for (int col = 0; col < numColumns; ++col)
+                c->values[(size_t) col] = valuesOf (e, (Column) col);
+            c->haystack = (e.name + " " + e.family + " " + e.file.getParentDirectory().getParentDirectory().getFileName()).toLowerCase();
             e.cached = std::move (c);
         }
     }
@@ -828,7 +873,7 @@ namespace grooves
         const auto byName = [] (const Entry& a, const Entry& b)
         {
             if (a.cached != nullptr && b.cached != nullptr)
-                return a.cached->nameRank < b.cached->nameRank;
+                return a.nameRank < b.nameRank;
             if (const auto c = a.family.compareNatural (b.family); c != 0)
                 return c < 0;
             return a.name.compareNatural (b.name) < 0;

@@ -543,6 +543,6 @@ TEST_CASE ("GROOVES 0.30.0: the values worked out once when listed are the ones 
     // The name order: family, then name, numbers in order ("verse 10" after "Verse 2").
     std::vector<juce::String> byRank (list.size());
     for (const auto& e : cached)
-        byRank[(size_t) e.cached->nameRank] = e.family + "/" + e.name;
+        byRank[(size_t) e.nameRank] = e.family + "/" + e.name;
     CHECK (byRank == std::vector<juce::String> { "Song 0/Chorus", "Song 0/Ending", "Song 0/Verse 2", "Song 1/Fill 1", "Song 1/Intro", "Song 1/verse 10" });
 }

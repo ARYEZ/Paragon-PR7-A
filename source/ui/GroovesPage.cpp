@@ -745,6 +745,7 @@ void GroovesPage::visibilityChanged()
     {
         scannedOnce = true;
         refresh();
+        library.setFocus (within);
         if (! library.getFolders().empty())
             library.scan (true);
     }
@@ -949,6 +950,16 @@ void GroovesPage::browseTo (const juce::File& folder, bool remember)
     suggestions->setVisible (false);
     rebuildBrowser();
     requery();
+    checkShownFolder();
+}
+
+void GroovesPage::checkShownFolder()
+{
+    // 0.33.2: a folder opened with MIDI files the list hasn't (copied in since the last check, or not come to yet by a
+    // long scan): scanned (again), that folder first, so its grooves come in at once. (A scan stopped keeps what it read.)
+    library.setFocus (within);
+    if (within.isDirectory() && library.hasUnlisted (within))
+        library.scan();
 }
 
 bool GroovesPage::goBack()
@@ -1753,8 +1764,8 @@ void GroovesPage::timerCallback()
     else if (library.isScanning() && results.empty() && library.getNumEntries() == 0)
         status.setText ("Reading your grooves... " + juce::String (library.getNumScanned()) + " files", juce::dontSendNotification);
     else if (library.isScanning())
-        status.setText (juce::String (results.size()) + (results.size() == 1 ? " groove" : " grooves") + " (checking for new ones"
-                            + (library.getNumScanned() > 0 ? ": " + juce::String (library.getNumScanned()) + " read" : juce::String()) + ")",
+        status.setText (juce::String (results.size()) + (results.size() == 1 ? " groove" : " grooves") + " (checking for new ones: "
+                            + juce::String (library.getNumLooked()) + " files looked at, " + juce::String (library.getNumScanned()) + " new)",
                         juce::dontSendNotification);
     else if (library.getNumEntries() == 0)
         status.setText ("No grooves yet: MENU > FOLDERS > ADD LINKED FOLDER..., or drop MIDI files on User MIDI", juce::dontSendNotification);

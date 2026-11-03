@@ -136,6 +136,7 @@ private:
     void requery();
     void rebuildBrowser();
     void browseTo (const juce::File& folder, bool remember);   // the folder chosen (history kept unless going back)
+    void checkShownFolder();   // 0.33.2: new files in it: scanned, it first
     void savePreview();
     void showMenu();
     void showFolderMenu (const juce::File& folder);

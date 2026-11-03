@@ -44,9 +44,10 @@ namespace grooves
         {
             std::array<juce::StringArray, 7> values;   // valuesOf each Column
             juce::String haystack;                    // what the search looks in, lower case
-            int nameRank = 0;                         // its place by family then name (natural order)
         };
         std::shared_ptr<const Cached> cached;
+        int nameRank = 0;   // its place by family then name (natural order), set with `cached` (0.33.2: out of it, so a
+                            // scan listing new grooves as it goes only redoes the places)
 
         juce::StringArray tagged (const juce::String& group) const;   // the values of one group of its tags
 
@@ -181,6 +182,12 @@ namespace grooves
         // 0.33.1: how often a scan puts what it has read anew into the list (milliseconds; tests set 0: after each file).
         static inline std::atomic<double> showFreshEveryMs { 500.0 };
         int getNumScanned() const noexcept { return scanned.load(); }   // files read anew (not known from before)
+        int getNumLooked() const noexcept { return looked.load(); }     // 0.33.2: files the scan has come to so far
+        // 0.33.2: the folder the page shows: a scan walks it first. hasUnlisted: whether it has MIDI files the list
+        // hasn't (the first `upTo` looked at): the page checks it on opening a folder, and scans (again) with it first.
+        void setFocus (const juce::File&);
+        juce::File getFocus() const;
+        bool hasUnlisted (const juce::File& folder, int upTo = 5000) const;
 
         // THE GROOVES (a copy: safe while the scan replaces them).
         std::vector<Entry> getEntries() const;
@@ -246,7 +253,9 @@ namespace grooves
         mutable juce::String matchKey;
         mutable std::map<juce::String, float> matchScores;
         std::atomic<bool> scanning { false };
-        std::atomic<int> scanned { 0 };
+        std::atomic<int> scanned { 0 }, looked { 0 };
+        mutable std::mutex focusLock;
+        juce::File focus;
         std::unique_ptr<Scanner> scanner;
     };
 }

@@ -2,6 +2,24 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.33.2
+
+**The folder you open is read first, and the status line shows the scan working.** You saw GROOVES sit at "0 grooves (checking for new ones)" for five minutes on your Folk Metal folder.
+
+**What I found:**
+- **New files went unchecked:** once a DAW session had checked your folders, opening GROOVES again in that session (another PR7-D, or the window reopened) only listed what it already knew. Files copied in since then weren't looked for until MENU > FOLDERS > CHECK ALL FOLDERS FOR CHANGES. That came from 0.15.2, so 10,000 grooves aren't rechecked by every PR7-D you add.
+- **A scan walks your folders in order:** a new folder near the end of a big library came in last.
+- **Long grooves aren't the cause** (your idea, and worth checking). A 2,000-bar song file, a file with one stray note a million beats in, and a 20,000-groove database all read here within seconds. Only the first 8 bars of a groove are used for searching, so long ones cost nothing extra.
+
+**Now:**
+- **The folder you open first:** when you open a folder in the browser that has MIDI files the list doesn't have yet, PR7-D scans, starting with that folder. Its grooves come in within a moment, then the rest of your library is checked as before. This works even if this DAW session already checked your folders.
+- **A count you can watch:** while checking, the status line says "N grooves (checking for new ones: X files looked at, Y new)". If X is climbing, it's walking your folders; if it sits still, something is stuck, and that number tells me where to look.
+- **Faster scans:** 0.33.1's "list as it reads" redid every groove's details twice a second during a big scan. Now only the new grooves' details are worked out; the rest just get their place in name order.
+
+**Not reproduced here:** a scan that doesn't move at all. I couldn't make one happen with packs laid out like yours. If the count stops moving on your computer, tell me its numbers and which folder you linked (MENU > FOLDERS).
+
+**Tests:** 1,500 new fills and 5 new Folk Metal grooves copied in after the folders were checked; a second PR7-D in the same session doesn't find them on opening, but opening Folk Metal does, and its 5 come in before the fills are read; every file read once.
+
 ## 0.33.1
 
 **GROOVES lists new grooves as it reads them.** Before, when you linked a folder (or added files to one), PR7-D read every new file first and only put them in the list at the very end. On a big library that meant a blank list saying "0 grooves (checking for new ones)" for a long time, which looked the same as "it doesn't recognize my MIDI files". Your Loudnoise Folk Metal folder showed that. `.mid` and `.midi` files were always recognized; they just weren't shown yet.
