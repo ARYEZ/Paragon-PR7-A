@@ -1,4 +1,5 @@
 #include "Parameters.h"
+#include "NoteNames.h"
 
 #include "dsp/synth/Drums.h"
 #include "dsp/synth/NoteMap.h"
@@ -30,6 +31,7 @@ namespace
     constexpr int pr7d0290 = 34; // PR7-D 0.29.0: a drum's layer
     constexpr int pr7d0330 = 35; // PR7-D 0.33.0: drums 24 to 29 (every setting of theirs)
     constexpr int pr7d0340 = 36; // PR7-D 0.34.0: the mixer's USER 9 to 16
+    constexpr int pr7d0351 = 37; // PR7-D 0.35.1: NOTE NAMES
 
     const ToText asDb = [] (float value, int) { return juce::String (value, 1) + " dB"; };
     const ToText asPercent = [] (float value, int) { return juce::String (juce::roundToInt (value * 100.0f)) + "%"; };
@@ -42,7 +44,7 @@ namespace
         const auto amount = juce::roundToInt (std::abs (pan) * 100.0f);
         return amount == 0 ? juce::String ("C") : (pan < 0.0f ? "L" : "R") + juce::String (amount);
     };
-    const ToText asNote = [] (float value, int) { return juce::MidiMessage::getMidiNoteName (juce::roundToInt (value), true, true, 4); };
+    const ToText asNote = [] (float value, int) { return notenames::name (juce::roundToInt (value)); };
 
     // A range whose knob travel is logarithmic: each octave takes the same distance.
     Range logRange (double min, double max)
@@ -109,6 +111,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
         add (layout, drumsVelocity, "Drums Velocity", { 0.0f, 1.0f }, 1.0f, asPercent, stage6a);
         addChoice (layout, drumsMap, "Drums Note Map", synth::drums::notemap::layoutNames, 0, pr7d020);
         addChoice (layout, drumsMidiChannel, "Drums MIDI Channel", midiChannelNames, 0, pr7d0180);
+        addChoice (layout, noteNames, "Note Names", notenames::choiceNames, 0, pr7d0351);
         {
             const synth::drums::KitSettings defaults;
             for (int i = 0; i < 4; ++i)

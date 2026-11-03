@@ -301,7 +301,8 @@ TEST_CASE ("ARTICULATIONS: the list on the KIT VIEW: the chosen drum's piece, AL
 
     page.clickRow (SD2, {});
     CHECK (list.getPiece() == pieceOfSlot (SD));
-    CHECK (list.describeRows() == juce::StringArray { "Center D2 ON", "Rimshot E2 ON", "Sidestick C#2 ON" });
+    // (0.35.1: named as Cubase names them by default, middle C = C3: the snare's note 38 is D1)
+    CHECK (list.describeRows() == juce::StringArray { "Center D1 ON", "Rimshot E1 ON", "Sidestick C#1 ON" });
 
     // ALL chooses the piece's three; the DRUM page's settings then go to all of them.
     list.clickAll();
@@ -314,7 +315,7 @@ TEST_CASE ("ARTICULATIONS: the list on the KIT VIEW: the chosen drum's piece, AL
 
     // ON off: the stand-in named.
     list.toggleOn (SD2);
-    CHECK (list.describeRows()[1] == "Rimshot E2 off -> SNARE CENTER");
+    CHECK (list.describeRows()[1] == "Rimshot E1 off -> SNARE CENTER");
     CHECK (p.processor.getKitSettings().playsAs (SD2) == SD);
     list.toggleOn (SD2);
     CHECK (p.processor.getKitSettings().slots[(size_t) SD2].active);

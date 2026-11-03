@@ -1,4 +1,5 @@
 #include "DrumSeqPage.h"
+#include "NoteNames.h"
 
 #include "ui/ParagonLookAndFeel.h"
 #include "ui/SynthDisplays.h"
@@ -649,7 +650,7 @@ DrumSeqPanel::DrumSeqPanel (ParagonX1AudioProcessor& p) : processor (p), grid (p
         button->setClickingTogglesState (true);
         button->setRadioGroupId (961);
         button->setTooltip ("Pattern " + synth::drumseq::patternNames[k] + ": edit it (and with SONG, play it). With KEY, the key "
-                            + juce::MidiMessage::getMidiNoteName (36 - 4 + k, true, true, 4) + " plays it (with the kit's root on C2).");
+                            + notenames::name (36 - 4 + k) + " plays it (with the kit's root on " + notenames::name (36) + ").");
         button->onClick = [this, k] { selectPattern (k); };
         addAndMakeVisible (*button);
         patternButtons.push_back (std::move (button));

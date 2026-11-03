@@ -48,6 +48,7 @@ private:
     int selected = 38;
     std::vector<std::unique_ptr<Row>> rows;
     synth::drums::notemap::Map shown {};
+    int shownOctave = 0;   // (0.35.1) the NOTE NAMES the rows are written with
 };
 
 //==============================================================================
@@ -89,7 +90,7 @@ private:
     ParagonX1AudioProcessor& processor;
     juce::TextButton openFolder { "OPEN PRESETS FOLDER" };
     juce::Rectangle<int> keysArea, rigsArea, aboutArea;
-    ParamControl mapChoice, channelChoice;
+    ParamControl mapChoice, channelChoice, namesChoice;
     juce::TextButton saveMap { "SAVE AS DEFAULT" }, presetButton;
     NoteMapList mapList;
     juce::Viewport mapView;

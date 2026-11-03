@@ -1,4 +1,5 @@
 #include "MainView.h"
+#include "NoteNames.h"
 
 #include "Parameters.h"
 #include "ui/Logo.h"
@@ -184,7 +185,7 @@ MainView::MainView (ParagonX1AudioProcessor& processorToShow)
     keyboard.setColour (juce::MidiKeyboardComponent::upDownButtonArrowColourId, ParagonColours::text);
     keyboard.setColour (juce::MidiKeyboardComponent::textLabelColourId, ParagonColours::inkDim);
     keyboard.setAvailableRange (24, 107);   // seven octaves shown (notes outside it from the DAW still play, in the kit's keys)
-    keyboard.setOctaveForMiddleC (4);
+    keyboard.setOctaveForMiddleC (notenames::middleCOctave.load());
     keyboard.setWantsKeyboardFocus (false);   // computer-key playing would fight the DAW's own shortcuts
     keyboard.setScrollButtonsVisible (false);  // all seven octaves fit
     addAndMakeVisible (keyboard);
@@ -302,6 +303,15 @@ void MainView::refreshRig()
 void MainView::timerCallback()
 {
     updateDragHover (juce::Time::getMillisecondCounterHiRes(), groovesPage.isDragAndDropActive() || isDragAndDropActive());
+    // NOTE NAMES (0.35.1): every note's name follows SETTINGS' choice (middle C as C3 or C4).
+    if (const auto* names = audioProcessor.getParameters().getRawParameterValue (ParamIDs::noteNames))
+        if (const auto octave = notenames::octaveForChoice (juce::roundToInt (names->load())); octave != notenames::middleCOctave.load()
+                                                                                                 || octave != keyboard.getOctaveForMiddleC())
+        {
+            notenames::middleCOctave = octave;
+            keyboard.setOctaveForMiddleC (octave);
+            repaint();
+        }
     refreshRig();
     undoButton.setEnabled (audioProcessor.canUndo());
     redoButton.setEnabled (audioProcessor.canRedo());

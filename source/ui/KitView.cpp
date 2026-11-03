@@ -1,4 +1,5 @@
 #include "ui/KitView.h"
+#include "NoteNames.h"
 
 #include "KitImages.h"
 #include "dsp/synth/NoteMap.h"
@@ -356,7 +357,7 @@ juce::String KitView::describe (int slot) const
     const auto playsAs = kit.playsAs (slot);
     return juce::String (synth::drums::slotDefaults[(size_t) slot].key) + "  " + synth::drums::articulationName (slot)
            + (playsAs != slot ? (playsAs >= 0 ? "  (OFF: " + synth::drums::articulationName (playsAs) + " PLAYS)" : juce::String ("  (OFF)")) : juce::String())
-           + (home >= 0 ? "  " + juce::MidiMessage::getMidiNoteName (home, true, true, 4) : juce::String());
+           + (home >= 0 ? "  " + notenames::name (home) : juce::String());
 }
 
 void KitView::mouseDown (const juce::MouseEvent& e)

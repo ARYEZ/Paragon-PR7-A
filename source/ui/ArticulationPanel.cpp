@@ -1,4 +1,5 @@
 #include "ui/ArticulationPanel.h"
+#include "NoteNames.h"
 
 #include "ui/ParagonLookAndFeel.h"
 
@@ -8,7 +9,7 @@ namespace
     constexpr int pedalHeight = 64, tailHeight = 44;
     constexpr float minDb = -48.0f, maxDb = 12.0f;
 
-    juce::String noteName (int note) { return note >= 0 ? juce::MidiMessage::getMidiNoteName (note, true, true, 4) : juce::String ("-"); }
+    juce::String noteName (int note) { return note >= 0 ? notenames::name (note) : juce::String ("-"); }
     juce::String upper (const char* text) { return juce::String (text).toUpperCase(); }
 }
 

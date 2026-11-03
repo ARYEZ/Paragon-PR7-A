@@ -1,4 +1,5 @@
 #include "ui/MidiInPanel.h"
+#include "NoteNames.h"
 
 #include "dsp/synth/NoteMap.h"
 #include "ui/DrumSeqPage.h"
@@ -7,7 +8,7 @@
 namespace
 {
     constexpr int tabHeight = 26, monitorLines = 9, lineHeight = 15;
-    juce::String noteName (int n) { return juce::MidiMessage::getMidiNoteName (n, true, true, 4); }
+    juce::String noteName (int n) { return notenames::name (n); }
     juce::String arrow() { return juce::String (juce::CharPointer_UTF8 (" \xe2\x86\x92 ")); }
 
     juce::String drumName (int slot)

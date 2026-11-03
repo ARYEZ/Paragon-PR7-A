@@ -2,6 +2,18 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.35.1
+
+**Note names now match your DAW: the kick is C1, the snare D1.** You saw your MIDI editor show the snare on D1 and the kick on C1 while PR7-D called them D2 and C2. Nothing was mapped wrong: both send and play the same note numbers (kick 36, snare 38), which is why the right drums played. The names differ because there are two ways to number octaves:
+- **Cubase and Yamaha** (and so your PR7-S) call middle C (note 60) **C3**, so note 36 is C1.
+- **Roland and most other software**, and PR7-D until now, call it **C4**, so note 36 is C2.
+
+**Now:** a **NOTE NAMES** setting in SETTINGS (beside MAP and CHANNEL), **C3 Cubase** by default, or **C4 Roland**. Every note name in PR7-D follows it: the kit list, the on-screen keyboard, the KIT VIEW, the articulations, THE KEYS list, MIDI IN and its monitor, the sequencer's KEY hints, and the knob that shows ROOT. It isn't part of a preset, so switching presets never changes it.
+
+Only the names change. No note plays anything different, and your saved projects, presets and grooves are untouched.
+
+**Tests:** both conventions name note 36, 38 and 60 correctly; the setting starts at C3, isn't kept in presets, and changing it leaves the note map as it was.
+
 ## 0.35.0
 
 **SATURATION: PR7-X's MARS in every mixer strip.** A new effect type, **Saturation**, sits beside Drive in every channel's, bus's and USER channel's four effect slots. It's MARS, the multiband saturator from PR7-X (inspired by FabFilter Saturn 2; our own design), with the same code and sound. Drive is one kind of distortion with a tone knob; MARS colours a drum properly. Warm a kick's low end without fuzzing its click, put tape on the snare's body, or give the room mics some grit.

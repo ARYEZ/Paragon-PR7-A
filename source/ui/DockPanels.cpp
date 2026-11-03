@@ -1,4 +1,5 @@
 #include "DockPanels.h"
+#include "NoteNames.h"
 
 #include "Parameters.h"
 #include "ui/ParagonLookAndFeel.h"
@@ -37,7 +38,7 @@ NoteMapList::NoteMapList (ParagonX1AudioProcessor& p) : processor (p)
     for (int n = 0; n < 128; ++n)
     {
         auto row = std::make_unique<Row>();
-        row->note.setText (juce::String (n).paddedLeft (' ', 3) + "   " + juce::MidiMessage::getMidiNoteName (n, true, true, 4), juce::dontSendNotification);
+        row->note.setText (juce::String (n).paddedLeft (' ', 3) + "   " + notenames::name (n), juce::dontSendNotification);
         row->note.setFont (juce::FontOptions (13.0f));
         row->note.setColour (juce::Label::textColourId, ParagonColours::textDim);
         row->box = std::make_unique<juce::ComboBox>();
@@ -72,9 +73,15 @@ NoteMapList::NoteMapList (ParagonX1AudioProcessor& p) : processor (p)
 void NoteMapList::refresh()
 {
     const auto map = processor.getNoteMap();
-    if (map == shown)
+    if (map == shown && notenames::middleCOctave.load() == shownOctave)
         return;
     shown = map;
+    if (const auto octave = notenames::middleCOctave.load(); octave != shownOctave)
+    {
+        shownOctave = octave;   // 0.35.1: the names follow NOTE NAMES
+        for (size_t n = 0; n < rows.size(); ++n)
+            rows[n]->note.setText (juce::String ((int) n).paddedLeft (' ', 3) + "   " + notenames::name ((int) n), juce::dontSendNotification);
+    }
     for (size_t n = 0; n < rows.size(); ++n)
     {
         rows[n]->box->setSelectedId (map[n] + 2, juce::dontSendNotification);
@@ -132,11 +139,16 @@ SettingsPage::SettingsPage (ParagonX1AudioProcessor& p)
                  "any note in the list). Not part of a preset: it suits your controller and grooves."),
       channelChoice (p.getParameters(), ParamIDs::drumsMidiChannel, "CHANNEL",
                      "MIDI IN CHANNEL: which channel your DAW or controller plays the kit on (ANY: all of them). Not part of a preset."),
+      namesChoice (p.getParameters(), ParamIDs::noteNames, "NOTE NAMES",
+                   "How notes are named. C3: middle C (note 60) is C3, the kick (36) C1, as in Cubase and Yamaha. C4: middle C "
+                   "is C4, the kick C2, as in Roland and most other software. Only the names change, never which note plays "
+                   "what. Not part of a preset."),
       mapList (p),
       midiInPanel (p)
 {
     addAndMakeVisible (mapChoice);
     addAndMakeVisible (channelChoice);
+    addAndMakeVisible (namesChoice);
     // MIDI IN / E-DRUMS (0.18.0): the preset menu, and the panel beside the list.
     styleButton (presetButton, false);
     presetButton.setTooltip ("MIDI IN presets: the map, channel, incoming velocity curve, CC zones and hi-hat steps together, "
@@ -321,7 +333,7 @@ void SettingsPage::paint (juce::Graphics& g)
     };
 
     const auto root = juce::roundToInt (processor.getParameters().getRawParameterValue (ParamIDs::drumsRoot)->load());
-    const auto note = [] (int n) { return juce::MidiMessage::getMidiNoteName (n, true, true, 4); };
+    const auto note = [] (int n) { return notenames::name (n); };
     section (keysArea, "MIDI IN / E-DRUMS", "Which notes from your DAW or controller play which drum. ROOT: the 29 keys from ROOT (now "
                                                 + note (root) + " to " + note (root + synth::drums::numSlots - 1)
                                                 + "), and with the sequencer on KEY the four below start its patterns. Click a note's "
@@ -360,6 +372,8 @@ void SettingsPage::resized()
         mapChoice.setBounds (bar.removeFromLeft (190));
         bar.removeFromLeft (10);
         channelChoice.setBounds (bar.removeFromLeft (90));
+        bar.removeFromLeft (10);
+        namesChoice.setBounds (bar.removeFromLeft (110));
         bar.removeFromLeft (10);
         saveMap.setBounds (bar.removeFromLeft (150).withSizeKeepingCentre (150, 30).translated (0, 8));
         bar.removeFromLeft (10);

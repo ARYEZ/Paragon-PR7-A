@@ -245,3 +245,30 @@ TEST_CASE ("NOTE MAP: an old kit file (PR7-K's 12 drums) loads; the 8 new drums 
     CHECK_THAT (value (ParamIDs::drum (2, "Pitch")), WithinAbs (3.0, 0.01));
     CHECK_THAT (value (ParamIDs::drum (12, "Pitch")), WithinAbs (synth::drums::slotDefaults[12].pitch, 0.01));
 }
+
+#include "NoteNames.h"
+
+TEST_CASE ("NOTE NAMES 0.35.1: middle C as C3 (Cubase, the default) or C4; only the names change, not what plays", "[notemap]")
+{
+    const auto before = notenames::middleCOctave.load();
+    notenames::middleCOctave = notenames::octaveForChoice (0);
+    CHECK (notenames::name (36) == "C1");   // the kick, as Cubase / PR7-S shows it
+    CHECK (notenames::name (38) == "D1");   // the snare
+    CHECK (notenames::name (60) == "C3");
+    notenames::middleCOctave = notenames::octaveForChoice (1);
+    CHECK (notenames::name (36) == "C2");
+    CHECK (notenames::name (38) == "D2");
+    CHECK (notenames::name (60) == "C4");
+    notenames::middleCOctave = before;
+
+    // The setting: C3 by default, not kept in presets, and it doesn't move a single note.
+    ParagonX1AudioProcessor p;
+    auto* names = p.getParameters().getParameter (ParamIDs::noteNames);
+    REQUIRE (names != nullptr);
+    CHECK (p.getParameters().getRawParameterValue (ParamIDs::noteNames)->load() == 0.0f);
+    CHECK (ParamIDs::notInRigs.contains (ParamIDs::noteNames));
+    CHECK (names->getText (names->getValue(), 32).startsWith ("C3"));
+    const auto map = p.getNoteMap();
+    names->setValueNotifyingHost (1.0f);
+    CHECK (p.getNoteMap() == map);
+}

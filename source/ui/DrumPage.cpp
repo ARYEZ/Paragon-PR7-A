@@ -1,4 +1,5 @@
 #include "DrumPage.h"
+#include "NoteNames.h"
 
 #include "dsp/synth/DrumGizmo.h"
 #include "dsp/synth/Instrument.h"
@@ -13,7 +14,7 @@ namespace
     constexpr double pictureRate = 24000.0;   // plenty for a picture, half the work
     constexpr double pictureMaxSeconds = 4.0;
 
-    juce::String noteName (int note) { return juce::MidiMessage::getMidiNoteName (note, true, true, 4); }
+    juce::String noteName (int note) { return notenames::name (note); }
 
     juce::String drumName (const synth::drums::SlotSettings& s, const ParagonX1AudioProcessor& p, int slot)
     {

@@ -69,6 +69,8 @@ namespace ParamIDs
     // MIDI IN CHANNEL (0.18.0, hint 27): which channel the DAW's or a controller's MIDI plays the kit on ("Any", 1-16).
     // Global, like the note map.
     inline constexpr auto drumsMidiChannel = "drumsMidiChannel";
+    // NOTE NAMES (0.35.1, hint 37): how notes are named (notenames::choiceNames: middle C is C3 or C4). Not in presets.
+    inline constexpr auto noteNames = "noteNames";
     inline const juce::StringArray midiChannelNames { "Any", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16" };
     inline juce::String drum (int slot, const char* what) { return "drum" + juce::String (slot + 1) + what; }
     // THE OUTPUTS (PR7-D 0.3.0, version hint 25): the plugin's stereo outputs, MAIN first. Each drum, insert bus and
@@ -308,6 +310,7 @@ namespace ParamIDs
         juce::StringArray ids { outputGain, bypass, limitUnity, limitDelta, drumsMap, delayOutput, reverbOutput };
         ids.addArray (drumsPedalSteps);
         ids.add (drumsMidiChannel);
+        ids.add (noteNames);
         for (int c = 0; c < 29; ++c)   // the mic channels (0.23.0: USER 1-8 too; 0.34.0: USER 9-16)
             ids.add (mix (c, "Output"));
         for (int b = 0; b < 8; ++b)
