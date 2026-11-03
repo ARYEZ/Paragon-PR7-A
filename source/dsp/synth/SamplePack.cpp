@@ -139,8 +139,8 @@ namespace synth::drums::samplepack
             return mixer::ambience;
         const auto kick = slot == BD, snare = slot == SD || slot == SD2 || slot == RIM;
         const auto close = m.isEmpty() || m == "SPOT" || m == "DYN" || m == "DYN1" || m == "TOP" || m == "INSIDE";
-        if (slot == T4 && close)
-            return -1;   // no TOM 4 channel: its own
+        if ((slot == T4 || slot == T5) && close)
+            return -1;   // no TOM 4 or 5 channel: its own (0.37.0: tom 5 too)
         if (kick && (m == "CON" || m == "OUTSIDE"))
             return mixer::kickOut;
         if (snare && (m == "BTM" || m == "BOTTOM"))

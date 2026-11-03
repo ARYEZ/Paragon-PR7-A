@@ -38,9 +38,9 @@ namespace synth::micsim
         {  0.0f,  0.45f, 0.30f },   // KICK (its beater)
         { -0.15f, 0.35f, 0.65f },   // SNARE
         { -0.45f, 0.40f, 0.95f },   // HI-HAT
-        {  0.0f,  0.62f, 0.85f },   // RACK TOM
-        {  0.45f, 0.35f, 0.60f },   // FLOOR TOM 1
-        {  0.65f, 0.12f, 0.55f },   // FLOOR TOM 2
+        {  0.0f,  0.62f, 0.85f },   // TOM 1 (RACK TOM until 0.37.0)
+        {  0.45f, 0.35f, 0.60f },   // TOM 2 (FLOOR TOM 1)
+        {  0.65f, 0.12f, 0.55f },   // TOM 3 (FLOOR TOM 2)
         { -0.45f, 0.75f, 1.35f },   // CRASH 1
         {  0.30f, 0.85f, 1.40f },   // CRASH 2
         {  0.65f, 0.60f, 1.15f },   // RIDE

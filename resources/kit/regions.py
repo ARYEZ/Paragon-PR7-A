@@ -2,10 +2,12 @@
 # its reflection on the floor below.
 import sys, numpy as np
 from PIL import Image
-PIECE_SLOTS = {"kick": [0], "snare": [1, 2, 4], "tom1": [9], "tom2": [7], "floor": [5], "hihat": [6, 8], "crash": [11],
-               "crash2": [14], "ride": [12, 13], "china": [15], "splash": [16], "tambourine": [18]}
+# (0.37.0: the owner's bigger kit; the click map's step is 7 now, for 36 slots)
+PIECE_SLOTS = {"kick": [0], "snare": [1, 2, 4], "tom1": [9], "tom2": [7], "tom3": [5], "floor": [23], "floor2": [35],
+               "hihat": [6, 8], "crash": [11], "crash2": [14], "crash3": [29], "crash4": [30], "crash5": [31],
+               "crash6": [32], "fxcrash": [33], "ride": [12, 13], "china": [15], "china2": [34], "splash": [16]}
 m = np.array(Image.open(sys.argv[1]).convert("RGB"))[..., 0] / 255.0
-z = np.round(np.where(m <= 0.04045, m / 12.92, ((m + 0.055) / 1.055) ** 2.4) * 255.0 / 12.0).astype(int) - 1
+z = np.round(np.where(m <= 0.04045, m / 12.92, ((m + 0.055) / 1.055) ** 2.4) * 255.0 / 7.0).astype(int) - 1
 H, W = z.shape
 for piece, slots in PIECE_SLOTS.items():
     ys, xs = np.nonzero(np.isin(z, slots))

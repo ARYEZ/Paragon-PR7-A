@@ -138,9 +138,9 @@ namespace synth::drums
         { "KICK",        {{ { 0, "Hit" } }}, 1 },
         { "SNARE",       {{ { 2, "Center" }, { 4, "Rimshot" }, { 1, "Sidestick" } }}, 3 },
         { "HI-HAT",      {{ { 6, "Closed" }, { 21, "Open 1" }, { 17, "Open 2" }, { 22, "Open 3" }, { 10, "Open 4" }, { 8, "Pedal" }, { 24, "Shoulder" } }}, 7 },
-        { "RACK TOM",    {{ { 9, "Hit" } }}, 1 },
-        { "FLOOR TOM 1", {{ { 7, "Hit" } }}, 1 },
-        { "FLOOR TOM 2", {{ { 5, "Hit" } }}, 1 },
+        { "TOM 1",       {{ { 9, "Hit" } }}, 1 },   // (0.37.0: named TOM 1-3, as the bigger kit's three rack toms;
+        { "TOM 2",       {{ { 7, "Hit" } }}, 1 },   //  RACK TOM / FLOOR TOM 1 / FLOOR TOM 2 before; by index, so
+        { "TOM 3",       {{ { 5, "Hit" } }}, 1 },   //  nothing saved changes)
         { "CRASH 1",     {{ { 11, "Hit" }, { 25, "Choke" } }}, 2 },
         { "CRASH 2",     {{ { 14, "Hit" }, { 26, "Choke" } }}, 2 },
         { "RIDE",        {{ { 12, "Bow" }, { 13, "Bell" }, { 20, "Edge" } }}, 3 },
@@ -186,9 +186,9 @@ namespace synth::drums
         if (name == "KICK") return mixer::kickIn;
         if (name == "SNARE") return mixer::snareTop;
         if (name == "HI-HAT") return mixer::hiHat;
-        if (name == "RACK TOM") return mixer::tom1;
-        if (name == "FLOOR TOM 1") return mixer::tom2;
-        if (name == "FLOOR TOM 2" || name == "TOM 4" || name == "TOM 5") return mixer::tom3;   // (TOM 4 shares it; a sampled kit's own mic: a USER channel)
+        if (name == "TOM 1") return mixer::tom1;
+        if (name == "TOM 2") return mixer::tom2;
+        if (name == "TOM 3" || name == "TOM 4" || name == "TOM 5") return mixer::tom3;   // (TOM 4 shares it; a sampled kit's own mic: a USER channel)
         if (name.startsWith ("CRASH") || name == "RIDE" || name.startsWith ("CHINA") || name == "SPLASH" || name == "FX CRASH") return mixer::cymbals;
         return mixer::other;
     }

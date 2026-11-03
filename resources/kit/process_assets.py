@@ -9,7 +9,8 @@ import numpy as np
 from PIL import Image, ImageFilter
 
 RAW, OUT = sys.argv[1], sys.argv[2]
-PIECES = ["kick", "snare", "tom1", "tom2", "floor", "hihat", "crash", "crash2", "ride", "china", "splash", "tambourine"]
+PIECES = ["kick", "snare", "tom1", "tom2", "tom3", "floor", "floor2", "hihat", "crash", "crash2", "crash3", "crash4",
+          "crash5", "crash6", "fxcrash", "ride", "china", "china2", "splash"]   # (0.37.0: the owner's bigger kit)
 LOW, HIGH = 330.0, 30.0     # the hues kept (degrees, through 0), inside the family's 318-42: JPEG drifts a few degrees
 
 def family_hues(rgb):
@@ -47,10 +48,10 @@ print("kit: %d pixels turned into the family's hues" % moved)
 # (JPEG moves a few colours a few degrees, and rings near bright glints: KitView pulls hues in again as it loads.)
 Image.fromarray(base).save(os.path.join(OUT, "kit.jpg"), quality=90, subsampling=0, optimize=True)
 
-# The click map: Blender wrote (slot + 1) x 12 / 255 through the sRGB curve; undo it.
+# The click map: Blender wrote (slot + 1) x 7 / 255 through the sRGB curve (0.37.0: 7, for 36 slots; 12 before); undo it.
 m = np.array(Image.open(os.path.join(RAW, "mask.png")).convert("RGB"))[..., 0] / 255.0
 linear = np.where(m <= 0.04045, m / 12.92, ((m + 0.055) / 1.055) ** 2.4) * 255.0
-zones = np.clip(np.round(linear / 12.0), 0, 255).astype(np.uint8)
+zones = np.clip(np.round(linear / 7.0), 0, 255).astype(np.uint8)
 print("zones:", sorted(int(v) - 1 for v in np.unique(zones) if v > 0))
 Image.fromarray(np.stack([zones] * 3, axis=2)).save(os.path.join(OUT, "kitzones.png"), optimize=True)
 

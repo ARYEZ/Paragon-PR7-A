@@ -1,4 +1,4 @@
-# THE KIT VIEW's pictures (0.14.0)
+# THE KIT VIEW's pictures (0.14.0; the kit and camera redone in 0.37.0)
 
 Our own 3D drum kit, modelled and rendered for PR7-D in the PR7 family's colours, built into the plugin as
 `KitImages::` binary data (see `CMakeLists.txt`) and drawn by `source/ui/KitView.cpp`.
@@ -7,7 +7,7 @@ Our own 3D drum kit, modelled and rendered for PR7-D in the PR7 family's colours
 |---|---|
 | `kit.jpg` | The kit from the drummer's seat, 1280 x 924 |
 | `kitzones.png` | The click map: each pixel's value (all channels) is the slot a click there plays + 1 (0: nothing) |
-| `lit<piece>.png` | Each piece glowing brighter, cut to the area it changes; its alpha fades where the glow fades |
+| `lit<piece>.png` | Each piece glowing brighter, cut to the area it changes; its alpha fades where the glow fades (19 pieces since 0.37.0) |
 | `kitlayout.txt` | `<piece> <x> <y> <width> <height>`: where each glow goes on `kit.jpg` |
 
 ## Making them again
@@ -35,3 +35,21 @@ python3 process_assets.py raw <the repo>/resources/kit
 The base render takes about 8 minutes on 4 CPU cores; the glows about a minute each.
 
 Which part plays which slot is in `kit3d.py`'s `zone_of` and `KitView.cpp`'s `slotPieces`: keep them together.
+
+## 0.37.0: the owner's bigger kit
+
+The owner sent a picture of the kit they wanted (from other drum software: only used as a layout to match, never
+traced or shipped): three rack toms, two floor toms, the hi-hat, six crashes, an FX crash with holes, two chinas, a
+splash and a ride. Its pieces were placed from that picture:
+
+- a camera was fitted to it (least squares on six pieces whose places in a kit are known, the two pedals, the snare,
+  the front floor tom, the middle rack tom and the kick's front, plus how round four round things look: a disc's height
+  over width is about the cosine between its axis and the view to it); the fit leaves the lens open, and the sizes
+  settle it (the front 16" floor tom shows 1.5 times the 12" rack tom's width: the camera about 6-7 m away);
+- each piece's centre in the picture, through that camera, at a height we chose, gives its place; the whole scene was
+  moved 0.19 m to put the kick where ours was;
+- `panel` is now that camera (`KIT_LENS` 74 mm and `KIT_TARGET_DZ` -0.1 frame it for 1280 x 924).
+
+The click map's step went from 12 to 7 a slot (36 slots fit 252). The rack toms are HT, MT, LT left to right, the floor
+toms T4 and T5; the tambourine isn't in this kit. The cymbals stand on boom stands (`boom_cymbal`, each with its stand's
+place), the back ones behind the toms; the FX crash's holes are boolean cuts with a glowing ring each.

@@ -2,6 +2,30 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.37.0
+
+**The KIT VIEW is your bigger kit now.** It's laid out like the kit in the picture you sent, still drawn and lit in our Tron look, and every piece you can see plays.
+
+**What's in it** (left to right, as you sit):
+- **Cymbals:** the FX crash with holes, Crash 1, Crash 3, the splash over Tom 1, Crash 4 high at the back, Crash 2 in the middle over the toms, Crash 5 and Crash 6 on the right, the china, the ride over the floor toms, and China 2 at the far right. All on boom stands, the back ones standing behind the toms.
+- **Drums:** three rack toms (10", 12", 13"), two floor toms (14", 16"), the snare, the kick, the hi-hat and both pedals.
+- **Which drum is which:** the rack toms play HT, MT, LT (high to low, left to right), the floor toms Tom 4 and Tom 5. 0.36.0's Crash 3–6, FX Crash and China 2 are the new cymbals. Each glows when it plays and chooses its drum when clicked, as before.
+
+**How it was matched:**
+- **The camera:** I worked out the camera of your picture from where its pieces appear and how flat its round shapes look. Your picture looks down at about 26° from 6–7 m away with a long lens, and our render uses the same view.
+- **The pieces:** each one stands where it shows in your picture, at a believable height, sized as a real kit: 22" kick, 14" snare, 17"–20" crashes, a 21" ride, 16"–18" chinas, a 10" splash.
+- **Our own design:** our own model and rendering, not a copy of the picture.
+
+**Also:**
+- **The ARTICULATIONS panel** moved to the kit view's bottom-left corner. The new kit fills the top-left with crashes; the bottom-left has only stands, so a short panel covers no drum and the hi-hat's tall one only its stands.
+- **The toms are named TOM 1 to TOM 5** (the articulations panel, the mixer's bleed list), for the three rack toms and two floor toms. They were RACK TOM, FLOOR TOM 1 and FLOOR TOM 2. Nothing saved changes.
+- **A sample pack's Tom 5** close mic gets a USER channel of its own, as Tom 4's does.
+- **No tambourine** in the picture: your kit has none. It still plays from its key.
+
+**Tests:** every drum on the picture has its part, and clicking it chooses it (the 23 drums on it, the clap, tambourine and shaker none); the glows cover only their own piece; the pictures keep to the PR7 colours. pluginval passes at strictness 10.
+
+**Not checked:** a real window on Windows. Tell me if anything looks off, or if a cymbal should move.
+
 ## 0.36.0
 
 **Seven more drums, for the bigger kit.** You asked for the kit view to match a big kit: six crashes, an FX crash with holes, two chinas, a splash, a ride, three rack toms and two floor toms. PR7-D had drums for only five of those cymbals and four toms. These are the missing ones, first. The new kit picture comes next, in 0.37.0.

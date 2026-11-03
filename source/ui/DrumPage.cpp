@@ -1376,9 +1376,12 @@ void DrumPage::updateLights()
 
 void DrumPage::placeArticulations()
 {
-    // In the kit view's top left corner, above the hi-hat: empty sky in the picture.
+    // In the kit view's bottom left corner, above its line naming the chosen drum: there the picture has only the
+    // cymbals' stands (0.37.0's bigger kit fills the top left with crashes; measured on the click map: a short panel
+    // covers no piece there, the hi-hat's tall one a fifth of the hats' stand and a little of the FX crash).
     const auto area = kitView.getBounds();
-    articulations.setBounds (area.getX() + 6, area.getY() + 4, juce::jmin (236, area.getWidth() / 3), articulations.wantedHeight());
+    const auto h = articulations.wantedHeight();
+    articulations.setBounds (area.getX() + 6, juce::jmax (area.getY() + 4, area.getBottom() - 30 - h), juce::jmin (236, area.getWidth() / 3), h);
 }
 
 void DrumPage::chooseSample()

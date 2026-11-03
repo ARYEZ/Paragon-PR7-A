@@ -38,7 +38,8 @@ namespace
 
     // The slots with a part on the kit (the clap and the shaker have none).
     // 0.17.0: the ride's edge (20) a ring round its bow; the hat's openness steps are chosen in the articulations.
-    const std::vector<int> onTheKit { 0, 1, 2, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 18, 20 };
+    // 0.37.0: the owner's bigger kit: tom 4 and 5 (the floor toms), crashes 3 to 6, the FX crash, china 2; no tambourine.
+    const std::vector<int> onTheKit { 0, 1, 2, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 20, 23, 29, 30, 31, 32, 33, 34, 35 };
 
     // A pixel's hue in degrees, and whether it's coloured enough to count (the family's rule is about colours, not
     // the near-black onyx or pearl greys).
@@ -63,7 +64,7 @@ TEST_CASE ("KIT VIEW: its pictures are built in and fit together", "[kitview]")
     }
 }
 
-TEST_CASE ("KIT VIEW: each drum on the kit has its part, the clap and shaker none", "[kitview]")
+TEST_CASE ("KIT VIEW: each drum on the kit has its part, the clap, tambourine and shaker none", "[kitview]")
 {
     TempFolder temp;
     Plugin p (temp.folder);
@@ -91,6 +92,11 @@ TEST_CASE ("KIT VIEW: each drum on the kit has its part, the clap and shaker non
     CHECK (KitView::pieceOf (6) == KitView::pieceOf (8));
     CHECK (KitView::pieceOf (3) == -1);
     CHECK (KitView::pieceOf (19) == -1);
+    CHECK (KitView::pieceOf (18) == -1);   // (0.37.0: no tambourine in the bigger kit)
+    // 0.37.0: each new piece its own.
+    CHECK (KitView::pieceOf (23) != KitView::pieceOf (35));
+    CHECK (KitView::pieceOf (29) != KitView::pieceOf (11));
+    CHECK (KitView::pieceOf (25) == KitView::pieceOf (11));   // a choke on its cymbal
     // The empty floor in the corners chooses nothing.
     CHECK (view.slotAt ({ 3.0f, 3.0f }) == -1);
     CHECK (view.slotAt ({ 845.0f, 609.0f }) == -1);
