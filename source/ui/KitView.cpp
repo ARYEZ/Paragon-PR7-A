@@ -138,7 +138,7 @@ KitView::KitView (ParagonX1AudioProcessor& p) : processor (p)
 }
 
 // 0.15.1: the pictures shrunk to the size they're shown, in the screen's own pixels (Windows' display scaling too),
-// once, and only copied after that: shrinking the 1280-pixel kit and each glow smoothly on every redraw cost
+// once, and only copied after that: shrinking the kit (1896 pixels wide since 0.42.0) and each glow smoothly on every redraw cost
 // milliseconds a frame, 30 frames a second per glowing piece.
 void KitView::prepare (float scale)
 {
@@ -177,8 +177,13 @@ juce::Rectangle<float> KitView::pictureArea() const
     const auto& kit = pictures().kit;
     if (! kit.isValid())
         return {};
-    return juce::RectanglePlacement (juce::RectanglePlacement::centred)
-        .appliedTo (kit.getBounds().toFloat(), getLocalBounds().toFloat());
+    // On whole pixels, its sides multiples of 4 (0.42.0: the wide picture rarely fits a view exactly; half a pixel off,
+    // or half a screen pixel too big at 125-200% display scaling, it would be drawn snapped or stretched, off its click
+    // map).
+    const auto placed = juce::RectanglePlacement (juce::RectanglePlacement::centred)
+                            .appliedTo (kit.getBounds().toFloat(), getLocalBounds().toFloat());
+    const auto w = juce::jmax (4, (int) (placed.getWidth() / 4.0f) * 4), h = juce::jmax (4, (int) (placed.getHeight() / 4.0f) * 4);
+    return juce::Rectangle<int> (w, h).withCentre (placed.getCentre().toInt()).toFloat();
 }
 
 int KitView::slotAt (juce::Point<float> at) const
