@@ -2,6 +2,16 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.42.0
+
+**The KIT VIEW has the whole page, as you asked.** The list of drums down the left is gone from the KIT VIEW, and the Tron kit spreads across the full width of the page.
+
+- **The same shape as your reference picture:** the kit is rendered again at 1896 x 744, the picture you sent's own size, instead of the old squarer 1280 x 924. It's the same kit from the same seat, with a wider lens: the whole kit fits top to bottom, with the glowing floor running out on both sides. The kit itself shows about 15% bigger than before, and the picture is about 70% sharper.
+- **Still there:** KITS, SEQUENCES and LINK on the KIT VIEW's title line, the articulations panel (now on the open floor at the bottom left), the OUTPUT strip and the SONG track.
+- **The drum list** is still on the DRUM and SEQUENCER views. The kit's own knobs (LEVEL and the rest) are there too. Clap, shaker and tambourine have no piece in the picture: choose them there or on the DRUM MACHINE.
+
+**Tests:** the kit view's click map, glows and colours checked on the new pictures; every test passes. pluginval passes at strictness 10.
+
 ## 0.41.0
 
 **The on-screen keyboard is gone, as you asked.** The strip under the pages is now the SONG track on its own, always there, using the whole strip. The KEYS | SONG switch has gone with the keyboard.

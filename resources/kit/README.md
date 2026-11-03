@@ -5,7 +5,7 @@ Our own 3D drum kit, modelled and rendered for PR7-D in the PR7 family's colours
 
 | File | What |
 |---|---|
-| `kit.jpg` | The kit from the drummer's seat, 1280 x 924 |
+| `kit.jpg` | The kit from the drummer's seat, 1896 x 744 (0.42.0: the reference picture's shape) |
 | `kitzones.png` | The click map: each pixel's value (all channels) is the slot a click there plays + 1 (0: nothing) |
 | `lit<piece>.png` | Each piece glowing brighter, cut to the area it changes; its alpha fades where the glow fades (19 pieces since 0.37.0) |
 | `kitlayout.txt` | `<piece> <x> <y> <width> <height>`: where each glow goes on `kit.jpg` |
@@ -16,10 +16,10 @@ Needs Blender 4.0 (`apt install blender`) and Python 3 with numpy and Pillow. In
 
 ```bash
 mkdir -p raw
-blender -b -P kit3d.py -- $PWD/raw/mask.png 1 1280 924 panel mask
-blender -b -P kit3d.py -- $PWD/raw/base.png 160 1280 924 panel tron
+blender -b -P kit3d.py -- $PWD/raw/mask.png 1 1896 744 panel mask
+blender -b -P kit3d.py -- $PWD/raw/base.png 160 1896 744 panel tron
 python3 regions.py raw/mask.png > raw/regions.txt
-while read piece region; do blender -b -P kit3d.py -- $PWD/raw/lit-$piece.png 160 1280 924 panel lit:$piece $region; done < raw/regions.txt
+while read piece region; do blender -b -P kit3d.py -- $PWD/raw/lit-$piece.png 160 1896 744 panel lit:$piece $region; done < raw/regions.txt
 python3 process_assets.py raw <the repo>/resources/kit
 ```
 
@@ -48,7 +48,8 @@ splash and a ride. Its pieces were placed from that picture:
   settle it (the front 16" floor tom shows 1.5 times the 12" rack tom's width: the camera about 6-7 m away);
 - each piece's centre in the picture, through that camera, at a height we chose, gives its place; the whole scene was
   moved 0.19 m to put the kick where ours was;
-- `panel` is now that camera (`KIT_LENS` 74 mm and `KIT_TARGET_DZ` -0.1 frame it for 1280 x 924).
+- `panel` is now that camera (`KIT_LENS` 74 mm and `KIT_TARGET_DZ` -0.1 framed it for 1280 x 924; since 0.42.0, 46 mm
+  and -0.11 for 1896 x 744, the reference picture's own shape, with the KIT VIEW across the whole page).
 
 The click map's step went from 12 to 7 a slot (36 slots fit 252). The rack toms are HT, MT, LT left to right, the floor
 toms T4 and T5; the tambourine isn't in this kit. The cymbals stand on boom stands (`boom_cymbal`, each with its stand's

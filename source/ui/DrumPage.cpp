@@ -844,6 +844,12 @@ void DrumPage::showView (View v)
     wholeFile.setVisible (drum && display.showsFile());
     refreshPictures();
     sequencer.setVisible (v == View::sequencer);
+    // 0.42.0: the KIT VIEW has the whole page (the owner: "lose the list ... the kit a little more space"): the drum list
+    // and the kit's own knobs give way to it; KITS, SEQUENCES and LINK stay on its title line.
+    for (auto& row : rows)
+        row->setVisible (v != View::kit);
+    for (auto& c : kitControls)
+        c->setVisible (v != View::kit);
     kitView.setVisible (v == View::kit);
     articulations.setVisible (v == View::kit);
     (v == View::machine ? machineTab : v == View::kit ? kitTab : drum ? drumTab : sequencerTab).setToggleState (true, juce::dontSendNotification);
@@ -1406,15 +1412,21 @@ void DrumPage::chooseSample()
 
 void DrumPage::paint (juce::Graphics& g)
 {
-    for (const auto& area : { kitArea, drumArea })
-        DockStyle::drawPanel (g, area.toFloat());
-
     const auto title = [&g] (const juce::String& text, juce::Rectangle<int> area)
     {
         g.setFont (juce::FontOptions (15.0f, juce::Font::bold));
         g.setGradientFill (ParagonLookAndFeel::menuHighlight (area.toFloat().withWidth (140.0f)));
         g.drawText (text, area, juce::Justification::centredLeft, false);
     };
+    if (view == View::kit)
+    {
+        // One panel over the page: the kit across all of it.
+        DockStyle::drawPanel (g, getLocalBounds().toFloat());
+        title ("KIT VIEW", getLocalBounds().reduced (18, 0).withHeight (40));
+        return;
+    }
+    for (const auto& area : { kitArea, drumArea })
+        DockStyle::drawPanel (g, area.toFloat());
     const auto kit = processor.getKitSettings();
     title ("KIT", kitArea.reduced (18, 0).withHeight (40));
     g.setColour (ParagonColours::textDim);
@@ -1428,11 +1440,6 @@ void DrumPage::paint (juce::Graphics& g)
     if (view == View::sequencer)
     {
         title ("SEQUENCER", drumArea.reduced (18, 0).withHeight (40));
-        return;
-    }
-    if (view == View::kit)
-    {
-        title ("KIT VIEW", drumArea.reduced (18, 0).withHeight (40));
         return;
     }
     const auto& slotKit = kit.slots[(size_t) selected];
@@ -1484,7 +1491,7 @@ void DrumPage::resized()
     tabs.removeFromRight (18);
     velocityTab.setBounds (tabs.removeFromRight (94).withSizeKeepingCentre (90, 24));
     envelopeTab.setBounds (tabs.removeFromRight (94).withSizeKeepingCentre (90, 24));
-    kitView.setBounds (drumArea.reduced (14, 10).withTrimmedTop (36));
+    kitView.setBounds (getLocalBounds().reduced (14, 10).withTrimmedTop (36));   // the whole page (0.42.0)
     placeArticulations();
     sequencer.setBounds (drumArea);
     const auto inner = drumArea.reduced (14, 0);

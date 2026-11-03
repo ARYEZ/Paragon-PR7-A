@@ -12,8 +12,8 @@ HEIGHT = int(argv[3]) if len(argv) > 3 else 720
 VIEW = argv[4] if len(argv) > 4 else "kit"
 STYLE = argv[5] if len(argv) > 5 else "tron"   # "tron", "ink", "mask" (the click map), "lit:<piece>" (one piece glowing)
 import os
-LENS = float(os.environ.get("KIT_LENS", "74"))          # 0.37.0: the panel's lens (mm) and how far up it aims, for framing
-TARGET_DZ = float(os.environ.get("KIT_TARGET_DZ", "-0.1"))
+LENS = float(os.environ.get("KIT_LENS", "46"))          # 0.37.0: the panel's lens (mm) and how far up it aims, for framing
+TARGET_DZ = float(os.environ.get("KIT_TARGET_DZ", "-0.11"))
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
 scene = bpy.context.scene
@@ -760,8 +760,8 @@ elif VIEW == "pedal":      # a close-up of the kick pedal and beater
     cam.location = (0.35, 1.25, 0.6)
     target = Vector((0.0, 0.35, 0.15))
 elif VIEW == "panel":     # the plugin's KIT view: the drummer's view, framed for its panel
-    # 0.37.0: the owner's reference picture's viewpoint (higher and steeper than before: fitted to it), framed for the
-    # panel's 1280 x 924.
+    # 0.37.0: the owner's reference picture's viewpoint (higher and steeper than before: fitted to it); 0.42.0: framed
+    # for the reference's own shape, 1896 x 744 (lens 46 mm: the kit top to bottom, the floor wide on both sides).
     cam_data.lens = LENS
     cam.location = (-0.486, 6.8, 3.862)
     target = Vector((-0.01, 0.115, 0.734 + TARGET_DZ))
