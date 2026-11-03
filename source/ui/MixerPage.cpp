@@ -136,15 +136,7 @@ public:
             b.setToggleState (fx.isLoaded() && fx.on, juce::dontSendNotification);
             b.setAlpha (fx.isLoaded() ? (fx.on ? 1.0f : 0.75f) : 0.6f);
         }
-        for (int k = 0; k < mixer::numFxSlots; ++k)
-        {
-            auto& b = effects[(size_t) k];
-            DrumSeqPanel::style (b);
-            b.setTooltip ("EFFECT " + juce::String (k + 1) + ": EQ, COMPRESSOR, GATE, TRANSIENT, DRIVE, LO-FI or MOD, in order from the "
-                          "top, before the pan and fader. Click to choose; its settings are in PROPERTIES > EFFECTS.");
-            b.onClick = [this, k] { page.showEffectMenu (strip, k, effects[(size_t) k]); };
-            addAndMakeVisible (b);
-        }
+        // (0.40.0: the effect buttons' set-up, repeated here every tick by mistake, removed: the constructor does it.)
         for (int k = 0; k < mixer::numSendSlots; ++k)
         {
             auto& b = sends[(size_t) k];

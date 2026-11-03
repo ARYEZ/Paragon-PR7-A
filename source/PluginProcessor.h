@@ -192,6 +192,13 @@ public:
     void loadInstrumentRef (int slot, const juce::String& ref);   // a slot's instrument by its reference (as presets keep it)
     juce::File knownKitFolder (const juce::String& name) const;
     bool isLoadingInstruments() const noexcept { return pendingLoads.load() > 0; }
+    // 0.40.0: how far the latest load has got (0 to 1, by drums started), or -1 when none is loading.
+    double getLoadProgress() const noexcept
+    {
+        if (pendingLoads.load() <= 0)
+            return -1.0;
+        return loadsTotal.load() > 0 ? juce::jlimit (0.0, 1.0, (double) loadsDone.load() / (double) loadsTotal.load()) : 0.0;
+    }
     juce::String getInstrumentRef (int slot) const { return instrumentRefs[(size_t) juce::jlimit (0, 2 * ParamIDs::numDrums - 1, slot)]; }
     // A DRUM'S LAYER (0.29.0): a sample or a folder of hits of the user's played with each of the drum's hits. It's kept
     // as the drum's second instrument (index layerOf (slot): presets, kits and projects keep its file, as an
@@ -653,7 +660,7 @@ private:
     mutable std::mutex loadedLock;
     std::vector<std::pair<int, std::shared_ptr<const synth::drums::Instrument>>> loadedInstruments;
     juce::StringArray loadProblems;
-    std::atomic<int> pendingLoads { 0 }, loadGeneration { 0 };
+    std::atomic<int> pendingLoads { 0 }, loadGeneration { 0 }, loadsTotal { 0 }, loadsDone { 0 };
     std::shared_ptr<int> lifeToken = std::make_shared<int> (0);
     void startLoading (std::vector<std::pair<int, juce::String>> refs);   // the slots' instruments from their refs
     void installLoadedInstruments();

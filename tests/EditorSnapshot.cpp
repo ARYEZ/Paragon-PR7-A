@@ -1091,6 +1091,9 @@ TEST_CASE ("Render the editor to a PNG", "[.][snapshot]")
         }
     }
 
+    // PARAGON_SNAPSHOT_PROGRESS=1 (0.40.0): the progress box over the page, a bounce 62% done, with CANCEL.
+    if (env ("PARAGON_SNAPSHOT_PROGRESS") == "1")
+        view->getProgressBox().show ({ "BOUNCING THE SONG TO AUDIO", [] { return 0.62; }, [] {} });
     const auto width = juce::jmax (960, juce::SystemStats::getEnvironmentVariable ("PARAGON_SNAPSHOT_WIDTH", "1600").getIntValue());
     editor->setSize (width, width * 9 / 16);
     editor->resized();

@@ -1113,10 +1113,14 @@ void ParagonX1AudioProcessor::startLoading (std::vector<std::pair<int, juce::Str
         std::map<juce::String, synth::drums::samplepack::PackInfo> packs;
         std::vector<std::pair<int, std::shared_ptr<const synth::drums::Instrument>>> done;
         juce::StringArray problems;
+        loadsTotal = (int) refs.size();   // (0.40.0: for the progress box)
+        loadsDone = 0;
         for (const auto& [slot, ref] : refs)
         {
             if (alive.expired() || loadGeneration.load() != generation)
                 break;
+            if (loadGeneration.load() == generation)
+                loadsDone = (int) done.size();
             const auto parts = juce::StringArray::fromTokens (ref, "|", {});
             if (parts.size() < 3)
                 continue;
@@ -1917,25 +1921,20 @@ synth::drums::KitSettings ParagonX1AudioProcessor::getKitSettings() const noexce
     {
         auto& ch = kit.channels[(size_t) c];
         const auto& values = mixParameters[(size_t) c];
-        const auto get = [&values] (std::string_view what)
-        {
-            for (size_t s = 0; s < std::size (ParamIDs::mixSettings); ++s)
-                if (what == ParamIDs::mixSettings[s])
-                    return values[s]->load();
-            return 0.0f;
-        };
-        const auto level = get ("Level"), bleed = get ("Bleed");
+        const auto get = [&values] (int index) { return values[(size_t) index]->load(); };
+        using ParamIDs::mixSetting;
+        const auto level = get (mixSetting ("Level")), bleed = get (mixSetting ("Bleed"));
         ch.gain = level <= -59.95f ? 0.0f : juce::Decibels::decibelsToGain (level);
-        ch.pan = get ("Pan");
-        ch.mute = get ("Mute") > 0.5f;
-        ch.solo = get ("Solo") > 0.5f;
-        ch.invert = get ("Phase") > 0.5f;
+        ch.pan = get (mixSetting ("Pan"));
+        ch.mute = get (mixSetting ("Mute")) > 0.5f;
+        ch.solo = get (mixSetting ("Solo")) > 0.5f;
+        ch.invert = get (mixSetting ("Phase")) > 0.5f;
         ch.bleedGain = bleed <= -59.95f ? 0.0f : juce::Decibels::decibelsToGain (bleed);
-        ch.bleedOn = get ("BleedOn") > 0.5f;
-        ch.offsetSeconds = get ("Offset") * 0.001;
-        ch.releaseSeconds = get ("Release") * 0.001;
-        ch.output = juce::jlimit (0, synth::numOutputs - 1, juce::roundToInt (get ("Output")));
-        ch.route = juce::jlimit (0, synth::mixer::routeNames.size() - 1, juce::roundToInt (get ("Route")));
+        ch.bleedOn = get (mixSetting ("BleedOn")) > 0.5f;
+        ch.offsetSeconds = get (mixSetting ("Offset")) * 0.001;
+        ch.releaseSeconds = get (mixSetting ("Release")) * 0.001;
+        ch.output = juce::jlimit (0, synth::numOutputs - 1, juce::roundToInt (get (mixSetting ("Output"))));
+        ch.route = juce::jlimit (0, synth::mixer::routeNames.size() - 1, juce::roundToInt (get (mixSetting ("Route"))));
     }
     // 0.21.0: the buses (ParamIDs::busSettings' order) and MUTE MODE.
     for (int b = 0; b < synth::mixer::numBuses; ++b)

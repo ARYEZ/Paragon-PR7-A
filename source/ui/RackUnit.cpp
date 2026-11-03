@@ -77,9 +77,38 @@ void RackUnit::timerCallback()
     // The ladder holds a peak and falls back about 15 dB a second, as a meter's lights do.
     if (spec.ladderReading)
         ladderHeld = juce::jmax (spec.ladderReading(), ladderHeld - 0.5f);
+    // 0.40.0: only what changed is drawn again. The screen every time (its readout can move); the ladder when another
+    // bar lights; a key's light, a knob's value or the small screen's words when they change.
+    repaint (at (476.0f, 12.0f, 380.0f, 108.0f).toNearestInt().expanded (2));
+    auto lit = 0;
+    for (size_t i = 0; i < spec.ladderMarks.size(); ++i)
+        lit += ladderHeld >= spec.ladderMarks[i] ? 1 : 0;
+    if (lit != shownLadder)
+    {
+        shownLadder = lit;
+        repaint (at (414.0f, 30.0f, 24.0f, 82.0f).toNearestInt().expanded (3));
+    }
     for (size_t i = 0; i < keys.size(); ++i)
+    {
         keyLit[i] = spec.keys[i].isOn && spec.keys[i].isOn();
-    repaint();
+        if (keyLit[i] != shownKeys[i])
+        {
+            shownKeys[i] = keyLit[i];
+            repaint (at (874.0f + 60.0f * (float) i + 5.0f, 34.0f, 32.0f, 15.0f).toNearestInt().expanded (3));
+        }
+    }
+    for (size_t i = 0; i < knobs.size() && i < shownValues.size(); ++i)
+        if (auto* p = state.getParameter (spec.knobs[i].parameterId))
+            if (const auto text = p->getCurrentValueAsText(); text != shownValues[i])
+            {
+                shownValues[i] = text;
+                repaint (at (1064.0f + 82.0f * (float) i - 14.0f, 98.0f, 88.0f, 14.0f).toNearestInt().expanded (2));
+            }
+    if (const auto foot = spec.footText ? spec.footText().toUpperCase() : juce::String(); foot != shownFoot)
+    {
+        shownFoot = foot;
+        repaint (at (1222.0f, 74.0f, 90.0f, 34.0f).toNearestInt().expanded (2));
+    }
 }
 
 void RackUnit::paint (juce::Graphics& g)
@@ -138,14 +167,18 @@ void RackUnit::paint (juce::Graphics& g)
 
     // The screen: the PR7's own, with the unit's readout behind its glass.
     {
-        const auto glass = LedDisplay::paintScreen (g, at (476.0f, 12.0f, 380.0f, 108.0f), 0.8f * scale);
+        const auto bounds = at (476.0f, 12.0f, 380.0f, 108.0f);
+        screenBack.draw (g, bounds.expanded (14.0f * scale).toNearestInt(),
+                         [this, bounds, scale] (juce::Graphics& sg) { glassArea = LedDisplay::paintScreen (sg, bounds, 0.8f * scale); });
+        const auto glass = glassArea;
         {
             juce::Graphics::ScopedSaveState clip (g);
             g.reduceClipRegion (glass.toNearestInt());
             if (spec.paintReadout)
                 spec.paintReadout (g, glass);
         }
-        LedDisplay::paintGlassOverlay (g, glass, 0.8f * scale);
+        screenGlass.draw (g, glass.expanded (6.0f * scale).toNearestInt(),
+                          [glass, scale] (juce::Graphics& sg) { LedDisplay::paintGlassOverlay (sg, glass, 0.8f * scale); });
     }
 
     // The keys' LED bars and labels.

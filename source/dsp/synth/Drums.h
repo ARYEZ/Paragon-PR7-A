@@ -550,6 +550,10 @@ namespace synth::drums
             float rise = 0.0f, riseCoef = 0.0f, glide = 0.0f, glideEnv = 0.0f, glideCoef = 0.0f;
             float wires = 0.0f, wireThreshold = 0.0f, stick = 0.0f;
             float loudest = 1.0f;   // its loudest mode now (amplitude x envelope): it ends once that's inaudible
+            // 0.40.0: the modes still heard, in order, listed with the envelopes every 16 samples (the per-sample loop
+            // then skips nothing: the same modes, the same sum, without a test per mode per sample).
+            std::array<std::uint8_t, max> heard {};
+            int numHeard = 0;
         };
         Modes modes;
         // THE ACOUSTIC CYMBALS (0.25.0): beside their modes, the WASH (the shimmer a struck cymbal blooms into: noise in
@@ -705,6 +709,7 @@ namespace synth::drums
                                 std::array<float, 2>& high, double sampleRate) noexcept;
         void startHit (int slot, float velocity, const KitSettings&, const HitOptions& = {}) noexcept;
         void runSequencer (const Outputs&, int from, int to, const KitSettings&, const drumseq::Settings&, double ppq, double bpm) noexcept;
+        void clearChannelScratch (int channel, int numSamples) noexcept;   // a mic channel's four lines, this piece
         void patternKey (int pattern, bool down, float velocity) noexcept;
 
         struct SequencedHit

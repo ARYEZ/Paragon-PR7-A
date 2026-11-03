@@ -886,13 +886,16 @@ namespace synth::drums
                 md.env[i] *= md.coef16[i];
             }
             md.loudest = loudest;
+            // Those still heard for the next 16 samples (faded below hearing, -120 dB: skipped).
+            md.numHeard = 0;
+            for (int k = 0; k < md.count; ++k)
+                if (md.amp[(size_t) k] * md.env[(size_t) k] >= 1.0e-6f)
+                    md.heard[(size_t) md.numHeard++] = (std::uint8_t) k;
         }
         auto sum = 0.0f;
-        for (int k = 0; k < md.count; ++k)
+        for (int h = 0; h < md.numHeard; ++h)
         {
-            const auto i = (size_t) k;
-            if (md.amp[i] * md.env[i] < 1.0e-6f)
-                continue;   // faded below hearing (-120 dB): skipped
+            const auto i = (size_t) md.heard[(size_t) h];
             const auto y = md.c[i] * md.y1[i] - md.r2[i] * md.y2[i];
             md.y2[i] = md.y1[i];
             md.y1[i] = y;
@@ -2071,7 +2074,8 @@ namespace synth::drums
                         micSim.tap (slot, t.delay, t.gain * roomSend, micSim.roomInput (side == 1), numSamples);
                     }
         auto* roomOut = simScratch.data() + 4 * bs;
-        std::fill (roomOut, roomOut + 4 * bs, 0.0f);
+        for (size_t line = 0; line < 4; ++line)   // (this piece's samples only: 0.40.0)
+            std::fill (roomOut + line * bs, roomOut + line * bs + (size_t) numSamples, 0.0f);
         micSim.runRoom (settings.micSim, numSamples, roomOut, roomOut + bs, roomOut + 2 * bs, roomOut + 3 * bs);
         const auto reverb = micSim.roomRinging();
 
@@ -2105,7 +2109,8 @@ namespace synth::drums
                 const auto& ch = settings.channels[(size_t) destination];
                 const auto offset = (int) std::lround (ch.offsetSeconds * sampleRate);
                 auto* lines = simScratch.data();
-                std::fill (lines, lines + 4 * bs, 0.0f);
+                for (size_t line = 0; line < 4; ++line)
+                    std::fill (lines + line * bs, lines + line * bs + (size_t) numSamples, 0.0f);
                 auto hasDirect = false, hasBleed = false;
                 for (int slot = 0; slot < numSlots; ++slot)
                 {
@@ -2142,6 +2147,8 @@ namespace synth::drums
                 if (! hasDirect && ! hasBleed)
                     continue;
                 // The mic's colour (a mono mic: one side, copied), then into the channel.
+                if (! used[(size_t) destination])
+                    clearChannelScratch (destination, numSamples);
                 auto* into = channelScratch.data() + 4 * (size_t) destination * bs;
                 for (int which = 0; which < 4; ++which)
                 {
@@ -2159,6 +2166,13 @@ namespace synth::drums
                 used[(size_t) destination] = true;
             }
         }
+    }
+
+    void Kit::clearChannelScratch (int channel, int numSamples) noexcept
+    {
+        auto* lines = channelScratch.data() + 4 * (size_t) channel * (size_t) blockSize;
+        for (size_t line = 0; line < 4; ++line)
+            std::fill (lines + line * (size_t) blockSize, lines + line * (size_t) blockSize + (size_t) numSamples, 0.0f);
     }
 
     void Kit::renderChannels (const Outputs& outputs, int offset, int numSamples, const KitSettings& settings) noexcept
@@ -2179,7 +2193,8 @@ namespace synth::drums
         // A strip with effects runs on for 3 s after its sound stops (a chorus's or a compressor's tail).
         const auto tailSamples = (int) (3.0 * sampleRate) + numSamples;
         const auto bs = (size_t) blockSize;
-        std::fill (channelScratch.begin(), channelScratch.begin() + (std::ptrdiff_t) (4 * mixer::numMicChannels * bs), 0.0f);
+        // 0.40.0: a channel's scratch cleared (its four lines, this piece only) the first time it's used here, not every
+        // channel's whole block every time (a tenth of a modelled kit's audio work was that clearing).
         std::array<bool, mixer::numMicChannels> used {};
         auto* vl = voiceScratch.data();
         auto* vr = vl + blockSize;
@@ -2199,6 +2214,8 @@ namespace synth::drums
             v.render (vl, vr, numSamples);
             const auto& s = settings.slots[(size_t) v.slot];
             const auto g = v.micGain * settings.gain * s.gain * s.trim * (audible (settings, v.slot) ? 1.0f : 0.0f);
+            if (! used[(size_t) v.channel])
+                clearChannelScratch (v.channel, numSamples);
             auto* cl = channelScratch.data() + 4 * (size_t) v.channel * bs + (v.bleed ? 2 * bs : 0);
             auto* cr = cl + blockSize;
             for (int i = 0; i < numSamples; ++i)
@@ -2220,7 +2237,10 @@ namespace synth::drums
             if (used[(size_t) c])
                 stripTail[strip] = tailSamples;
             else if (stripTail[strip] > 0 && hasEffects ((int) strip))
+            {
+                clearChannelScratch (c, numSamples);
                 used[(size_t) c] = true;   // silence in, its effects' tails out
+            }
         }
 
         // Where a strip's sound goes. A bus's scratch is cleared when it's first used here; an FX BUS the processor

@@ -58,6 +58,14 @@ namespace ParamIDs
     inline constexpr const char* mixSettings[] = { "Level", "Pan", "Mute", "Solo", "Phase", "Bleed", "BleedOn", "Offset", "Release", "Output",
                                                    "Route" };   // 0.21.0 (hint 30): mixer::routeNames' index, in presets
     // THE MIXER's BUSES (0.21.0, hint 30): "mixBus<n>" plus a setting (n = 1 to 8). OUTPUT global, ROUTE in presets.
+    // 0.40.0: a mixer setting's place in mixSettings, worked out when compiling (the audio thread looked them up by name).
+    consteval int mixSetting (std::string_view what)
+    {
+        for (int i = 0; i < (int) std::size (mixSettings); ++i)
+            if (std::string_view (mixSettings[i]) == what)
+                return i;
+        throw "not a mixer setting";
+    }
     inline juce::String mixBus (int bus, const char* what) { return "mixBus" + juce::String (bus + 1) + what; }
     inline constexpr const char* busSettings[] = { "Level", "Pan", "Mute", "Solo", "Phase", "Output", "Route" };
     inline constexpr auto mixMuteMode = "mixMuteMode";   // mixer::muteModeNames' index (in presets)

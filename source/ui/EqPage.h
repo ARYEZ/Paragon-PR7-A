@@ -28,13 +28,15 @@ public:
     bool isAnalyserOn() const noexcept { return showInput.getToggleState() || showOutput.getToggleState(); }
     void setAnalyser (bool on);
     EqMatchPanel& getMatchPanel() noexcept { return matchPanel; }
-    void refreshControls() { timerCallback(); }   // what the timer does (30 times a second)
+    void refreshControls() { updateControls(); }   // what the timer does (30 times a second, while shown)
 
     void paint (juce::Graphics&) override;
     void resized() override;
 
 private:
-    void timerCallback() override;
+    // 0.40.0: the timer works only while the page is shown; layout calls updateControls itself.
+    void timerCallback() override { if (isShowing()) updateControls(); }
+    void updateControls();
     void showBand (int band);   // attaches the band controls to `band` (-1: none)
     void step (int direction);
 

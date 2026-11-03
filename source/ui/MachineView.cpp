@@ -159,8 +159,16 @@ public:
                 g.setColour (ParagonColours::glow.withAlpha (0.07f * light));
                 g.fillRoundedRectangle (area.expanded ((float) i * 3.5f * s), 12.0f * s);
             }
-        const auto well = ParagonLookAndFeel::drawChromeBezel (g, area, 9.0f * s);
-        ParagonLookAndFeel::drawPianoKey (g, well.reduced (1.5f * s), 7.0f * s, 4.5f * s, pressed, isMouseOver(), Finish::neonKeys());
+        // The chrome bezel and the key, drawn once for each look (pressed, hovered) at this size and scale (0.40.0: they
+        // were most of a glowing pad's 30 Hz redraw).
+        const auto look = (pressed ? 1 : 0) + (isMouseOver() ? 2 : 0);
+        juce::Rectangle<float> well;
+        keyCache[(size_t) look].draw (g, getLocalBounds(), [&] (juce::Graphics& kg)
+        {
+            const auto w = ParagonLookAndFeel::drawChromeBezel (kg, area, 9.0f * s);
+            ParagonLookAndFeel::drawPianoKey (kg, w.reduced (1.5f * s), 7.0f * s, 4.5f * s, look & 1, (look & 2) != 0, Finish::neonKeys());
+        });
+        well = area.reduced (4.5f);   // (the bezel's well, exactly as drawChromeBezel works it out)
         if (light > 0.0f)
         {
             g.setColour (juce::Colours::white.withAlpha (0.2f * light));
@@ -200,6 +208,7 @@ public:
 private:
     float light = 0.0f;
     bool chosen = false, pressed = false;
+    std::array<PaintCache, 4> keyCache;
 };
 
 //==============================================================================
@@ -785,7 +794,7 @@ void MachineView::resized()
     screenArea = at (480, 34, 640, 190).toNearestInt();
     meterArea = at (1580, 38, 28, 178).toNearestInt();
     stepLabels = at (30, 816, 1590, 130).toNearestInt().withTrimmedTop (0);
-    namesArea = at (30, 788, 1590, 22).toNearestInt();
+    namesArea = at (30, 776, 1590, 20).toNearestInt();
 }
 
 void MachineView::stamp (juce::Graphics& g, const juce::String& text, juce::Rectangle<float> r, juce::Justification j, float size,
@@ -840,17 +849,24 @@ void MachineView::paint (juce::Graphics& g)
     Finish::paintAs (Finish::Type::pearlBlack);
     faceCache.draw (g, getLocalBounds(), [this] (juce::Graphics& fg) { paintFace (fg); });
 
-    // What changes: the screen, the meter, the drums' names (the chosen one red), the steps' line and numbers.
-    paintScreen (g, at (480, 34, 640, 190));
-    paintMeter (g, at (1586, 44, 16, 166));
+    // What changes: the screen, the meter, the drums' names (the chosen one red), the steps' line and numbers. Each
+    // only when the area being redrawn reaches it (0.40.0: a pad's glow or the meter redrew the screen 30 times a second).
+    const auto reaches = [&g] (juce::Rectangle<int> area) { return g.clipRegionIntersects (area); };
+    if (reaches (screenArea))
+        paintScreen (g, at (480, 34, 640, 190));
+    if (reaches (meterArea))
+        paintMeter (g, at (1586, 44, 16, 166));
 
     const auto chosen = chosenSlot();
-    for (int c = 0; c < numColumns; ++c)
-    {
-        const auto slot = slotOfColumn (c);
-        stamp (g, nameOf (slot), at (column (c) - 8, 778, 102, 16), juce::Justification::centred, 10.5f,
-               slot == chosen ? Finish::printedRed() : Finish::ink());
-    }
+    if (reaches (namesArea))
+        for (int c = 0; c < numColumns; ++c)
+            if (const auto where = at (column (c) - 8, 778, 102, 16); reaches (where.getSmallestIntegerContainer()))
+            {
+                const auto slot = slotOfColumn (c);
+                stamp (g, nameOf (slot), where, juce::Justification::centred, 10.5f, slot == chosen ? Finish::printedRed() : Finish::ink());
+            }
+    if (! reaches (stepLabels))
+        return;
 
     const auto pages = numStepPages();
     const auto dot = juce::String::fromUTF8 ("  \xc2\xb7  ");

@@ -2,6 +2,35 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.40.0
+
+**A lighter plugin, and PR7-S's progress box.** You asked for a check of the whole code for ways to run better, starting with the drum machine. Every change below was measured before and after; the sound is unchanged (every test still matches its expected sound sample for sample).
+
+**The window (where most of the waste was):**
+- **The FX page:** each rack unit redrew itself completely 30 times a second, about 7 ms a time. With four units on screen that was nearly a whole core here. Now only what changes is redrawn: the screen's readout every time, and the meter lights, key lights, knob values and the small screen only when they change. The screen's chrome frame and glass are drawn once and kept. **A unit's 30 Hz redraw: 6.2 ms → 0.36 ms (17× less).**
+- **THE DRUM MACHINE:** a glowing pad or the meter used to redraw the screen, every drum name and the step numbers too. Now each part is drawn only when it's in the area being redrawn, and each pad's chrome and key are drawn once and kept. **A pad's glow: 1.25 ms → 0.13 ms (9× less).** Also fixed: changing the chosen drum didn't fully redraw the top of the old drum's name.
+- **The SEQUENCER:** the whole grid redrew 30 times a second while a beat played, just to move the playhead. Now only its old and new places are redrawn (2.6 ms → about 1 ms).
+- **The SONG strip:** the same for its playhead (it redrew every hit of every block while the song played).
+- **The compressor, DOMINION and EQ pages and their PRESET buttons** kept checking their settings 30 times a second even while another page was shown. They now wait until they're shown.
+- **The MIXER:** a slip had every strip set its four effect buttons up again 30 times a second. Removed (it did nothing visible).
+
+**The sound engine (it was already light: 2-7% of a core on the factory kits here):**
+- **Modelled drums and cymbals:** each of their 16-48 ringing modes was checked for being audible on every sample. The check is now made once every 16 samples, when the levels actually change.
+- **The mixer:** all 29 mic channels' working memory was cleared on every pass, used or not. Now only the channels in use, and only the samples needed.
+- **Mixer settings** were looked up by name every block. They now go straight to the setting.
+- **Together: 11% less work on the Djent Kit** (measured instruction by instruction).
+
+**THE PROGRESS BOX (PR7-S's):** BOUNCE TO AUDIO and loading a kit (once it takes over half a second) now show PR7-S's progress box over the window: what's being done, the bar drawn as PR7-S's meter (lit orange to pink-red), the percentage, and CANCEL while bouncing. It sits inside the plugin's window rather than opening one of its own (a plugin's own windows can misbehave in some DAWs), and the plugin keeps playing meanwhile.
+
+**Found and left for later:**
+- **Streamed kits:** reading their samples could be quicker. That's a bigger change, and it can't be measured fairly here, because the result depends on what the computer has cached.
+- **The KIT VIEW's hover** redraws the whole picture when the mouse moves from one drum to another.
+- **The modelled drums' modes** could add up faster if their summing order were allowed to change. That would change the sound in its last decimal places, so it's left for you to decide.
+
+**Tests:** the progress box (shown, its CANCEL stopping a bounce, gone when done, its bar's colours); everything else as before. pluginval passes at strictness 10.
+
+**Not checked:** a real window on Windows. The timings are from this Linux machine, whose drawing is slower than Windows', so expect smaller numbers there; the share saved should be similar.
+
 ## 0.39.0
 
 **This release also carries 0.38.0, THE DRUM MACHINE**, which was never published on its own: one of its new tests compared a knob's value too exactly and failed on the Mac build machine (5 read back as 4.9999995). The plugin itself was fine; the test now allows for that rounding. 0.38.0's notes are below.

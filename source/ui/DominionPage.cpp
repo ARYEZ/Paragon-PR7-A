@@ -621,7 +621,7 @@ void DominionPage::showBand (int newBand)
         depthAttachment = std::make_unique<juce::SliderParameterAttachment> (parameter ("Depth"), bandDepth);
         qAttachment = std::make_unique<juce::SliderParameterAttachment> (parameter ("Q"), q);
         focusAttachment = std::make_unique<juce::SliderParameterAttachment> (parameter ("Focus"), bandFocus);
-        timerCallback();
+        updateControls();
     }
     repaint();
 }
@@ -641,7 +641,7 @@ void DominionPage::step (int direction)
     display.select (order[(size_t) ((index + (int) order.size()) % (int) order.size())]);
 }
 
-void DominionPage::timerCallback()
+void DominionPage::updateControls()
 {
     preset.refresh();   // its name, with * once its settings have been changed
 

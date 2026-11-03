@@ -215,6 +215,7 @@ MainView::MainView (ParagonX1AudioProcessor& processorToShow)
     machine.getChosen = [this] { return drumPage.getSelected(); };
     machine.onChoose = [this] (int slot) { drumPage.clickRow (slot, {}); };
     drumPage.onViewChanged = [this] (DrumPage::View) { updateMachine(); };
+    addChildComponent (progressBox);
     songTrack.onOpenCreator = [this]
     {
         if (songCreator.isVisible())
@@ -312,6 +313,8 @@ void MainView::updateMachine()
     machine.setVisible (shown);
     if (shown)
         machine.toFront (false);
+    if (progressBox.isVisible())
+        progressBox.toFront (false);   // (a long job's box stays over everything)
     drumPage.setVisible (page == Page::drums && ! shown);
     outputColumn.setVisible (! shown);
     keysTab.setVisible (! shown);
@@ -328,8 +331,30 @@ void MainView::refreshRig()
         rigNameButton.setButtonText (headerText);
 }
 
+void MainView::checkLongJobs (double nowMs)
+{
+    if (progressBox.isShowingJob())
+        return;
+    if (songTrack.isBouncing())
+    {
+        progressBox.show ({ "BOUNCING THE SONG TO AUDIO", [this] { return songTrack.getBounceProgress(); }, [this] { songTrack.cancelBounce(); } });
+        return;
+    }
+    // A kit loading: shown once it's taken half a second (a single sample's load would only flash it up).
+    if (audioProcessor.getLoadProgress() < 0.0)
+    {
+        loadingSince = -1.0;
+        return;
+    }
+    if (loadingSince < 0.0)
+        loadingSince = nowMs;
+    if (nowMs - loadingSince >= 500.0)
+        progressBox.show ({ "LOADING THE KIT", [this] { return audioProcessor.getLoadProgress(); }, {} });
+}
+
 void MainView::timerCallback()
 {
+    checkLongJobs (juce::Time::getMillisecondCounterHiRes());
     updateDragHover (juce::Time::getMillisecondCounterHiRes(), groovesPage.isDragAndDropActive() || isDragAndDropActive());
     // NOTE NAMES (0.35.1): every note's name follows SETTINGS' choice (middle C as C3 or C4).
     if (const auto* names = audioProcessor.getParameters().getRawParameterValue (ParamIDs::noteNames))
@@ -501,6 +526,7 @@ void MainView::resized()
     blockEditor.setBounds (pageArea);
     songCreator.setBounds (pageArea);
     machine.setBounds (machineArea);
+    progressBox.setCentrePosition (getLocalBounds().getCentre());
 }
 
 void MainView::showSong (bool show)

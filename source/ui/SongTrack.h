@@ -85,6 +85,9 @@ public:
     juce::String getStatusText() const { return status.getText(); }
     void startBounce (const ParagonX1AudioProcessor::BounceOptions&, const juce::File& folder);
     bool isBouncing() const noexcept { return bounceThread != nullptr; }
+    // 0.40.0, for the progress box: how far the bounce has got (-1: none running), and stopping it.
+    double getBounceProgress() const;
+    void cancelBounce();
     double getStartBeat() const noexcept { return startBeat; }
     juce::TextButton& getPlayButton() noexcept { return play; }
 

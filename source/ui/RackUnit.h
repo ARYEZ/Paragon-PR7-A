@@ -3,6 +3,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #include "ui/Footswitch.h"
+#include "ui/PaintCache.h"
 
 // One of the unit's four rows since 0.18.0: a stomp drawn as a rack
 // processor, after the owner's photo of a Yamaha SPX90, Lexicon PCM70 and
@@ -74,5 +75,15 @@ private:
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> knobAttachments;
     juce::TextButton edit { "EDIT" };
     float ladderHeld = -100.0f;   // the ladder's reading, falling back slowly after a peak
+    // 0.40.0: what each changing part showed when last drawn: the timer repaints only the parts that change (the whole
+    // unit redrew 30 times a second: about a quarter of a core per unit).
+    int shownLadder = -1;
+    std::array<bool, 3> shownKeys {};
+    std::array<juce::String, 2> shownValues;
+    juce::String shownFoot;
+    // The screen's frame and glass, drawn once at this size and the screen's scale (0.40.0: its drop shadow and
+    // gradients were most of the 30 Hz redraw); the live readout goes between them.
+    PaintCache screenBack, screenGlass;
+    juce::Rectangle<float> glassArea;
     std::array<bool, 3> keyLit {};
 };

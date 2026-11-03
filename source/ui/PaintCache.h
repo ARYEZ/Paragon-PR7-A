@@ -31,6 +31,10 @@ public:
         }
         // Copied pixel for pixel: the context's own scale cancels ours, and the corner sits on a whole screen pixel.
         const auto origin = (area.getTopLeft().toFloat() * scale).roundToInt();
+        // At full opacity whatever colour the caller left set (JUCE draws images at the current colour's alpha: 0.40.0's
+        // cached pads vanished under their own glow), the caller's state as it was after.
+        juce::Graphics::ScopedSaveState state (g);
+        g.setOpacity (1.0f);
         g.drawImageTransformed (image, juce::AffineTransform::translation ((float) origin.x, (float) origin.y).scaled (1.0f / scale));
     }
     void invalidate() noexcept { image = {}; }

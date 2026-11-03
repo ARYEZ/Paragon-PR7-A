@@ -110,7 +110,9 @@ private:
         std::unique_ptr<juce::ComboBoxParameterAttachment> attachment;
     };
 
-    void timerCallback() override;
+    // 0.40.0: the timer works only while the page is shown; layout calls updateControls itself.
+    void timerCallback() override { if (isShowing()) updateControls(); }
+    void updateControls();
     void showBand (int band);
     void step (int direction);
     std::vector<juce::Component*> bandComponents();

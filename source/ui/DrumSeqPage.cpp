@@ -173,10 +173,28 @@ void DrumSeqGrid::timerCallback()
     const auto pattern = shownPattern;
     refreshShown();
     const auto x = playheadX();
-    if (! (before == shown) || pattern != shownPattern || std::abs (x - lastPlayhead) > 0.5f)
+    if (! (before == shown) || pattern != shownPattern)
     {
         lastPlayhead = x;
         repaint();
+    }
+    else if (std::abs (x - lastPlayhead) > 0.5f)
+    {
+        // 0.40.0: the playhead moved: only its old and new places are drawn again (the whole grid redrew 30 times a
+        // second while a beat played).
+        // (Its line, and its step's shaded column when the step changes.)
+        const auto stepWidth = (float) getWidth() / (float) getLengthSteps();
+        const auto strip = [this] (float at) { return juce::Rectangle<int> ((int) std::floor (at) - 3, 0, 7, getHeight()); };
+        const auto column = [this, stepWidth] (float at)
+        {
+            const auto step = std::floor (at / stepWidth);
+            return juce::Rectangle<int> ((int) std::floor (step * stepWidth) - 1, 0, (int) std::ceil (stepWidth) + 3, getHeight());
+        };
+        const auto stepOf = [stepWidth] (float at) { return at < 0.0f ? -1 : (int) std::floor (at / stepWidth); };
+        for (const auto at : { lastPlayhead, x })
+            if (at >= 0.0f)
+                repaint (stepOf (lastPlayhead) != stepOf (x) ? column (at) : strip (at));
+        lastPlayhead = x;
     }
 }
 

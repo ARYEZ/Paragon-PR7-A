@@ -28,6 +28,19 @@ struct SongTrack::BounceThread final : juce::Thread
     juce::Array<juce::File> files;
 };
 
+double SongTrack::getBounceProgress() const
+{
+    if (bounceThread == nullptr || ! bounceThread->isThreadRunning())
+        return -1.0;
+    return (double) bounceThread->bouncer.progress.load();
+}
+
+void SongTrack::cancelBounce()
+{
+    if (bounceThread != nullptr)
+        bounceThread->bouncer.cancel = true;
+}
+
 SongTrack::SongTrack (ParagonX1AudioProcessor& p) : processor (p)
 {
     setWantsKeyboardFocus (true);
@@ -767,8 +780,12 @@ void SongTrack::timerCallback()
     play.setButtonText (processor.isSongPlaying() ? "STOP" : "PLAY");
     if (const auto at = processor.getSongPosition(); at != shownPosition)
     {
+        // 0.40.0: only the line's old and new places drawn again (the whole strip, every hit of every block, redrew 30
+        // times a second while the song played).
+        for (const auto beat : { shownPosition, at })
+            if (beat >= 0.0)
+                repaint (juce::Rectangle<int> ((int) std::floor (xOf (beat)) - 3, 0, 7, getHeight()));
         shownPosition = at;
-        repaint();
     }
 }
 

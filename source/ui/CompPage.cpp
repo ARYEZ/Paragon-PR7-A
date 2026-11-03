@@ -680,7 +680,7 @@ void CompPage::showBand (int newBand)
             knob->attachment = std::make_unique<juce::SliderParameterAttachment> (p, knob->slider);
             knob->slider.setDoubleClickReturnValue (true, p.convertFrom0to1 (p.getDefaultValue()));
         }
-        timerCallback();
+        updateControls();
     }
     repaint();
 }
@@ -700,7 +700,7 @@ void CompPage::step (int direction)
     display.select (order[(size_t) ((index + (int) order.size()) % (int) order.size())]);
 }
 
-void CompPage::timerCallback()
+void CompPage::updateControls()
 {
     preset.refresh();   // its name, with * once COMP's settings have been changed
 

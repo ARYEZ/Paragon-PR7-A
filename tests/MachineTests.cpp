@@ -355,3 +355,59 @@ TEST_CASE ("THE DRUM MACHINE 0.39.0's face: a pad given another drum, its knobs 
     machine.getTune (1).setValue (-2.0, juce::sendNotificationSync);
     CHECK (std::abs (value (p, ParamIDs::drum (1, "Pitch")) - (-2.0f)) < 1.0e-4f);
 }
+
+//==============================================================================
+// 0.40.0: THE PROGRESS BOX (PR7-S's), while a long job runs.
+TEST_CASE ("THE PROGRESS BOX: a kit loading for over half a second, then gone; a bounce with CANCEL", "[progress][ui]")
+{
+    ParagonX1AudioProcessor p;
+    p.setPlayConfigDetails (0, 2, sampleRate, blockSize);
+    p.prepareToPlay (sampleRate, blockSize);
+    std::unique_ptr<juce::AudioProcessorEditor> editor (p.createEditor());
+    editor->setSize (1600, 900);
+    auto* view = dynamic_cast<MainView*> (editor->getChildComponent (0));
+    REQUIRE (view != nullptr);
+    auto& box = view->getProgressBox();
+    CHECK_FALSE (box.isVisible());
+
+    // Nothing running: no box.
+    view->checkLongJobs (0.0);
+    view->checkLongJobs (1000.0);
+    CHECK_FALSE (box.isVisible());
+
+    // The bar: lit up to the progress, orange to pink-red (the family's colours only).
+    juce::Image bar (juce::Image::ARGB, 200, 20, true);
+    {
+        juce::Graphics g (bar);
+        ProgressBox::paintBar (g, { 0.0f, 0.0f, 200.0f, 20.0f }, 0.5);
+    }
+    CHECK (bar.getPixelAt (30, 10).getBrightness() > 0.6f);    // lit
+    CHECK (bar.getPixelAt (170, 10).getBrightness() < 0.3f);   // not yet
+    CHECK (bar.getPixelAt (30, 10).getRed() > 200);
+
+    // A bounce: the box at once, its CANCEL stops it; the box goes when the bounce has.
+    song::Song s;
+    song::Block b;
+    b.length = b.loopLength = 64.0;
+    for (int beat = 0; beat < 64; ++beat)
+        b.hits.push_back ({ (double) beat, 0, 1.0f });
+    s.blocks.push_back (b);
+    p.setSong (s);
+    auto& track = view->getSongTrack();
+    const auto folder = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("pr7d-progress-test");
+    folder.deleteRecursively();
+    folder.createDirectory();
+    ParagonX1AudioProcessor::BounceOptions options;
+    options.tailSeconds = 1.0;
+    track.startBounce (options, folder);
+    view->checkLongJobs (5000.0);
+    CHECK (box.isVisible());
+    CHECK (box.getWhat() == "BOUNCING THE SONG TO AUDIO");
+    CHECK (box.getCancelKey().isVisible());
+    box.getCancelKey().onClick();
+    for (int i = 0; i < 500 && track.getBounceProgress() >= 0.0; ++i)
+        juce::Thread::sleep (10);
+    box.update();
+    CHECK_FALSE (box.isVisible());
+    folder.deleteRecursively();
+}

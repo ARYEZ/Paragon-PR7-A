@@ -194,7 +194,7 @@ void EqPage::showBand (int newBand)
         component->setVisible (visible);
     if (! visible)
     {
-        timerCallback();   // hides the dynamics row
+        updateControls();   // hides the dynamics row
         repaint();
         return;
     }
@@ -212,7 +212,7 @@ void EqPage::showBand (int newBand)
     attackAttachment = std::make_unique<juce::SliderParameterAttachment> (bands.parameter (band, "Attack"), attack);
     releaseAttachment = std::make_unique<juce::SliderParameterAttachment> (bands.parameter (band, "Release"), release);
     dynAutoAttachment = std::make_unique<juce::ButtonParameterAttachment> (bands.parameter (band, "DynAuto"), dynAuto);
-    timerCallback();
+    updateControls();
     repaint();
 }
 
@@ -232,7 +232,7 @@ void EqPage::step (int direction)
     display.select (order[(size_t) ((index + (int) order.size()) % (int) order.size())]);
 }
 
-void EqPage::timerCallback()
+void EqPage::updateControls()
 {
     auto wantDynamics = false;
     if (band >= 0)

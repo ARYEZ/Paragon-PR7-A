@@ -12,6 +12,7 @@
 #include "ui/RigBrowser.h"
 #include "ui/DrumPage.h"
 #include "ui/MachineView.h"
+#include "ui/ProgressBox.h"
 #include "ui/GroovesPage.h"
 #include "ui/MixerPage.h"
 #include "ui/SongTrack.h"
@@ -120,6 +121,9 @@ public:
     // THE DRUM MACHINE (0.38.0): the DRUMS page's MACHINE view, over everything under the header (the page, the
     // keyboard or song strip and OUTPUT hidden under it while it's shown).
     MachineView& getMachine() noexcept { return machine; }
+    // 0.40.0: a long job's progress (BOUNCE, a kit loading for more than half a second), PR7-S's box over the window.
+    ProgressBox& getProgressBox() noexcept { return progressBox; }
+    void checkLongJobs (double nowMs);   // the timer's look at them (tests)
     bool isShowingMachine() const noexcept { return machine.isVisible(); }
 
     // ControlHost: the knobs' MIDI learn.
@@ -175,6 +179,8 @@ private:
     SongCreator songCreator;   // THE SONG CREATOR (0.10.0): over the pages too (one of the two at a time)
     MachineView machine;       // THE DRUM MACHINE (0.38.0): over everything under the header
     bool songShown = false;    // the strip shows the song (not the keyboard), when the machine isn't over it
+    ProgressBox progressBox;   // over everything while a long job runs (0.40.0)
+    double loadingSince = -1.0;
     double hoverSince = -1.0;  // a drag over the DRUMS tab since then (-1: none)
     bool dragPeek = false;     // the DRUMS page brought in front for a drag
     Page page = Page::drums;

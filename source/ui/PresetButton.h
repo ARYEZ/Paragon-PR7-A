@@ -31,7 +31,7 @@ public:
     void refresh();
 
 private:
-    void timerCallback() override { refresh(); }
+    void timerCallback() override { if (isShowing()) refresh(); }   // (0.40.0: only while shown)
     void askForName();
 
     Hooks hooks;
