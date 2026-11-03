@@ -678,6 +678,27 @@ void ParagonX1AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
             }
         }
 
+    // THE DRUM MACHINE (0.38.0): the sequencer follows the DAW while it plays; else PLAY's own clock, from its start.
+    dawPlaying = hostPpq >= 0.0;
+    if (machineRestart.exchange (false))
+        machineBeat = 0.0;
+    if (hostPpq >= 0.0)
+    {
+        seqPpq = hostPpq;
+        seqBpm = juce::jmax (1.0, hostBpm.load());
+    }
+    else if (machinePlaying.load())
+    {
+        seqBpm = juce::jlimit (1.0, 1000.0, (double) param (ParamIDs::machineTempo));
+        seqPpq = machineBeat;
+        machineBeat += numSamples / getSampleRate() * seqBpm / 60.0;
+    }
+    else
+    {
+        seqPpq = -1.0;
+        seqBpm = juce::jmax (1.0, hostBpm.load());
+    }
+
     // MIDI LEARN: the last controller moved (for the strip and for learning), and the knobs linked to controllers.
     for (const auto metadata : midi)
     {
@@ -701,9 +722,13 @@ void ParagonX1AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
     keyboardMidi.addEvents (midi, 0, numSamples, 0);
     keyboardState.processNextMidiBuffer (keyboardMidi, 0, numSamples, true);
     const auto kit = getKitSettings();
+    const auto padSequencer = machineRecording.load() ? getDrumSeqSettings() : synth::drumseq::Settings {};
     for (int slot = 0; slot < ParamIDs::numDrums; ++slot)
         if (pendingPreview[(size_t) slot].exchange (false))
+        {
             drumKit.trigger (slot, 0.8f, kit);
+            recordMachineNote (seqPpq, seqBpm, slot, 0.8f, padSequencer);   // REC: a pad played on the face
+        }
 
     // OUT 2 to 16: the ones the DAW has switched on (the others' drums play in MAIN).
     AuxOutputs aux;
@@ -805,13 +830,21 @@ void ParagonX1AudioProcessor::processChunk (juce::AudioBuffer<float>& buffer, co
                 }
         }
         const auto ppq = hostPpq >= 0.0 ? hostPpq + (start + done) / getSampleRate() * bpm / 60.0 : -1.0;
+        // The sequencer's own position: the DAW's, or THE DRUM MACHINE's PLAY (0.38.0).
+        const auto seqHere = seqPpq >= 0.0 ? seqPpq + (start + done) / getSampleRate() * seqBpm / 60.0 : -1.0;
+        if (machineRecording.load() && seqHere >= 0.0)
+            for (const auto metadata : drums)
+                if (const auto pos = metadata.samplePosition - (start + done); pos >= 0 && pos < n)
+                    if (const auto& m = metadata.getMessage(); m.isNoteOn())
+                        if (const auto slot = kit.slotFor (m.getNoteNumber()); slot >= 0)
+                            recordMachineNote (seqHere + pos / getSampleRate() * seqBpm / 60.0, seqBpm, slot, m.getFloatVelocity(), sequencer);
         // The preview's hits and the song's, in sample order (the kit plays them in turn).
         const auto numGrooveHits = collectGrooveHits (n);
         const auto numHits = numGrooveHits + collectSongHits (n, ppq, bpm, grooveHits.data() + numGrooveHits, (int) grooveHits.size() - numGrooveHits);
         recordSongNotes (drums, start + done, n, kit);   // RECORD: this piece's notes at their song beats
         if (numGrooveHits > 0 && numHits > numGrooveHits)
             std::sort (grooveHits.begin(), grooveHits.begin() + numHits, [] (const auto& a, const auto& b) { return a.offset < b.offset; });
-        drumKit.process (out, n, drums, start + done, kit, sequencer, ppq, bpm, grooveHits.data(), numHits);
+        drumKit.process (out, n, drums, start + done, kit, sequencer, seqHere, seqBpm, grooveHits.data(), numHits);
         if (numChannels == 1)
             for (int i = 0; i < n; ++i)
                 left[done + i] = 0.5f * (left[done + i] + scratchRight[i]);
@@ -3703,6 +3736,99 @@ void ParagonX1AudioProcessor::recordSongNotes (const juce::MidiBuffer& midi, int
         else if (scope.blockSize2 > 0)
             recordBuffer[(size_t) scope.startIndex2] = note;
     }
+}
+
+//==============================================================================
+// THE DRUM MACHINE (0.38.0)
+void ParagonX1AudioProcessor::recordMachineNote (double ppq, double bpm, int slot, float velocity,
+                                                 const synth::drumseq::Settings& sequencer) noexcept
+{
+    juce::ignoreUnused (bpm);
+    if (! machineRecording.load() || ppq < 0.0 || ! sequencer.on || sequencer.trigger != synth::drumseq::Trigger::song)
+        return;
+    const auto length = sequencer.lengthSteps();
+    const MachineNote note { std::fmod (ppq / sequencer.beatsPerStep(), length), slot, velocity, sequencer.pattern };
+    const auto scope = machineFifo.write (1);
+    if (scope.blockSize1 > 0)
+        machineBuffer[(size_t) scope.startIndex1] = note;
+    else if (scope.blockSize2 > 0)
+        machineBuffer[(size_t) scope.startIndex2] = note;
+}
+
+void ParagonX1AudioProcessor::setMachinePlaying (bool on)
+{
+    if (on)
+    {
+        // The sequencer on and following the song, so PLAY's clock (or the DAW's) drives it.
+        if (! isOn (ParamIDs::dseqOn))
+            setParameterNow (ParamIDs::dseqOn, 1.0f);
+        if (juce::roundToInt (param (ParamIDs::dseqTrigger)) != (int) synth::drumseq::Trigger::song)
+            setParameterNow (ParamIDs::dseqTrigger, (float) synth::drumseq::Trigger::song);
+        machineRestart = true;
+        machinePlaying = true;
+        return;
+    }
+    machinePlaying = false;
+    setMachineRecording (false);   // STOP ends a take
+}
+
+void ParagonX1AudioProcessor::setMachineRecording (bool on)
+{
+    if (on == machineRecording.load())
+        return;
+    if (on)
+    {
+        machineFifo.reset();
+        machineRecording = true;
+        return;
+    }
+    machineRecording = false;
+    mergeMachineNotes();
+    requestCheckpoint();   // the take: one undo step
+}
+
+int ParagonX1AudioProcessor::mergeMachineNotes()
+{
+    std::vector<MachineNote> notes;
+    if (const auto ready = machineFifo.getNumReady(); ready > 0)
+    {
+        const auto scope = machineFifo.read (ready);
+        for (int i = 0; i < scope.blockSize1; ++i)
+            notes.push_back (machineBuffer[(size_t) (scope.startIndex1 + i)]);
+        for (int i = 0; i < scope.blockSize2; ++i)
+            notes.push_back (machineBuffer[(size_t) (scope.startIndex2 + i)]);
+    }
+    if (notes.empty())
+        return 0;
+    const auto settings = getDrumSeqSettings();
+    const auto length = juce::roundToInt (settings.lengthSteps());
+    auto m = getModMatrix();
+    auto added = 0;
+    for (const auto& note : notes)
+    {
+        auto step = juce::roundToInt (note.step);
+        if (step >= length)
+            step = 0;   // just before the loop's end: its first step
+        auto& pattern = m.drumPatterns[(size_t) juce::jlimit (0, synth::drumseq::numPatterns - 1, note.pattern)];
+        auto found = false;
+        for (auto& existing : pattern.notes)
+            if (existing.row == note.slot && std::abs (existing.start - step) < 0.5)
+            {
+                existing.velocity = juce::jmax (existing.velocity, note.velocity);
+                found = true;
+            }
+        if (! found && (int) pattern.notes.size() < synth::drumseq::maxNotes)
+        {
+            synth::drumseq::Note n;
+            n.row = note.slot;
+            n.start = step;
+            n.velocity = juce::jlimit (0.0f, 1.0f, note.velocity);
+            pattern.notes.push_back (n);
+        }
+        ++added;
+    }
+    setModMatrix (m);
+    return added;
 }
 
 void ParagonX1AudioProcessor::setSongRecording (bool on)

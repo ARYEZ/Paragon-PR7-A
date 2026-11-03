@@ -28,6 +28,7 @@ add_executable(ParagonX1Tests
     ProcessorTests.cpp
     RigTests.cpp
     UiTests.cpp
+    MachineTests.cpp
     NoteMapTests.cpp
     OutputTests.cpp
     GrooveTests.cpp

@@ -405,6 +405,18 @@ public:
     bool isSongRecording() const noexcept { return songRecording.load(); }
     int mergeRecordedNotes();   // how many it put in
 
+    // THE DRUM MACHINE (0.38.0): PLAY starts the DRUM SEQUENCER (on, following the song) from its first step on a clock of
+    // its own at the machine's TEMPO while the DAW isn't playing (the DAW leads while it plays); STOP stops it. REC, while
+    // it runs, writes the drums played (the DAW's notes, the on-screen keyboard's, the face's pads) into the pattern
+    // playing, each on its nearest step (a drum already there keeps the louder hit); mergeMachineNotes (the message
+    // thread, often) puts them in; disarming (or STOP) ends the take: one undo step.
+    void setMachinePlaying (bool);
+    bool isMachinePlaying() const noexcept { return machinePlaying.load(); }
+    bool isDawPlaying() const noexcept { return dawPlaying.load(); }
+    void setMachineRecording (bool);
+    bool isMachineRecording() const noexcept { return machineRecording.load(); }
+    int mergeMachineNotes();   // how many it put in
+
     // BOUNCE (0.12.0): the song rendered to WAV files, faster than real time, by a copy of the plugin made from the
     // project's state (this one plays on, untouched): from the start through the song's tempo changes (none: the DAW's
     // last tempo) to its end, then on until the kit and effects have died away (silence, or `tailSeconds`); the plugin's
@@ -708,6 +720,14 @@ private:
         const SongPlayback* playback = nullptr;
     } songChunk;   // audio thread
     void recordSongNotes (const juce::MidiBuffer&, int offset, int numSamples, const synth::drums::KitSettings&) noexcept;
+    // THE DRUM MACHINE's clock and REC (audio thread but the atomics): the sequencer's song position and tempo this block
+    // (the DAW's while it plays, else PLAY's own, else -1), and the notes on their way to the pattern.
+    std::atomic<bool> machinePlaying { false }, machineRestart { false }, machineRecording { false }, dawPlaying { false };
+    double machineBeat = 0.0, seqPpq = -1.0, seqBpm = 120.0;
+    struct MachineNote { double step = 0.0; int slot = 0; float velocity = 1.0f; int pattern = 0; };
+    juce::AbstractFifo machineFifo { 1024 };
+    std::array<MachineNote, 1024> machineBuffer {};
+    void recordMachineNote (double ppq, double bpm, int slot, float velocity, const synth::drumseq::Settings&) noexcept;
     int takeBlock = -1;   // message thread: this take's "Recorded" block (it grows bar by bar)
     std::shared_ptr<const SongPlayback> songPlayback;
     std::atomic<const SongPlayback*> songForAudio { nullptr };

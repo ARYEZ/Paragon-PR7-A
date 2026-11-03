@@ -808,7 +808,7 @@ DrumPage::DrumPage (ParagonX1AudioProcessor& p) : processor (p), display (p), en
     addChildComponent (articulations);
     articulations.onChoose = [this] (int slot) { clickRow (slot, {}); };
     articulations.onChooseAll = [this] (const std::vector<int>& slots) { chooseSlots (slots); };
-    for (auto* tab : { &kitTab, &drumTab, &sequencerTab })
+    for (auto* tab : { &machineTab, &kitTab, &drumTab, &sequencerTab })
     {
         DrumSeqPanel::style (*tab);
         tab->setClickingTogglesState (true);
@@ -818,6 +818,9 @@ DrumPage::DrumPage (ParagonX1AudioProcessor& p) : processor (p), display (p), en
     kitTab.setTooltip ("The KIT VIEW: the kit from the drummer's seat. Click a drum to choose it and hear it; each glows as it plays.");
     drumTab.setTooltip ("The chosen drum's sound, its sample and where it goes.");
     sequencerTab.setTooltip ("The DRUM SEQUENCER: beats for the kit, played with your song or from keys.");
+    machineTab.setTooltip ("THE DRUM MACHINE: the kit as a drum machine's face over the whole window: a column per drum "
+                           "(TUNE, DECAY, LEVEL, its pad), the tempo screen, PLAY / REC, and the chosen drum's steps.");
+    machineTab.onClick = [this] { showView (View::machine); };
     kitTab.onClick = [this] { showView (View::kit); };
     drumTab.onClick = [this] { showView (View::drum); };
     sequencerTab.onClick = [this] { showView (View::sequencer); };
@@ -843,11 +846,14 @@ void DrumPage::showView (View v)
     sequencer.setVisible (v == View::sequencer);
     kitView.setVisible (v == View::kit);
     articulations.setVisible (v == View::kit);
-    (v == View::kit ? kitTab : drum ? drumTab : sequencerTab).setToggleState (true, juce::dontSendNotification);
+    (v == View::machine ? machineTab : v == View::kit ? kitTab : drum ? drumTab : sequencerTab).setToggleState (true, juce::dontSendNotification);
+    machineTab.toFront (false);
     kitTab.toFront (false);
     drumTab.toFront (false);
     sequencerTab.toFront (false);
     repaint();
+    if (onViewChanged)
+        onViewChanged (v);
 }
 
 DrumPage::~DrumPage()
@@ -1473,6 +1479,7 @@ void DrumPage::resized()
     sequencerTab.setBounds (tabs.removeFromRight (104).withSizeKeepingCentre (100, 24));
     drumTab.setBounds (tabs.removeFromRight (74).withSizeKeepingCentre (70, 24));
     kitTab.setBounds (tabs.removeFromRight (94).withSizeKeepingCentre (90, 24));
+    machineTab.setBounds (tabs.removeFromRight (94).withSizeKeepingCentre (90, 24));
     // The DRUM view's own pair (0.18.0): ENVELOPE / VELOCITY, left of the view tabs.
     tabs.removeFromRight (18);
     velocityTab.setBounds (tabs.removeFromRight (94).withSizeKeepingCentre (90, 24));

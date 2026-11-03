@@ -20,6 +20,7 @@
 //   PARAGON_SNAPSHOT_PAGE=drums      THE DRUMS, the page it opens on (also with no PAGE) (PARAGON_SNAPSHOT_DRUM=n: slot n chosen;
 //                                    PARAGON_SNAPSHOT_DRUMS=1: a beat just played, its rows lit; =2 a file of nine kicks, the 4th chosen;
 //                                    PARAGON_SNAPSHOT_DRUMSEQ=1: the SEQUENCER view, a beat playing with the song;
+//                                    PARAGON_SNAPSHOT_MACHINE=1: THE DRUM MACHINE playing Room Beat (=2: drums 19-36, REC);
 //                                    PARAGON_SNAPSHOT_DRUMEDIT=1: the clap with an envelope, an anchor, GAIN and LP, =2 with DRUMS=2 a fade;
 //                                    PARAGON_SNAPSHOT_DRUMCHOSEN=1: the hats and cymbal chosen together, the tom's playhead;
 //                                    any of these shows the DRUM view; with none, the KIT VIEW (0.14.0), the page's first:
@@ -557,6 +558,26 @@ TEST_CASE ("Render the editor to a PNG", "[.][snapshot]")
             drums.select (2);
             drums.getSequencer().getGrid().setSelection ({ 4, 5 });
             drums.updateLights();
+        }
+        if (env ("PARAGON_SNAPSHOT_MACHINE").isNotEmpty())
+        {
+            // THE DRUM MACHINE (0.38.0): "Room Beat" played by PLAY's own clock (no DAW) to bar 1's 11th step, the snare
+            // chosen (its steps shown); =2: drums 19-36 on the columns, REC armed.
+            processor.loadRig (*processor.getRigLibrary().findFactory ("Room Beat"));
+            drums.select (2);
+            drums.showView (DrumPage::View::machine);
+            auto& machine = view->getMachine();
+            machine.play();
+            if (env ("PARAGON_SNAPSHOT_MACHINE") == "2")
+            {
+                machine.setBank (1);
+                machine.toggleRecord();
+            }
+            juce::AudioBuffer<float> buffer (2, 512);
+            juce::MidiBuffer midi;
+            for (int b = 0; b < 118; ++b)   // 2.5 beats at 120 BPM: the 11th step
+                processor.processBlock (buffer, midi);
+            machine.update();
         }
     }
     if (page == "grooves")

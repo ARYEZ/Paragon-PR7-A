@@ -116,6 +116,7 @@ namespace ParamIDs
     inline constexpr auto dseqLength   = "dseqLength";     // beats, 1 to 16
     inline constexpr auto dseqVelocity = "dseqVelocity";   // VELOCITY AMOUNT: how much the key's velocity counts (KEY)
     inline constexpr auto shuffle      = "shuffle";        // SHUFFLE (PR7-K's, shared there with its synth)
+    inline constexpr auto machineTempo = "machineTempo";   // THE DRUM MACHINE's TEMPO (0.38.0, hint 39): its PLAY without the DAW
 
     // THE RACK (stage 7a, 0.17.0): PR7-E 0.18.1's four effects, with PR7-E's IDs (so their presets load in either
     // plugin) and its comments below (its "stomps" are our rack units; "rigs" our presets).

@@ -2,6 +2,8 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include <optional>
+
 // The unit's finish: the original pearl white with black keys, or pearl
 // white or pearl black with neon keys and knobs (pink to red to orange). Only the unit itself changes (its chassis, the expression
 // pedal's plate, the lettering printed on it, its keys and knobs); the
@@ -18,6 +20,10 @@ namespace Finish
     inline const juce::StringArray names { "Pearl White", "Pearl Black", "Pearl White + Neon" };
 
     Type get();
+    // 0.38.0: while set, everything drawn is in this finish instead (THE DRUM MACHINE's face is pearl black, as PR7-K's,
+    // whatever the rest of the plugin is in): set in a component's paint, cleared in its paintOverChildren, so its
+    // children (keys, knobs) draw in it too. Message thread only.
+    void paintAs (std::optional<Type>);
     // `remember` saves it to the settings file (off for tests and snapshots).
     void set (Type, bool remember = true);
     inline bool isBlack() { return get() == Type::pearlBlack; }          // the chassis colour

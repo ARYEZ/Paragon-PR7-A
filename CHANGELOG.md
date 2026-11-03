@@ -2,6 +2,41 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.38.0
+
+**THE DRUM MACHINE: a new view on DRUMS, as in the mockup you approved.** Click **MACHINE** (left of KIT VIEW) and the whole window under the tabs becomes a drum machine's face: PR7-K's pearl black, its neon knobs and keys, and PARAGON PR7-D with **ADVANCED DRUM COMPUTER** under it. The drum list, the keyboard and OUTPUT step aside while it's shown; its **VIEW** keys (KIT, DRUM, SEQ) bring them back.
+
+**A column per drum, 18 at a time** (**BANK** 1-18 and 19-36 reach all 36):
+- **TUNE**: the drum's pitch (the same as PITCH on the DRUM view). **DECAY**: how long it rings. **The fader**: its level.
+- **The pad:** click it to choose the drum and hear it. It glows whenever the drum plays (the beat, your DAW, a groove, the song), and its stripe stays lit while it's the chosen drum. The chosen drum is the same one the DRUM view edits.
+
+**Playing a beat, with or without the DAW:**
+- **PLAY** starts the pattern from its first step at the machine's own **TEMPO**, so you can play a beat with the DAW stopped. While the DAW plays, the beat follows the DAW's tempo and position instead, as it always has. **STOP** stops it.
+- **REC:** while the beat runs, whatever you play (the pads, the DAW, a MIDI controller) is written into the pattern on its nearest step. A drum already on that step keeps the louder hit. Each take is one undo step.
+- **TAP** the tempo in. **SWING** is the sequencer's SHUFFLE, shown the drum machine way (50% straight, up to 75%). **MASTER** is OUTPUT, with its meter.
+- **The screen:** the pattern, the time signature, the bar and step, the preset's name, the tempo (marked DAW when the DAW is leading) and the swing.
+
+**Programming the chosen drum:**
+- **The 16 step keys** are the chosen drum's steps in the pattern. Click one to add or remove a hit. A longer pattern pages 16 steps at a time with **< >**, and the page follows the beat while it plays.
+- **PATTERN A-D** picks the pattern. **COPY** then a letter copies the pattern there.
+- **CLEAR** removes the chosen drum's hits (SHIFT: the whole pattern). **FILL** puts it on every step shown.
+- **MUTE / SOLO** the chosen drum. **SONG** lit means the beat follows the song (the DAW, or PLAY); off, the patterns play from keys as before.
+
+**How it's built:**
+- **Our own design:** the column-per-drum layout of the classic early-80s machines, drawn with the PR7 family's own parts. PR7-K's chassis code is copied in, with one colour changed: a lavender sheen in its pearl white finish is now a pearl pink.
+- **Its own finish:** the machine always draws in pearl black. The rest of PR7-D keeps its pearl white.
+- **One new setting:** the machine's **TEMPO** (40-300 BPM, 120 to start), saved with presets. Everything else on the face is a control PR7-D already had.
+
+**Tests:**
+- PLAY's hits land on the exact sample at TEMPO, from the first step, and stop with STOP; the DAW takes over while it plays.
+- REC puts notes on their nearest steps with their velocities; a take undoes in one step.
+- The face covers and gives back the window. The step keys, FILL, CLEAR, COPY, the pages, the banks, the knobs and faders, a pad, TAP, MUTE and the screen all do what they should.
+- pluginval passes at strictness 10.
+
+**Not checked:**
+- A real window on Windows.
+- How REC feels when played live. A hit a little before a step is moved onto that step, so on the same pass the step can play it again just after you (more likely at slow tempos).
+
 ## 0.37.0
 
 **The KIT VIEW is your bigger kit now.** It's laid out like the kit in the picture you sent, still drawn and lit in our Tron look, and every piece you can see plays.

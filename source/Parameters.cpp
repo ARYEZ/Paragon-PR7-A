@@ -33,6 +33,7 @@ namespace
     constexpr int pr7d0340 = 36; // PR7-D 0.34.0: the mixer's USER 9 to 16
     constexpr int pr7d0351 = 37; // PR7-D 0.35.1: NOTE NAMES
     constexpr int pr7d0360 = 38; // PR7-D 0.36.0: drums 30 to 36 (every setting of theirs)
+    constexpr int pr7d0380 = 39; // PR7-D 0.38.0: THE DRUM MACHINE's own TEMPO
 
     const ToText asDb = [] (float value, int) { return juce::String (value, 1) + " dB"; };
     const ToText asPercent = [] (float value, int) { return juce::String (juce::roundToInt (value * 100.0f)) + "%"; };
@@ -232,6 +233,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
              stage6b);
         add (layout, dseqVelocity, "Drum Seq Velocity Amount", { 0.0f, 1.0f }, sequencer.velocityAmount, asPercent, stage6b);
         add (layout, shuffle, "Shuffle", { 0.0f, 1.0f }, 0.0f, asPercent, stage4d);
+        // THE DRUM MACHINE (0.38.0): the tempo its PLAY runs at while the DAW isn't playing (the DAW's leads when it is).
+        add (layout, machineTempo, "Machine Tempo", { 40.0f, 300.0f, 0.1f }, 120.0f,
+             [] (float bpm, int) { return juce::String (bpm, 1) + " BPM"; }, pr7d0380);
     }
 
     addRackParameters (layout);   // the rack (PR7-K's 7a): RackParameters.cpp

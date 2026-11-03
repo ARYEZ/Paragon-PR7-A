@@ -11,6 +11,7 @@
 #include "ui/ParagonLookAndFeel.h"
 #include "ui/RigBrowser.h"
 #include "ui/DrumPage.h"
+#include "ui/MachineView.h"
 #include "ui/GroovesPage.h"
 #include "ui/MixerPage.h"
 #include "ui/SongTrack.h"
@@ -115,7 +116,11 @@ public:
     juce::Rectangle<int> getDrumsTabBounds() const { return drumsTab.getBounds(); }
     // THE SONG TRACK (0.8.0): the strip under the pages shows the keyboard or the song (KEYS | SONG beside it).
     void showSong (bool);
-    bool isShowingSong() const noexcept { return songTrack.isVisible(); }
+    bool isShowingSong() const noexcept { return songShown; }
+    // THE DRUM MACHINE (0.38.0): the DRUMS page's MACHINE view, over everything under the header (the page, the
+    // keyboard or song strip and OUTPUT hidden under it while it's shown).
+    MachineView& getMachine() noexcept { return machine; }
+    bool isShowingMachine() const noexcept { return machine.isVisible(); }
 
     // ControlHost: the knobs' MIDI learn.
     int linkedController (const juce::String& parameterId) const override;
@@ -134,6 +139,7 @@ private:
     void timerCallback() override;
     void refreshRig();
     void saveRig();
+    void updateMachine();
 
     ParagonX1AudioProcessor& audioProcessor;
 
@@ -167,6 +173,8 @@ private:
     SettingsPage settingsPage;
     BlockEditor blockEditor;   // EDIT BLOCK (0.9.0): over the pages, opened from the song track
     SongCreator songCreator;   // THE SONG CREATOR (0.10.0): over the pages too (one of the two at a time)
+    MachineView machine;       // THE DRUM MACHINE (0.38.0): over everything under the header
+    bool songShown = false;    // the strip shows the song (not the keyboard), when the machine isn't over it
     double hoverSince = -1.0;  // a drag over the DRUMS tab since then (-1: none)
     bool dragPeek = false;     // the DRUMS page brought in front for a drag
     Page page = Page::drums;

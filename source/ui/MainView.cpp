@@ -30,6 +30,7 @@ namespace
     const juce::Rectangle<int> outputArea { 1496, 68, 92, 672 };
     const juce::Rectangle<int> keyboardArea { 12, 750, 1576, 138 };
     const juce::Rectangle<int> pageArea { 12, 68, 1476, 672 };   // the pages, beside the OUTPUT strip
+    const juce::Rectangle<int> machineArea { 10, 66, 1580, 826 };   // THE DRUM MACHINE: everything under the header
 }
 
 //==============================================================================
@@ -133,7 +134,8 @@ MainView::MainView (ParagonX1AudioProcessor& processorToShow)
       rigBrowser (processorToShow),
       settingsPage (processorToShow),
       blockEditor (processorToShow),
-      songCreator (processorToShow)
+      songCreator (processorToShow),
+      machine (processorToShow)
 {
     setOpaque (true);   // it fills itself: nothing behind it needs drawing
     // Header
@@ -202,6 +204,17 @@ MainView::MainView (ParagonX1AudioProcessor& processorToShow)
     // THE SONG CREATOR: CREATOR... on the strip (again: closes it), USE WITH SONG CREATOR on a groove or a block, a groove
     // from the GROOVES list dropped on it; its grooves dragged onto the strip.
     addChildComponent (songCreator);
+    // THE DRUM MACHINE (0.38.0): the DRUMS page's MACHINE view; its VIEW keys go back to the page's other views, and the
+    // drum chosen is the page's.
+    addChildComponent (machine);
+    machine.onView = [this] (MachineView::OtherView v)
+    {
+        drumPage.showView (v == MachineView::OtherView::kit ? DrumPage::View::kit
+                           : v == MachineView::OtherView::drum ? DrumPage::View::drum : DrumPage::View::sequencer);
+    };
+    machine.getChosen = [this] { return drumPage.getSelected(); };
+    machine.onChoose = [this] (int slot) { drumPage.clickRow (slot, {}); };
+    drumPage.onViewChanged = [this] (DrumPage::View) { updateMachine(); };
     songTrack.onOpenCreator = [this]
     {
         if (songCreator.isVisible())
@@ -290,6 +303,21 @@ void MainView::showPage (Page newPage)
     mixerPage.setVisible (newPage == Page::mixer);
     rigBrowser.setVisible (newPage == Page::presets);
     settingsPage.setVisible (newPage == Page::settings);
+    updateMachine();
+}
+
+void MainView::updateMachine()
+{
+    const auto shown = page == Page::drums && drumPage.getView() == DrumPage::View::machine;
+    machine.setVisible (shown);
+    if (shown)
+        machine.toFront (false);
+    drumPage.setVisible (page == Page::drums && ! shown);
+    outputColumn.setVisible (! shown);
+    keysTab.setVisible (! shown);
+    songTab.setVisible (! shown);
+    keyboard.setVisible (! shown && ! songShown);
+    songTrack.setVisible (! shown && songShown);
 }
 
 void MainView::refreshRig()
@@ -472,12 +500,14 @@ void MainView::resized()
     settingsPage.setBounds (pageArea);
     blockEditor.setBounds (pageArea);
     songCreator.setBounds (pageArea);
+    machine.setBounds (machineArea);
 }
 
 void MainView::showSong (bool show)
 {
-    songTrack.setVisible (show);
-    keyboard.setVisible (! show);
+    songShown = show;
+    songTrack.setVisible (show && ! machine.isVisible());
+    keyboard.setVisible (! show && ! machine.isVisible());
     keysTab.setToggleState (! show, juce::dontSendNotification);
     songTab.setToggleState (show, juce::dontSendNotification);
 }

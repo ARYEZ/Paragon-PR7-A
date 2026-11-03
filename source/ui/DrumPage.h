@@ -121,8 +121,10 @@ public:
     void updateLights();      // the rows' hit lights, from the kit (the timer; tests and snapshots)
 
     // The right-hand panel: the chosen DRUM, the SEQUENCER (stage 6b), or the KIT VIEW (0.14.0: the page opens on it).
-    enum class View { drum, sequencer, kit };
+    // 0.38.0: THE DRUM MACHINE (machine): MainView puts its face over the whole window (`onViewChanged` tells it).
+    enum class View { drum, sequencer, kit, machine };
     void showView (View);
+    std::function<void (View)> onViewChanged;
     View getView() const noexcept { return view; }
     DrumSeqPanel& getSequencer() noexcept { return sequencer; }
     // 0.18.0: the DRUM view's strip shows the ENVELOPE (and the hit) or the chosen drum's VELOCITY curve and gate.
@@ -190,5 +192,5 @@ private:
     juce::Rectangle<int> velocityArea;
     void updateDrumPanels();
     void placeArticulations();
-    juce::TextButton kitTab { "KIT VIEW" }, drumTab { "DRUM" }, sequencerTab { "SEQUENCER" };
+    juce::TextButton kitTab { "KIT VIEW" }, drumTab { "DRUM" }, sequencerTab { "SEQUENCER" }, machineTab { "MACHINE" };
 };
