@@ -2,6 +2,18 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.33.1
+
+**GROOVES lists new grooves as it reads them.** Before, when you linked a folder (or added files to one), PR7-D read every new file first and only put them in the list at the very end. On a big library that meant a blank list saying "0 grooves (checking for new ones)" for a long time, which looked the same as "it doesn't recognize my MIDI files". Your Loudnoise Folk Metal folder showed that. `.mid` and `.midi` files were always recognized; they just weren't shown yet.
+
+**Now:** while a scan runs, the grooves it has read so far go into the list every half second. A new folder fills in as it's read. The filter columns' counts and the status line ("N grooves (checking for new ones: M read)") keep up too.
+
+**Under the hood:**
+- **No extra work:** only the new grooves are worked out each time. Grooves already listed keep their column values and search text; only their place in name order is redone.
+- **Unchanged:** the index file is still written once, when the scan ends.
+
+**Tests:** a pack of 400 grooves scanned in the background. Some are listed while the scan is still running, all 400 once it ends, each one once, in name order, with its values worked out.
+
 ## 0.33.0
 
 **Your Just Add Drums "Djent Drums" library as a kit, and six new drums for it.** You chose the library's individual mics, so each one mixes on its own channel, plus all of its sounds. A new **LOAD... > A SAMPLE PACK...** reads a multi-mic library's folder by its file names and puts every sound on its drum, every velocity layer and round robin in place, and every mic on its mixer channel, streamed from disk.

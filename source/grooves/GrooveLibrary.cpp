@@ -479,6 +479,39 @@ namespace grooves
         std::vector<Entry> found;
         std::set<juce::String> seen;
         auto changed = false;   // anything read anew (else the index stays as it is)
+        // 0.33.1: grooves read anew go into the list as the scan goes (every half second), not only when it ends: a
+        // newly linked folder of thousands fills in as it's read instead of staying empty until the last file.
+        std::vector<Entry> fresh;
+        auto lastShown = juce::Time::getMillisecondCounterHiRes();
+        const auto showFresh = [&]
+        {
+            if (fresh.empty())
+                return;
+            std::set<juce::String> paths;
+            for (const auto& e : fresh)
+                paths.insert (e.file.getFullPathName());
+            std::vector<Entry> listed;
+            {
+                std::lock_guard<std::mutex> guard (lock);
+                listed.reserve (entries.size() + fresh.size());
+                for (const auto& e : entries)
+                    if (paths.count (e.file.getFullPathName()) == 0)
+                        listed.push_back (e);
+            }
+            for (auto& e : fresh)
+                listed.push_back (std::move (e));
+            fresh.clear();
+            cacheEntries (listed, true);
+            {
+                std::lock_guard<std::mutex> guard (lock);
+                entries = std::move (listed);
+                packsKnown = false;
+                matchScores.clear();
+                indexLoaded = true;
+            }
+            lastShown = juce::Time::getMillisecondCounterHiRes();
+            sendChangeMessage();
+        };
         juce::XmlElement index ("GrooveIndex");
         for (int f = 0; f < (int) folders.size(); ++f)
         {
@@ -488,6 +521,7 @@ namespace grooves
             const auto add = [&] (const juce::File& file, const juce::String& key, auto readIt, const db::Contents::Item* item = nullptr)
             {
                 Entry e;
+                auto isNew = false;
                 if (const auto known = before.find (file.getFullPathName()); known != before.end() && known->second.first == key)
                     e = known->second.second;
                 else if (const auto g = readIt())
@@ -499,8 +533,8 @@ namespace grooves
                         e.priority = item->priority;
                     }
                     changed = true;
-                    if ((++scanned % 200) == 0)
-                        sendChangeMessage();
+                    ++scanned;
+                    isNew = true;
                 }
                 else
                     return;   // not a groove: no notes, or not a MIDI file
@@ -510,6 +544,12 @@ namespace grooves
                 e.family = file.getParentDirectory().getFileName();
                 e.part = partOf (file);
                 index.addChildElement (toXml (e, key).release());
+                if (isNew)
+                {
+                    fresh.push_back (e);
+                    if (juce::Time::getMillisecondCounterHiRes() - lastShown >= showFreshEveryMs.load())
+                        showFresh();
+                }
                 found.push_back (std::move (e));
             };
             for (const auto& item : juce::RangedDirectoryIterator (linked.folder, true, juce::String ("*.mid;*.midi;") + db::wildcard, juce::File::findFiles))
@@ -557,6 +597,7 @@ namespace grooves
         {
             // Stopped (another scan, or this PR7-D removed): what it read anew is kept, with the rest as before, so the
             // next one carries on from here.
+            showFresh();
             if (changed)
             {
                 for (const auto& [path, item] : before)
@@ -648,7 +689,7 @@ namespace grooves
         return scratch;
     }
 
-    void cacheEntries (std::vector<Entry>& list)
+    void cacheEntries (std::vector<Entry>& list, bool keepValues)
     {
         // Each groove's column values and search text, and its place by name, worked out once (in the scanner's
         // thread when it's the one listing them).
@@ -667,11 +708,21 @@ namespace grooves
         for (size_t i = 0; i < list.size(); ++i)
         {
             auto& e = list[i];
-            e.cached = nullptr;
+            if (keepValues && e.cached != nullptr && e.cached->nameRank == rank[i])
+                continue;   // (0.33.1) worked out before, in the same place
             auto c = std::make_shared<Entry::Cached>();
-            for (int col = 0; col < numColumns; ++col)
-                c->values[(size_t) col] = valuesOf (e, (Column) col);
-            c->haystack = (e.name + " " + e.family + " " + e.file.getParentDirectory().getParentDirectory().getFileName()).toLowerCase();
+            if (keepValues && e.cached != nullptr)
+            {
+                c->values = e.cached->values;
+                c->haystack = e.cached->haystack;
+            }
+            else
+            {
+                e.cached = nullptr;
+                for (int col = 0; col < numColumns; ++col)
+                    c->values[(size_t) col] = valuesOf (e, (Column) col);
+                c->haystack = (e.name + " " + e.family + " " + e.file.getParentDirectory().getParentDirectory().getFileName()).toLowerCase();
+            }
             c->nameRank = rank[i];
             e.cached = std::move (c);
         }

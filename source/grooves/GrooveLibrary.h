@@ -70,7 +70,8 @@ namespace grooves
     // The same, without a copy when the entry has them cached (`scratch` holds them when it hasn't).
     const juce::StringArray& valuesIn (const Entry&, Column, juce::StringArray& scratch);
     // Works out each entry's `cached` (the library does it whenever it lists them).
-    void cacheEntries (std::vector<Entry>&);
+    // keepValues (0.33.1): entries already worked out keep their values and search text (only their places by name redone).
+    void cacheEntries (std::vector<Entry>&, bool keepValues = false);
     juce::String valueOf (const Entry&, Column);   // its values, joined (", ")
     // The order a column lists the values it knows (others follow, alphabetically; TIME, simplest first).
     juce::StringArray orderOf (Column);
@@ -177,6 +178,8 @@ namespace grooves
         void scan (bool onlyIfNeeded = false);
         void scanNow();
         bool isScanning() const noexcept { return scanning.load(); }
+        // 0.33.1: how often a scan puts what it has read anew into the list (milliseconds; tests set 0: after each file).
+        static inline std::atomic<double> showFreshEveryMs { 500.0 };
         int getNumScanned() const noexcept { return scanned.load(); }   // files read anew (not known from before)
 
         // THE GROOVES (a copy: safe while the scan replaces them).

@@ -746,6 +746,60 @@ TEST_CASE ("TAP TO FIND in the library: grooves sorted by how close they are to 
     CHECK (again.query ({}, {}, false, grooves::Sort::name, 120.0, 4, 4, {}, &tap)[0].name == "Push");
 }
 
+TEST_CASE ("GROOVES 0.33.1: a scan lists grooves as it reads them, not only when it ends", "[grooves][groove-player]")
+{
+    Plugin t;
+    const auto pack = t.folder.getChildFile ("Big Pack");
+    constexpr int count = 400;
+    for (int i = 0; i < count; ++i)
+    {
+        juce::MidiMessageSequence track;
+        for (int beat = 0; beat < 4; ++beat)
+        {
+            track.addEvent (juce::MidiMessage::noteOn (10, beat % 2 == 0 ? 36 : 38, (juce::uint8) 100).withTimeStamp (beat * 480));
+            track.addEvent (juce::MidiMessage::noteOff (10, beat % 2 == 0 ? 36 : 38).withTimeStamp (beat * 480 + 60));
+        }
+        track.updateMatchedPairs();
+        juce::MidiFile file;
+        file.setTicksPerQuarterNote (480);
+        file.addTrack (track);
+        const auto f = pack.getChildFile ("Folk Metal").getChildFile ("130bpm - Galloping " + juce::String (i) + ".mid");
+        f.getParentDirectory().createDirectory();
+        juce::FileOutputStream out (f);
+        file.writeTo (out);
+    }
+    auto& library = t.p.getGrooveLibrary();
+    grooves::Library::showFreshEveryMs = 0.0;
+    REQUIRE (library.addFolder (pack));
+    library.scan();
+    // While it scans, some are listed already (the whole of them only at the end, before this change).
+    auto seenPartly = false;
+    const auto until = juce::Time::getMillisecondCounterHiRes() + 30000.0;
+    while (library.isScanning() && juce::Time::getMillisecondCounterHiRes() < until)
+    {
+        const auto n = library.getNumEntries();
+        seenPartly = seenPartly || (n > 0 && n < count);
+        juce::Thread::sleep (1);
+    }
+    grooves::Library::showFreshEveryMs = 500.0;
+    CHECK (seenPartly);
+    REQUIRE (library.getNumEntries() == count);
+    // Each listed once, with its values worked out, in name order.
+    const auto found = library.query ({}, {}, false, grooves::Sort::name, 120.0, 4, 4, {});
+    REQUIRE (found.size() == (size_t) count);
+    CHECK (found[0].name == "130bpm - Galloping 0");
+    CHECK (found[1].name == "130bpm - Galloping 1");
+    CHECK (found.back().name == "130bpm - Galloping 399");
+    std::set<juce::String> paths;
+    for (const auto& e : found)
+    {
+        paths.insert (e.file.getFullPathName());
+        REQUIRE (e.cached != nullptr);
+        CHECK (e.cached->values[(size_t) grooves::Column::tempo] == juce::StringArray { "120-139" });
+    }
+    CHECK (paths.size() == (size_t) count);
+}
+
 TEST_CASE ("TAP TO FIND page: open taps with a loop; FIND sorts by MATCH; FIND SIMILAR; a MIDI file dropped; CLEAR TAP", "[tap][groove-player][ui]")
 {
     Plugin t;
