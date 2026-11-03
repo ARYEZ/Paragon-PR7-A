@@ -1736,12 +1736,14 @@ void MixerPage::resized()
         std::vector<PieceRow*> direct, bleeding;
         for (auto& r : rows)
             (r->isDirect ? direct : bleeding).push_back (r.get());
+        // 0.36.0: 22 pieces: the rows as tall as fits (at most rowHeight), so TIME OFFSET and RELEASE stay on the panel.
+        bleedRowHeight = juce::jlimit (16, rowHeight, (p.getHeight() - 18 - 22 - 14 - 24 - 6 - 24) / juce::jmax (1, (int) rows.size()));
         p.removeFromTop (18);
         for (auto* r : direct)
-            r->setBounds (p.removeFromTop (rowHeight));
+            r->setBounds (p.removeFromTop (bleedRowHeight));
         p.removeFromTop (22);
         for (auto* r : bleeding)
-            r->setBounds (p.removeFromTop (rowHeight));
+            r->setBounds (p.removeFromTop (bleedRowHeight));
         p.removeFromTop (14);
         offset.setBounds (p.removeFromTop (24).withTrimmedLeft (100));
         p.removeFromTop (6);
@@ -1818,9 +1820,9 @@ void MixerPage::paint (juce::Graphics& g)
     for (auto& r : rows)
         directCount += r->isDirect ? 1 : 0;
     g.drawText (mixer::hearsWholeKit (selected) ? "THE WHOLE KIT (NO BLEED HERE)" : "CLOSE MIC AUDIO", p.removeFromTop (18), juce::Justification::centredLeft, false);
-    p.removeFromTop (directCount * rowHeight);
+    p.removeFromTop (directCount * bleedRowHeight);
     g.drawText ("BLEED FROM INSTRUMENTS", p.removeFromTop (22).withTrimmedTop (4), juce::Justification::centredLeft, false);
-    p.removeFromTop ((mixer::numPieces - directCount) * rowHeight + 14);
+    p.removeFromTop ((mixer::numPieces - directCount) * bleedRowHeight + 14);
     g.drawText ("TIME OFFSET", p.removeFromTop (24), juce::Justification::centredLeft, false);
     p.removeFromTop (6);
     g.drawText ("RELEASE", p.removeFromTop (24), juce::Justification::centredLeft, false);

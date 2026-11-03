@@ -25,8 +25,9 @@ namespace
     const juce::Identifier modulationKey { "Modulation" };
     const juce::Identifier midiLinksKey { "MidiLinks" };
     const juce::Identifier noteMapKey { "NoteMap" };
-    constexpr int parameterVersion = 3;   // 2: 0.17.0 (the articulations: older projects load with drums 21 to 23 off)
+    constexpr int parameterVersion = 4;   // 2: 0.17.0 (the articulations: older projects load with drums 21 to 23 off)
                                           // 3: 0.33.0 (drums 24 to 29 off; layers' instrument numbers moved)
+                                          // 4: 0.36.0 (drums 30 to 36 likewise)
 }
 
 //==============================================================================
@@ -1275,7 +1276,9 @@ ParagonX1AudioProcessor::DrumGizmoImport ParagonX1AudioProcessor::importDrumGizm
     }
     // The hi-hat's and ride's articulations the kit has no hits for: off, so they play the nearest it has (their
     // stand-ins), not a synth drum among recorded ones.
-    for (const auto slot : { synth::drums::notemap::HO1, synth::drums::notemap::HO3, synth::drums::notemap::RE, synth::drums::notemap::HH })
+    // (0.36.0: the extra drums too: tom 4 and 5, the shoulder, the chokes, crashes 3 to 6, the FX crash, china 2.)
+    using namespace synth::drums::notemap;
+    for (const auto slot : { HO1, HO3, RE, HH, T4, HSH, C1C, C2C, CHC, SPC, C3, C4, C5, C6, CFX, CH2, T5 })
         if (assigned.slots.count (slot) == 0)
             setParameterNow (ParamIDs::drum (slot, "On"), 0.0f);
     rememberKit (info.name, kitFile.getParentDirectory());
@@ -1307,7 +1310,7 @@ ParagonX1AudioProcessor::SamplePackImport ParagonX1AudioProcessor::importSampleP
         refs.emplace_back (slot, "pack2|" + juce::String (slot) + "|{kit:" + info.name + "}/");
     }
     using namespace synth::drums::notemap;
-    for (const auto slot : { HO1, HO3, SD2, RE, HH, HSH, C1C, C2C, CHC, SPC, T4 })
+    for (const auto slot : { HO1, HO3, SD2, RE, HH, HSH, C1C, C2C, CHC, SPC, T4, C3, C4, C5, C6, CFX, CH2, T5 })
         if (info.slots.count (slot) == 0)
             setParameterNow (ParamIDs::drum (slot, "On"), 0.0f);
     // Its USER channels: fresh, named; a trigger or effect mic starts 12 dB down, a sub kick 6 (our guesses: they're
@@ -1998,7 +2001,7 @@ juce::Array<juce::File> ParagonX1AudioProcessor::listDrumSequences() const { ret
 std::unique_ptr<juce::XmlElement> ParagonX1AudioProcessor::captureDrumKit() const
 {
     auto xml = std::make_unique<juce::XmlElement> ("DrumKit");
-    xml->setAttribute ("version", 3);   // 2: 0.17.0 (older kits load with drums 21 to 23 off); 3: 0.33.0 (24 to 29)
+    xml->setAttribute ("version", 4);   // 2: 0.17.0 (older kits load with drums 21 to 23 off); 3: 0.33.0 (24 to 29); 4: 0.36.0 (30 to 36)
     for (auto* parameter : AudioProcessor::getParameters())
         if (auto* ranged = dynamic_cast<juce::RangedAudioParameter*> (parameter); ranged != nullptr && isKitParameter (ranged->paramID))
         {
@@ -2075,6 +2078,9 @@ bool ParagonX1AudioProcessor::applyDrumKit (const juce::XmlElement& xml)
     if (xml.getIntAttribute ("version", 1) < 3)
         for (const auto& id : ParamIDs::slotsAdded033Off)
             values[id] = 0.0f;
+    if (xml.getIntAttribute ("version", 1) < 4)
+        for (const auto& id : ParamIDs::slotsAdded036Off)
+            values[id] = 0.0f;
     for (auto* parameter : AudioProcessor::getParameters())
         if (auto* ranged = dynamic_cast<juce::RangedAudioParameter*> (parameter); ranged != nullptr && isKitParameter (ranged->paramID))
         {
@@ -2104,9 +2110,9 @@ bool ParagonX1AudioProcessor::applyDrumKit (const juce::XmlElement& xml)
     {
         std::vector<std::pair<int, juce::String>> refs;
         std::array<bool, 2 * ParamIDs::numDrums> has {};
-        const auto before033 = xml.getIntAttribute ("version", 1) < 3;
+        const auto savedBy = xml.getIntAttribute ("version", 1);
         for (const auto* e : xml.getChildWithTagNameIterator ("DrumInstrument"))
-            if (const auto slot = ParamIDs::instrumentIndexFrom (e->getIntAttribute ("slot") - 1, before033); slot >= 0 && slot < 2 * ParamIDs::numDrums)
+            if (const auto slot = ParamIDs::instrumentIndexFrom (e->getIntAttribute ("slot") - 1, savedBy); slot >= 0 && slot < 2 * ParamIDs::numDrums)
             {
                 refs.emplace_back (slot, e->getStringAttribute ("ref"));
                 has[(size_t) slot] = true;
@@ -2622,9 +2628,9 @@ void ParagonX1AudioProcessor::setStateInformation (const void* data, int sizeInB
     std::vector<std::pair<int, juce::String>> instrumentsToLoad;
     if (auto saved = state.getChildWithName ("DrumInstruments"); saved.isValid())
     {
-        const auto before033 = (int) state.getProperty (parameterVersionKey, 1) < 3;
+        const auto savedBy = (int) state.getProperty (parameterVersionKey, 1);
         for (const auto& e : saved)
-            if (const auto slot = ParamIDs::instrumentIndexFrom ((int) e["slot"] - 1, before033); slot >= 0 && slot < 2 * ParamIDs::numDrums)
+            if (const auto slot = ParamIDs::instrumentIndexFrom ((int) e["slot"] - 1, savedBy); slot >= 0 && slot < 2 * ParamIDs::numDrums)
                 instrumentsToLoad.emplace_back (slot, e["ref"].toString());
         state.removeChild (saved, nullptr);
     }
@@ -2678,6 +2684,8 @@ void ParagonX1AudioProcessor::setStateInformation (const void* data, int sizeInB
         startOff.addArray (ParamIDs::articulationsAddedOff);
     if ((int) state.getProperty (parameterVersionKey, 1) < 3)
         startOff.addArray (ParamIDs::slotsAdded033Off);
+    if ((int) state.getProperty (parameterVersionKey, 1) < 4)
+        startOff.addArray (ParamIDs::slotsAdded036Off);   // 0.36.0's seven
     for (const auto& id : startOff)
         {
             auto param = state.getChildWithProperty ("id", id);

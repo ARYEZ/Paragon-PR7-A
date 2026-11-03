@@ -14,8 +14,9 @@ namespace grooves
             case SD: case SD2: case RIM: case CLP: return (int) Lane::snare;   // 0.31.0: the clap too (an electronic backbeat)
             case CH: case OH: case HH: case HO1: case HO3: case HSH: return (int) Lane::hats;
             case RD: case RB: case RE: return (int) Lane::ride;
-            case LT: case MT: case HT: case T4: return (int) Lane::toms;
-            case CY: case CR2: case CHN: case SPL: case C1C: case C2C: case CHC: case SPC: return (int) Lane::crash;
+            case LT: case MT: case HT: case T4: case T5: return (int) Lane::toms;
+            case CY: case CR2: case CHN: case SPL: case C1C: case C2C: case CHC: case SPC:
+            case C3: case C4: case C5: case C6: case CFX: case CH2: return (int) Lane::crash;
             default: return -1;   // the pedal hat (a foot), percussion
         }
     }

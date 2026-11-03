@@ -87,9 +87,9 @@ namespace synth::drums::samplepack
                 return SD2;
             return SD;
         }
-        for (int t = 1; t <= 4; ++t)
+        for (int t = 1; t <= 5; ++t)   // (0.36.0: tom 5)
             if (w.contains ("TOM" + juce::String (t)) || joined.contains ("TOM " + juce::String (t)))
-                return t == 1 ? HT : t == 2 ? MT : t == 3 ? LT : T4;
+                return t == 1 ? HT : t == 2 ? MT : t == 3 ? LT : t == 4 ? T4 : T5;
         if (has ({ "HATS", "HAT", "HH", "HIHAT" }))
         {
             if (has ({ "PEDAL", "FOOT" }))
@@ -103,6 +103,14 @@ namespace synth::drums::samplepack
         if (has ({ "RIDE" }))
             return has ({ "BELL" }) ? RB : has ({ "CRASH", "EDGE" }) ? RE : RD;
         const auto choke = has ({ "CHOKE", "CHOKED", "STOP", "GRAB" });
+        // 0.36.0: crashes 3 to 6, an FX crash, a second china (no choke slots of their own: a choke of one is left out).
+        for (int n = 3; n <= 6; ++n)
+            if (has ({ ("CRASH" + juce::String (n)).toRawUTF8() }) || joined.contains ("CRASH " + juce::String (n)))
+                return choke ? -1 : C3 + (n - 3);
+        if (has ({ "FXCRASH", "OZONE", "EFFECT", "EFX" }) || joined.contains ("FX CRASH") || joined.contains ("CRASH FX"))
+            return choke ? -1 : CFX;
+        if (has ({ "CHINA2" }) || joined.contains ("CHINA 2"))
+            return choke ? -1 : CH2;
         if (has ({ "CRASH2" }) || joined.contains ("CRASH 2"))
             return choke ? C2C : CR2;
         if (has ({ "CRASH1", "CRASH" }) || joined.contains ("CRASH 1"))

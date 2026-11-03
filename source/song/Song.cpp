@@ -446,7 +446,7 @@ namespace song
     // EDITING INSIDE A BLOCK (0.9.0)
     namespace
     {
-        bool has (unsigned slots, int slot) noexcept { return slot >= 0 && slot < 32 && (slots & (1u << slot)) != 0; }
+        bool has (SlotMask slots, int slot) noexcept { return (slots & slotBit (slot)) != 0; }
 
         // In time order; on one drum and beat (within a hair) only the loudest kept.
         void tidy (std::vector<Hit>& hits)
@@ -472,21 +472,21 @@ namespace song
         }
     }
 
-    unsigned slotsOf (unsigned parts) noexcept
+    SlotMask slotsOf (unsigned parts) noexcept
     {
         auto slots = 0u;
         for (int k = 0; k < synth::drums::numSlots; ++k)
             if (grooves::inParts (parts, k))
-                slots |= 1u << k;
+                slots |= slotBit (k);
         return slots;
     }
 
-    unsigned slotsIn (const Block& b) noexcept
+    SlotMask slotsIn (const Block& b) noexcept
     {
         auto slots = 0u;
         for (const auto& h : b.hits)
             if (h.slot >= 0 && h.slot < synth::drums::numSlots)
-                slots |= 1u << h.slot;
+                slots |= slotBit (h.slot);
         return slots;
     }
 
@@ -508,12 +508,12 @@ namespace song
         b.loopLength = b.length;
     }
 
-    void removeDrums (Block& b, unsigned slots)
+    void removeDrums (Block& b, SlotMask slots)
     {
         std::erase_if (b.hits, [slots] (const Hit& h) { return has (slots, h.slot); });
     }
 
-    void pasteDrums (Block& b, const Block& clip, unsigned slots)
+    void pasteDrums (Block& b, const Block& clip, SlotMask slots)
     {
         removeDrums (b, slots);
         if (clip.loopLength > 0.0)
@@ -524,7 +524,7 @@ namespace song
         tidy (b.hits);
     }
 
-    void quantize (Block& b, double grid, unsigned slots)
+    void quantize (Block& b, double grid, SlotMask slots)
     {
         if (grid <= 0.0)
             return;
@@ -538,7 +538,7 @@ namespace song
         tidy (b.hits);
     }
 
-    void scaleVelocity (Block& b, float factor, unsigned slots)
+    void scaleVelocity (Block& b, float factor, SlotMask slots)
     {
         for (auto& h : b.hits)
             if (has (slots, h.slot))

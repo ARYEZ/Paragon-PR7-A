@@ -9,7 +9,8 @@ namespace
     const char* const drumNames[] = { "Kick", "Rim", "Snare", "Clap", "Snare 2", "Low Tom", "Closed Hat", "Mid Tom", "Pedal Hat",
                                       "High Tom", "Open Hat", "Crash", "Ride", "Ride Bell", "Crash 2", "China", "Splash",
                                       "Half Hat", "Tambourine", "Shaker", "Ride Edge", "Hat Open 1", "Hat Open 3",
-                                      "Tom 4", "Hat Shoulder", "Crash Choke", "Crash 2 Choke", "China Choke", "Splash Choke" };
+                                      "Tom 4", "Hat Shoulder", "Crash Choke", "Crash 2 Choke", "China Choke", "Splash Choke",
+                                      "Crash 3", "Crash 4", "Crash 5", "Crash 6", "FX Crash", "China 2", "Tom 5" };
     static_assert (std::size (drumNames) == synth::drums::numSlots);
 
     juce::String drumName (int slot)
@@ -122,7 +123,7 @@ void BlockEditor::edit (const std::function<void (song::Block&)>& f)
     refresh();   // at once (the song's change message comes later)
 }
 
-unsigned BlockEditor::targetDrums() const noexcept
+song::SlotMask BlockEditor::targetDrums() const noexcept
 {
     return chosenDrums != 0 ? chosenDrums : song::allSlots;
 }
@@ -132,14 +133,14 @@ void BlockEditor::refresh()
     // The rows: the drums the block plays, and any added, in the kit's order.
     rows.clear();
     const auto* b = block();
-    const auto shown = (b != nullptr ? song::slotsIn (*b) : 0u) | extraRows;
+    const auto shown = (b != nullptr ? song::slotsIn (*b) : song::SlotMask (0)) | extraRows;
     for (int k = 0; k < synth::drums::numSlots; ++k)
-        if ((shown & (1u << k)) != 0)
+        if ((shown & song::slotBit (k)) != 0)
             rows.push_back (k);
     chosenDrums &= shown;
     addDrum.clear (juce::dontSendNotification);
     for (int k = 0; k < synth::drums::numSlots; ++k)
-        if ((shown & (1u << k)) == 0)
+        if ((shown & song::slotBit (k)) == 0)
             addDrum.addItem (drumName (k), k + 1);
     moveTo.setEnabled (countOf (chosenDrums) == 1);
     moveLabel.setEnabled (moveTo.isEnabled());
@@ -155,15 +156,15 @@ std::vector<int> BlockEditor::getRows() const
 
 void BlockEditor::chooseDrum (int slot, bool add)
 {
-    const auto bit = 1u << slot;
+    const auto bit = song::slotBit (slot);
     chosenDrums = add ? chosenDrums ^ bit : (chosenDrums == bit ? 0u : bit);
     refresh();
 }
 
 void BlockEditor::addRow (int slot)
 {
-    extraRows |= 1u << slot;
-    chosenDrums = 1u << slot;
+    extraRows |= song::slotBit (slot);
+    chosenDrums = song::slotBit (slot);
     refresh();
 }
 
@@ -220,7 +221,7 @@ void BlockEditor::pasteChosen()
     if (countOf (copied) == 1 && countOf (chosenDrums) == 1)
     {
         for (auto& h : clip.hits)
-            h.slot = juce::findHighestSetBit (chosenDrums);
+            h.slot = song::highestSlot (chosenDrums);
         edit ([&clip, this] (song::Block& b) { song::pasteDrums (b, clip, chosenDrums); });
         return;
     }
@@ -231,9 +232,9 @@ void BlockEditor::moveChosenTo (int slot)
 {
     if (countOf (chosenDrums) != 1)
         return;
-    const auto from = juce::findHighestSetBit (chosenDrums);
+    const auto from = song::highestSlot (chosenDrums);
     edit ([from, slot] (song::Block& b) { song::moveDrum (b, from, slot); });
-    chosenDrums = 1u << slot;
+    chosenDrums = song::slotBit (slot);
     refresh();
 }
 
@@ -336,7 +337,7 @@ void BlockEditor::paint (juce::Graphics& g)
     {
         const auto slot = rows[r];
         const auto y = (float) grid.getY() + rowHeight * (float) r;
-        const auto chosen = (chosenDrums & (1u << slot)) != 0;
+        const auto chosen = (chosenDrums & song::slotBit (slot)) != 0;
         if (chosen)
         {
             g.setColour (ParagonColours::accent.withAlpha (0.12f));

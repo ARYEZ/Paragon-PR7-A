@@ -549,19 +549,19 @@ namespace synth::drums::drumgizmo
                 return { RD, RE };
             }
             if (hasAny (c, { "china" }))
-                return { CHN };
+                return { CHN, CH2 };   // (0.36.0: a second china)
             if (hasAny (c, { "splash" }))
                 return { SPL };
             if (hasAny (c, { "crash", "cymbal" }))
             {
                 if (hasAny (c, { "stop", "choke", "mute", "grab" }))
                     return {};
-                return { CY, CR2 };
+                return { CY, CR2, C3, C4, C5, C6 };   // (0.36.0: crashes 3 to 6)
             }
             if (hasAny (c, { "ftom", "floor" }))
-                return { LT, MT, HT };
+                return { LT, MT, HT, T4, T5 };
             if (hasAny (c, { "tom" }))
-                return { HT, MT, LT };
+                return { HT, MT, LT, T4, T5 };
             if (hasAny (c, { "clap" }))
                 return { CLP };
             if (hasAny (c, { "tamb" }))

@@ -220,7 +220,8 @@ void DrumRow::setPlayhead (float seconds)
 
 void DrumRow::resized()
 {
-    auto area = getLocalBounds().reduced (4, 4);
+    // (0.36.0: 36 rows make them short: the M and S buttons keep their height.)
+    auto area = getLocalBounds().reduced (4, getHeight() >= 22 ? 4 : 1);
     solo.setBounds (area.removeFromRight (44));
     mute.setBounds (area.removeFromRight (44));
 }

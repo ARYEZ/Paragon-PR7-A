@@ -75,6 +75,7 @@ public:
     void resized() override;
 
 private:
+    int bleedRowHeight = 26;   // (0.36.0) the BLEED table's rows, fitted to the panel
     void timerCallback() override;
     void refreshProperties();
     void showOutputMenu (int strip, juce::Component& from);

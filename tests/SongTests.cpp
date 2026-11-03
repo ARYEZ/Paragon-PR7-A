@@ -479,7 +479,7 @@ namespace
             out.emplace_back (h.beat, h.slot);
         return out;
     }
-    unsigned bit (int slot) { return 1u << slot; }
+    song::SlotMask bit (int slot) { return song::slotBit (slot); }
 }
 
 TEST_CASE ("SONG 0.9: split at a bar (each half its own notes), merge with the next (a gap kept as rests)", "[song][song-edit]")

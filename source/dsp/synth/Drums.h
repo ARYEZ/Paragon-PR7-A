@@ -42,7 +42,8 @@ namespace synth
 
 namespace synth::drums
 {
-    inline constexpr int numSlots = 29;   // 12 in PR7-K, 20 from PR7-D 0.2.0, 23 from 0.17.0 (articulations), 29 from 0.33.0
+    inline constexpr int numSlots = 36;   // 12 in PR7-K, 20 from PR7-D 0.2.0, 23 from 0.17.0 (articulations), 29 from 0.33.0,
+                                          // 36 from 0.36.0 (the bigger kit's cymbals and tom 5)
 
     // Saved by index (drum{k}Model): only ever append. RIDE, BELL, TAMBOURINE and SHAKER came in PR7-D 0.2.0.
     // ACOUSTIC KICK, SNARE and TOM came in 0.24.0: physically modelled drums (see Voice::startAcoustic).
@@ -105,6 +106,15 @@ namespace synth::drums
         { Model::cymbal,   -2.0f, 0.12f, 0.45f, 0.5f, 0, "C2C" },  // crash 2, choked
         { Model::cymbal,   -5.0f, 0.10f, 0.2f, 0.9f, 0, "CHC" },   // the china, choked
         { Model::cymbal,    5.0f, 0.08f, 0.6f, 0.5f, 0, "SPC" },   // the splash, choked
+        // PR7-D 0.36.0 (ROOT + 29 to + 35): the owner's bigger kit (six crashes, an FX crash with holes, two chinas, five
+        // toms): crashes 3 to 6 (tuned apart from 1 and 2), the FX crash (trashy and short), a second china, a fifth tom.
+        { Model::cymbal,    2.0f, 0.55f, 0.55f, 0.5f, 0, "C3" },   // crash 3
+        { Model::cymbal,   -3.0f, 0.7f, 0.4f, 0.5f, 0, "C4" },     // crash 4
+        { Model::cymbal,    4.0f, 0.5f, 0.6f, 0.5f, 0, "C5" },     // crash 5
+        { Model::cymbal,   -4.0f, 0.75f, 0.4f, 0.55f, 0, "C6" },   // crash 6
+        { Model::cymbal,    3.0f, 0.3f, 0.35f, 0.85f, 0, "CFX" },  // the FX crash (holes: short and trashy)
+        { Model::cymbal,   -2.0f, 0.45f, 0.25f, 0.9f, 0, "CH2" },  // china 2
+        { Model::tom,     -13.0f, 0.6f, 0.5f, 0.5f, 0, "T5" },     // tom 5 (the lowest)
     }};
 
     // THE PIECES AND THEIR ARTICULATIONS (PR7-D 0.17.0). Inspired by drum software where each drum of the kit is one
@@ -123,7 +133,7 @@ namespace synth::drums
         std::array<Articulation, 8> articulations;   // (6 until 0.33.0)
         int count;
     };
-    inline constexpr int numPieces = 15;   // 14 until 0.33.0 (TOM 4 appended: pieces are saved by index)
+    inline constexpr int numPieces = 22;   // 14 until 0.33.0 (TOM 4 appended: pieces are saved by index), 15 until 0.36.0
     inline constexpr std::array<Piece, numPieces> pieces {{
         { "KICK",        {{ { 0, "Hit" } }}, 1 },
         { "SNARE",       {{ { 2, "Center" }, { 4, "Rimshot" }, { 1, "Sidestick" } }}, 3 },
@@ -140,6 +150,13 @@ namespace synth::drums
         { "TAMBOURINE",  {{ { 18, "Hit" } }}, 1 },
         { "SHAKER",      {{ { 19, "Hit" } }}, 1 },
         { "TOM 4",       {{ { 23, "Hit" } }}, 1 },   // 0.33.0
+        { "CRASH 3",     {{ { 29, "Hit" } }}, 1 },   // 0.36.0
+        { "CRASH 4",     {{ { 30, "Hit" } }}, 1 },
+        { "CRASH 5",     {{ { 31, "Hit" } }}, 1 },
+        { "CRASH 6",     {{ { 32, "Hit" } }}, 1 },
+        { "FX CRASH",    {{ { 33, "Hit" } }}, 1 },
+        { "CHINA 2",     {{ { 34, "Hit" } }}, 1 },
+        { "TOM 5",       {{ { 35, "Hit" } }}, 1 },
     }};
     // 0.33.0: a choke articulation (hit, then grabbed): it stops what's ringing of its cymbal first.
     inline bool isChoke (int slot) noexcept { return slot >= 25 && slot <= 28; }
@@ -171,8 +188,8 @@ namespace synth::drums
         if (name == "HI-HAT") return mixer::hiHat;
         if (name == "RACK TOM") return mixer::tom1;
         if (name == "FLOOR TOM 1") return mixer::tom2;
-        if (name == "FLOOR TOM 2" || name == "TOM 4") return mixer::tom3;   // (TOM 4 shares it; a sampled kit's own mic: a USER channel)
-        if (name.startsWith ("CRASH") || name == "RIDE" || name == "CHINA" || name == "SPLASH") return mixer::cymbals;
+        if (name == "FLOOR TOM 2" || name == "TOM 4" || name == "TOM 5") return mixer::tom3;   // (TOM 4 shares it; a sampled kit's own mic: a USER channel)
+        if (name.startsWith ("CRASH") || name == "RIDE" || name.startsWith ("CHINA") || name == "SPLASH" || name == "FX CRASH") return mixer::cymbals;
         return mixer::other;
     }
     // Whether a channel is a slot's own (direct sound) or bleed: its close mic(s), or a mic over the whole kit.
@@ -221,6 +238,13 @@ namespace synth::drums
         { 14, 11, -1, -1, -1, -1 },          // C2C: crash 2, crash 1
         { 15, 11, -1, -1, -1, -1 },          // CHC: the china, crash 1
         { 16, 11, -1, -1, -1, -1 },          // SPC: the splash, crash 1
+        { 11, 14, -1, -1, -1, -1 },          // C3: crash 1, crash 2 (0.36.0)
+        { 14, 11, -1, -1, -1, -1 },          // C4: crash 2, crash 1
+        { 11, 29, 14, -1, -1, -1 },          // C5: crash 1, crash 3, crash 2
+        { 14, 30, 11, -1, -1, -1 },          // C6: crash 2, crash 4, crash 1
+        { 15, 11, -1, -1, -1, -1 },          // CFX: the china, crash 1
+        { 15, 11, -1, -1, -1, -1 },          // CH2: the china, crash 1
+        { 23, 5, 7, -1, -1, -1 },            // T5: tom 4, floor tom 2, floor tom 1
     }};
 
     // THE HI-HAT PEDAL (PR7-D 0.17.0): a controller's hi-hat pedal sends CC 4, 127 fully closed, 0 fully open. A note

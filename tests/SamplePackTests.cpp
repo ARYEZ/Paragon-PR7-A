@@ -345,7 +345,7 @@ TEST_CASE ("THE MIXER 0.34.0: 16 USER channels, each with its fader, effects, se
 TEST_CASE ("0.33.0's DRUMS: tom 4, the hat's shoulder, the chokes; a choke stops its cymbal; older files load as they were", "[samplepack][articulations]")
 {
     using namespace synth::drums;
-    CHECK (numSlots == 29);
+    CHECK (numSlots >= 29);
     CHECK (articulationName (T4) == "TOM 4");
     CHECK (articulationName (HSH) == "HI-HAT SHOULDER");
     CHECK (articulationName (C1C) == "CRASH 1 CHOKE");
@@ -392,4 +392,67 @@ TEST_CASE ("0.33.0's DRUMS: tom 4, the hat's shoulder, the chokes; a choke stops
     CHECK (old->drumInstruments.count (23) == 0);
     for (const auto& id : ParamIDs::slotsAdded033Off)
         CHECK (old->parameters.at (id) == 0.0f);
+}
+
+TEST_CASE ("0.36.0's DRUMS: crashes 3 to 6, the FX crash, china 2, tom 5: they play, their stand-ins while off; older files load as they were",
+           "[samplepack][articulations]")
+{
+    using namespace synth::drums;
+    CHECK (numSlots == 36);
+    CHECK (numPieces == 22);
+    CHECK (synth::mixer::numPieces == numPieces);
+    CHECK (synth::micsim::numPieces == numPieces);
+    CHECK (articulationName (C3) == "CRASH 3");
+    CHECK (articulationName (CFX) == "FX CRASH");
+    CHECK (articulationName (CH2) == "CHINA 2");
+    CHECK (articulationName (T5) == "TOM 5");
+    CHECK (homeChannel (C6) == synth::mixer::cymbals);
+    CHECK (homeChannel (CFX) == synth::mixer::cymbals);
+    CHECK (homeChannel (CH2) == synth::mixer::cymbals);
+    CHECK (homeChannel (T5) == synth::mixer::tom3);
+    CHECK (grooves::drumPartOf (C4) == (int) grooves::DrumPart::crash);
+    CHECK (grooves::drumPartOf (T5) == (int) grooves::DrumPart::toms);
+    CHECK (pack::slotFor (juce::StringArray { "CRASH3" }) == C3);
+    CHECK (pack::slotFor (juce::StringArray { "CRASH6" }) == C6);
+    CHECK (pack::slotFor (juce::StringArray { "CHINA2" }) == CH2);
+    CHECK (pack::slotFor (juce::StringArray { "TOM5" }) == T5);
+    CHECK (pack::slotFor (juce::StringArray { "FX", "CRASH" }) == CFX);
+
+    // Each new drum plays its own sound (a tone of its own, as SAMPLE), at its ROOT key.
+    Plugin p;
+    const std::array<int, 7> added { C3, C4, C5, C6, CFX, CH2, T5 };
+    for (size_t i = 0; i < added.size(); ++i)
+        testkit::useSample (*p.processor, added[i], testkit::sine (300.0 + 100.0 * (double) i, 0.5, 0.25f));
+    testkit::useSample (*p.processor, CY, testkit::sine (2000.0, 0.5, 0.25f));
+    for (size_t i = 0; i < added.size(); ++i)
+    {
+        INFO ("slot " << added[i]);
+        const auto out = p.play (added[i], 127, 0.2);
+        CHECK (levelAt (out, 300.0 + 100.0 * (double) i, 0, 4800) > 0.05);
+    }
+    // Crash 3 off: its note plays crash 1 (its stand-in).
+    testkit::set (*p.processor, ParamIDs::drum (C3, "On"), 0.0f);
+    const auto standIn = p.play (C3, 127, 0.2);
+    CHECK (levelAt (standIn, 300.0, 0, 4800) < 0.005);
+    CHECK (levelAt (standIn, 2000.0, 0, 4800) > 0.05);
+
+    // A preset from 0.33.0-0.35.x: the seven off; a layer saved as instrument 29 + slot is that drum's layer now, and
+    // one from before 0.33.0 (23 + slot) too.
+    for (const auto& [version, savedAs] : { std::pair<int, int> { 3, 29 }, std::pair<int, int> { 2, 23 } })
+    {
+        auto xml = Rig {}.toXml();
+        xml->setAttribute ("parameterVersion", version);
+        auto* layerRef = xml->createNewChildElement ("DrumInstrument");
+        layerRef->setAttribute ("slot", savedAs + SD + 1);   // the snare's layer
+        layerRef->setAttribute ("ref", "file||/my/snare.wav");
+        const auto old = Rig::fromXml (*xml);
+        REQUIRE (old.has_value());
+        CHECK (old->drumInstruments.count (ParagonX1AudioProcessor::layerOf (SD)) == 1);
+        CHECK (old->drumInstruments.count (savedAs + SD) == 0);
+        for (const auto& id : ParamIDs::slotsAdded036Off)
+            CHECK (old->parameters.at (id) == 0.0f);
+    }
+    // Saved now and read back: as saved (no shift).
+    CHECK (ParamIDs::instrumentIndexFrom (ParamIDs::numDrums + SD, 4) == ParamIDs::numDrums + SD);
+    CHECK (ParamIDs::instrumentIndexFrom (SD, 2) == SD);
 }

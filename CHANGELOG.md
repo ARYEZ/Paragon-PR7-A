@@ -2,6 +2,30 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.36.0
+
+**Seven more drums, for the bigger kit.** You asked for the kit view to match a big kit: six crashes, an FX crash with holes, two chinas, a splash, a ride, three rack toms and two floor toms. PR7-D had drums for only five of those cymbals and four toms. These are the missing ones, first. The new kit picture comes next, in 0.37.0.
+
+**The new drums** (each its own sound, keys, sequencer row, mixer bleed row and settings):
+- **Crash 3, Crash 4, Crash 5, Crash 6:** tuned apart from Crash 1 and 2 (higher, lower, brighter, darker), so a row of crashes doesn't sound like one cymbal.
+- **FX Crash:** the one with holes, short and trashy.
+- **China 2:** a second, slightly higher china.
+- **Tom 5:** the lowest tom, below Tom 4.
+
+**Where they are:** the kit list on DRUMS (at the bottom: C3, C4, C5, C6, CFX, CH2, T5), the sequencer, the song editor and the mixer's BLEED table. In ROOT they're the seven keys after the splash's choke, so the kit now spans **C1 to B3**. GROOVE LIBRARY and GENERAL MIDI have no notes for them; give them notes in CUSTOM if your grooves use them.
+
+**Your kits:**
+- **Sample packs:** a pack with `CRASH3` to `CRASH6`, `CHINA2`, `TOM5` or an FX crash in its file names now fills these. On import, each new cymbal gets its own channel, as Crash 1 and 2 do.
+- **DrumGizmo kits:** a kit with more crashes, chinas or toms than before fills them in order. Any drum a kit has no sound for is switched off, so it plays the nearest drum the kit does have rather than a synth sound among recorded ones.
+
+**Older presets, kits and projects** load with the seven off. Each plays its stand-in instead (Crash 3 plays Crash 1, China 2 plays China, Tom 5 plays Tom 4...), so nothing sounds different. A drum's layer, saved under a number that moved with the new drums, is read back the old way, so it stays on its drum.
+
+**Also:** the song track's drum choices (Remove Drums, Paste Drums, the block editor) handle more than 32 drums now. The mixer's BLEED list fits its 22 pieces on the panel. The DRUMS list's M and S buttons stay readable at 36 rows.
+
+**Tests:** each new drum plays its own sound at its key; Crash 3 switched off plays Crash 1; the new names, channels, groove parts and sample-pack rules; presets from 0.33.0–0.35.x and from before 0.33.0 load with the seven off and their layers on the right drums. pluginval passes at strictness 10.
+
+**Not yet:** the KIT VIEW picture doesn't show the new pieces (0.37.0 brings the new kit). They play from their keys, the list and the sequencer.
+
 ## 0.35.1
 
 **Note names now match your DAW: the kick is C1, the snare D1.** You saw your MIDI editor show the snare on D1 and the kick on C1 while PR7-D called them D2 and C2. Nothing was mapped wrong: both send and play the same note numbers (kick 36, snare 38), which is why the right drums played. The names differ because there are two ways to number octaves:

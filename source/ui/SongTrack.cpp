@@ -560,7 +560,7 @@ juce::PopupMenu SongTrack::menuFor (int block, double atBeat)
     menu.addSubMenu ("Change Tempo", tempo);
 
     // EDITING INSIDE IT (0.9.0): its drums by GROOVE PARTS group (each with how many notes it has there).
-    const auto partsMenu = [] (const song::Block& of, const std::function<void (unsigned slots)>& act, bool withAll)
+    const auto partsMenu = [] (const song::Block& of, const std::function<void (song::SlotMask slots)>& act, bool withAll)
     {
         juce::PopupMenu m;
         std::array<int, grooves::numDrumParts> counts {};
@@ -586,14 +586,14 @@ juce::PopupMenu SongTrack::menuFor (int block, double atBeat)
             edit ([&] (song::Song& song) { chosen = song.place (*c, song.blocks[(size_t) block].end()); });
     });
     if (clip.has_value())
-        menu.addSubMenu ("Paste Drums Onto It", partsMenu (*clip, [this, block] (unsigned slots)
+        menu.addSubMenu ("Paste Drums Onto It", partsMenu (*clip, [this, block] (song::SlotMask slots)
         {
             if (const auto& c = processor.getSongClipboard())
                 edit ([&] (song::Song& song) { song::pasteDrums (song.blocks[(size_t) block], *c, slots); });
         }, true));
     else
         menu.addItem ("Paste Drums Onto It", false, false, nullptr);
-    menu.addSubMenu ("Remove Drums", partsMenu (b, [this, block] (unsigned slots)
+    menu.addSubMenu ("Remove Drums", partsMenu (b, [this, block] (song::SlotMask slots)
     {
         edit ([&] (song::Song& song) { song::removeDrums (song.blocks[(size_t) block], slots); });
     }, false), ! b.hits.empty());

@@ -33,7 +33,7 @@ namespace synth::micsim
     // Where things stand: x to the drummer's right, y forward, z up (metres).
     struct Point { float x = 0.0f, y = 0.0f, z = 0.0f; };
     // A piece's place (THE PIECES' order, drums::pieces).
-    inline constexpr int numPieces = 15;
+    inline constexpr int numPieces = 22;
     inline constexpr std::array<Point, numPieces> piecePlaces {{
         {  0.0f,  0.45f, 0.30f },   // KICK (its beater)
         { -0.15f, 0.35f, 0.65f },   // SNARE
@@ -50,6 +50,13 @@ namespace synth::micsim
         { -0.45f, 0.40f, 1.10f },   // TAMBOURINE (on the hi-hat's stand)
         {  0.0f,  0.30f, 1.00f },   // SHAKER
         {  0.85f, 0.10f, 0.45f },   // TOM 4 (0.33.0: beyond floor tom 2)
+        { -0.75f, -0.20f, 1.55f },  // CRASH 3 (0.36.0: the bigger kit, left high)
+        { -0.20f, -0.55f, 1.75f },  // CRASH 4 (over the rack toms)
+        {  0.55f, -0.45f, 1.65f },  // CRASH 5 (right high)
+        {  0.85f, -0.15f, 1.45f },  // CRASH 6 (right)
+        { -0.80f, 0.15f, 1.15f },   // FX CRASH (left, low)
+        {  1.00f, 0.25f, 1.05f },   // CHINA 2 (right, low)
+        {  0.95f, 0.30f, 0.45f },   // TOM 5 (beyond tom 4)
     }};
 
     // The mics a piece plays through (every channel but OTHER for the kit's drums and cymbals; the clap, tambourine
@@ -100,7 +107,7 @@ namespace synth::micsim
     class Simulator
     {
     public:
-        static constexpr int numSlots = 29;
+        static constexpr int numSlots = 36;
         static constexpr int maxFilters = 3;
 
         void prepare (double sampleRate, int blockSize);

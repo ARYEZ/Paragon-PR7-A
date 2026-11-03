@@ -29,7 +29,7 @@ public:
 
     // For tests and snapshots.
     std::vector<int> getRows() const;                    // the drums shown, top to bottom
-    unsigned getChosenDrums() const noexcept { return chosenDrums; }
+    song::SlotMask getChosenDrums() const noexcept { return chosenDrums; }
     void chooseDrum (int slot, bool add);                // as clicking its name (with CTRL: add)
     void addRow (int slot);                              // as ADD DRUM
     juce::Rectangle<float> cellOf (int slot, double beat) const;   // where a note there would be drawn
@@ -46,7 +46,7 @@ private:
     void changeListenerCallback (juce::ChangeBroadcaster*) override;
     const song::Block* block() const noexcept;
     void edit (const std::function<void (song::Block&)>&);   // the block changed as an undo step
-    unsigned targetDrums() const noexcept;                   // the chosen drums, else every one
+    song::SlotMask targetDrums() const noexcept;                   // the chosen drums, else every one
     void refresh();
     double beatAt (float x) const noexcept;
     int rowAt (float y) const noexcept;
@@ -54,7 +54,7 @@ private:
 
     ParagonX1AudioProcessor& processor;
     int blockIndex = -1;
-    unsigned chosenDrums = 0, extraRows = 0;
+    song::SlotMask chosenDrums = 0, extraRows = 0;
     std::vector<int> rows;
     juce::Rectangle<int> names, grid, ruler;
 

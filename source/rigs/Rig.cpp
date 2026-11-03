@@ -13,7 +13,8 @@ namespace
     // 1: PR7-D 0.1.0 (PR7-K 0.24.0's drum and effect parameters).
     // 2: PR7-D 0.17.0 (the articulations: older presets load with drums 21 to 23 off).
     // 3: PR7-D 0.33.0 (drums 24 to 29: older presets load with them off; their layers' instrument numbers moved).
-    constexpr int parameterVersion = 3;
+    // 4: PR7-D 0.36.0 (drums 30 to 36, likewise).
+    constexpr int parameterVersion = 4;
 
     const juce::Identifier rigTag { "ParagonRig" };
     const juce::Identifier parameterTag { "Param" };
@@ -108,7 +109,7 @@ std::optional<Rig> Rig::fromXml (const juce::XmlElement& xml)
         rig.modulation = ModMatrix::fromXml (*modulation);
     const auto version = xml.getIntAttribute ("parameterVersion", 1);
     for (const auto* e : xml.getChildWithTagNameIterator ("DrumInstrument"))
-        if (const auto slot = ParamIDs::instrumentIndexFrom (e->getIntAttribute ("slot") - 1, version < 3);
+        if (const auto slot = ParamIDs::instrumentIndexFrom (e->getIntAttribute ("slot") - 1, version);
             slot >= 0 && slot < 2 * synth::drums::numSlots)   // 0.29.0: then layers
             rig.drumInstruments[slot] = e->getStringAttribute ("ref");
 
@@ -117,6 +118,9 @@ std::optional<Rig> Rig::fromXml (const juce::XmlElement& xml)
             rig.parameters[id] = 0.0f;
     if (version < 3)
         for (const auto& id : ParamIDs::slotsAdded033Off)
+            rig.parameters[id] = 0.0f;
+    if (version < 4)
+        for (const auto& id : ParamIDs::slotsAdded036Off)
             rig.parameters[id] = 0.0f;
 
     return rig;

@@ -7,6 +7,8 @@
 // gap before it). Lengthening a block pushes the ones after it; shortening leaves a gap.
 #pragma once
 
+#include <cstdint>
+
 #include "grooves/Groove.h"
 
 #include <juce_audio_basics/juce_audio_basics.h>
@@ -152,19 +154,24 @@ namespace song
     // EDITING INSIDE A BLOCK (0.9.0, the song track part 2). Our own design, inspired by the block editing in chapter 7
     // of the manual the owner sent. Each works on the block's groove (one time round: `loopLength`), on the drums in
     // `slots` (bit n: the kit's drum n; allSlots: every drum), and keeps its hits in time order.
-    inline constexpr unsigned allSlots = (1u << synth::drums::numSlots) - 1u;
-    unsigned slotsOf (unsigned parts) noexcept;                  // grooves::DrumPart bits -> the drums in them
-    unsigned slotsIn (const Block&) noexcept;                    // the drums the block plays
+    // 0.36.0: 64 bits (36 drums no longer fit 32).
+    using SlotMask = std::uint64_t;
+    inline constexpr SlotMask slotBit (int slot) noexcept { return slot >= 0 && slot < 64 ? SlotMask (1) << slot : 0; }
+    inline constexpr SlotMask allSlots = (SlotMask (1) << synth::drums::numSlots) - 1u;
+    static_assert (synth::drums::numSlots < 64);
+    inline int highestSlot (SlotMask m) noexcept { for (int k = 63; k >= 0; --k) if ((m & slotBit (k)) != 0) return k; return -1; }
+    SlotMask slotsOf (unsigned parts) noexcept;                  // grooves::DrumPart bits -> the drums in them
+    SlotMask slotsIn (const Block&) noexcept;                    // the drums the block plays
     std::vector<Hit> unrolled (const Block&);                    // every hit over its whole length (repeats written out)
     void flatten (Block&);                                       // the repeats written out: loopLength = length
-    void removeDrums (Block&, unsigned slots);
+    void removeDrums (Block&, SlotMask slots);
     // The clip's notes on those drums in place of the block's own (the clip repeated, or cut, to the block's groove).
-    void pasteDrums (Block&, const Block& clip, unsigned slots);
+    void pasteDrums (Block&, const Block& clip, SlotMask slots);
     // Each note to the nearest `grid` beats (a note pushed to the groove's end goes round to its start); two on the same
     // drum and beat become one (the louder).
-    void quantize (Block&, double grid, unsigned slots = allSlots);
+    void quantize (Block&, double grid, SlotMask slots = allSlots);
     // Each velocity times `factor` (the balance between them kept), between 1/127 and full.
-    void scaleVelocity (Block&, float factor, unsigned slots = allSlots);
+    void scaleVelocity (Block&, float factor, SlotMask slots = allSlots);
     // Every note on drum `from` played by drum `to` instead, with `to`'s own (on the same beat: one, the louder).
     void moveDrum (Block&, int from, int to);
     void addHit (Block&, Hit);                                   // one more (replacing one on that drum and beat)

@@ -32,6 +32,7 @@ namespace
     constexpr int pr7d0330 = 35; // PR7-D 0.33.0: drums 24 to 29 (every setting of theirs)
     constexpr int pr7d0340 = 36; // PR7-D 0.34.0: the mixer's USER 9 to 16
     constexpr int pr7d0351 = 37; // PR7-D 0.35.1: NOTE NAMES
+    constexpr int pr7d0360 = 38; // PR7-D 0.36.0: drums 30 to 36 (every setting of theirs)
 
     const ToText asDb = [] (float value, int) { return juce::String (value, 1) + " dB"; };
     const ToText asPercent = [] (float value, int) { return juce::String (juce::roundToInt (value * 100.0f)) + "%"; };
@@ -122,8 +123,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
         {
             // PR7-K's 12 drums keep their version hints; the 8 PR7-D added take 0.2.0's, the 3 after them 0.17.0's;
             // 0.33.0's six take its hint for every setting (`newer` below).
-            const auto added = k >= 12, articulation = k >= 20, newer = k >= 23;
-            const auto at = [newer] (int hint) { return newer ? pr7d0330 : hint; };
+            const auto added = k >= 12, articulation = k >= 20, newer = k >= 23, newest = k >= 29;
+            const auto at = [newer, newest] (int hint) { return newest ? pr7d0360 : newer ? pr7d0330 : hint; };
             const auto hint = articulation ? pr7d0170 : added ? pr7d020 : stage6a;
             const auto hintStart = articulation ? pr7d0170 : added ? pr7d020 : stage6aStart;
             const auto hintEditor = articulation ? pr7d0170 : added ? pr7d020 : stage6c;
