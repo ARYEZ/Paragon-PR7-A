@@ -33,7 +33,10 @@ public:
 
     void setBank (int bank);   // 0: drums 1-18, 1: 19-36
     int getBank() const noexcept { return bank; }
-    int slotOfColumn (int column) const noexcept { return bank * numColumns + column; }
+    // 0.39.0: the drum on each column is the project's pad order (right-click a pad or its name: pick another).
+    int slotOfColumn (int column) const noexcept;
+    void showPadMenu (int column);
+    void assignPad (int column, int slot);   // swaps with the pad that had it
     static juce::String nameOf (int slot);   // the pad's label
 
     // The steps shown: a page of 16 of the pattern's steps (it follows the playhead while the beat runs).
@@ -66,6 +69,7 @@ public:
 
     void paint (juce::Graphics&) override;
     void paintOverChildren (juce::Graphics&) override;
+    void mouseDown (const juce::MouseEvent&) override;
     void resized() override;
 
 private:
@@ -109,6 +113,7 @@ private:
     juce::String shownScreen;
     float meterLevel = 0.0f, shownMeter = -1.0f;
     int shownPlayStep = -2, shownChosen = -1;
+    std::array<int, numColumns> shownSlots {};
     juce::Rectangle<int> screenArea, meterArea, stepLabels, namesArea;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MachineView)

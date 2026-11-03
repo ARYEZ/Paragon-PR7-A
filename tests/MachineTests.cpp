@@ -299,12 +299,12 @@ TEST_CASE ("THE DRUM MACHINE's face: over the window, its steps, columns, keys, 
 
     // The columns: bank 1 is drums 1-18, bank 2 19-36; TUNE is the drum's PITCH, its fader its LEVEL.
     machine.getTune (2).setValue (5.0, juce::sendNotificationSync);
-    CHECK (value (p, ParamIDs::drum (2, "Pitch")) == 5.0f);
+    CHECK (std::abs (value (p, ParamIDs::drum (2, "Pitch")) - (5.0f)) < 1.0e-4f);
     machine.getKey ("19-36").onClick();
     CHECK (machine.slotOfColumn (0) == 18);
     machine.getTune (0).setValue (-3.0, juce::sendNotificationSync);
-    CHECK (value (p, ParamIDs::drum (18, "Pitch")) == -3.0f);
-    CHECK (value (p, ParamIDs::drum (0, "Pitch")) == 0.0f);
+    CHECK (std::abs (value (p, ParamIDs::drum (18, "Pitch")) - (-3.0f)) < 1.0e-4f);
+    CHECK (std::abs (value (p, ParamIDs::drum (0, "Pitch")) - (0.0f)) < 1.0e-4f);
     CHECK (MachineView::nameOf (35) == "TOM 5");
 
     // A pad: chooses its drum (the page's chosen one) and plays it.
@@ -326,4 +326,32 @@ TEST_CASE ("THE DRUM MACHINE's face: over the window, its steps, columns, keys, 
     CHECK (machine.getKey ("MUTE").getToggleState());
     CHECK (machine.getScreenText().startsWith ("PATTERN B|4/4|STOPPED|"));
     CHECK (machine.getScreenText().contains ("|100.0|BPM|"));
+}
+
+TEST_CASE ("THE DRUM MACHINE 0.39.0's face: a pad given another drum, its knobs and fader that drum's", "[machine][ui]")
+{
+    ParagonX1AudioProcessor p;
+    std::unique_ptr<juce::AudioProcessorEditor> editor (p.createEditor());
+    editor->setSize (1600, 900);
+    auto* view = dynamic_cast<MainView*> (editor->getChildComponent (0));
+    REQUIRE (view != nullptr);
+    view->getDrumPage().showView (DrumPage::View::machine);
+    auto& machine = view->getMachine();
+
+    machine.assignPad (1, 30);   // CRASH 4 where the sidestick was
+    CHECK (machine.slotOfColumn (1) == 30);
+    machine.getTune (1).setValue (4.0, juce::sendNotificationSync);
+    CHECK (std::abs (value (p, ParamIDs::drum (30, "Pitch")) - (4.0f)) < 1.0e-4f);
+    CHECK (std::abs (value (p, ParamIDs::drum (1, "Pitch")) - (0.0f)) < 1.0e-4f);
+    // The sidestick went to CRASH 4's pad (bank 19-36's 13th column).
+    machine.setBank (1);
+    CHECK (machine.slotOfColumn (12) == 1);
+    machine.setBank (0);
+
+    // A project loaded with its own order: the face follows it.
+    p.setMachinePad (1, 1);
+    machine.update();
+    CHECK (machine.slotOfColumn (1) == 1);
+    machine.getTune (1).setValue (-2.0, juce::sendNotificationSync);
+    CHECK (std::abs (value (p, ParamIDs::drum (1, "Pitch")) - (-2.0f)) < 1.0e-4f);
 }

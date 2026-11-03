@@ -14,7 +14,8 @@ namespace
     // 2: PR7-D 0.17.0 (the articulations: older presets load with drums 21 to 23 off).
     // 3: PR7-D 0.33.0 (drums 24 to 29: older presets load with them off; their layers' instrument numbers moved).
     // 4: PR7-D 0.36.0 (drums 30 to 36, likewise).
-    constexpr int parameterVersion = 4;
+    // 5: PR7-D 0.39.0 (the drum buses: older presets keep their channels' routes, their buses unnamed).
+    constexpr int parameterVersion = 5;
 
     const juce::Identifier rigTag { "ParagonRig" };
     const juce::Identifier parameterTag { "Param" };
@@ -122,6 +123,13 @@ std::optional<Rig> Rig::fromXml (const juce::XmlElement& xml)
     if (version < 4)
         for (const auto& id : ParamIDs::slotsAdded036Off)
             rig.parameters[id] = 0.0f;
+    if (version < 5)
+    {
+        for (const auto& id : ParamIDs::routesOnBuses039)
+            if (rig.parameters.find (id) == rig.parameters.end())
+                rig.parameters[id] = 0.0f;
+        std::fill (rig.modulation.busNames.begin(), rig.modulation.busNames.end(), juce::String());
+    }
 
     return rig;
 }

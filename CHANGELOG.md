@@ -2,6 +2,25 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.39.0
+
+**This release also carries 0.38.0, THE DRUM MACHINE**, which was never published on its own: one of its new tests compared a knob's value too exactly and failed on the Mac build machine (5 read back as 4.9999995). The plugin itself was fine; the test now allows for that rounding. 0.38.0's notes are below.
+
+**Drum buses, set up for you.** A new project's mixer now groups each drum's channels into a bus of its own:
+- **KICK** (BUS 1): KICK IN and KICK OUT.
+- **SNARE** (BUS 2): SNARE TOP and SNARE BOTTOM.
+- **TOMS** (BUS 3): TOM 1, TOM 2 and TOM 3.
+- **Nothing sounds different until you touch them.** A bus at 0 dB adds its channels up exactly (tested: identical to the old routing to a millionth). Now one fader, mute or effect chain moves the whole kick, snare or toms. The overheads and room stay on their own channels, and the kick's level in them doesn't change with the KICK bus.
+- **Channels added later follow their drum.** A drum's layer channel and a sample pack's extra mics (KICK SUB, SNARE TOP 2, TOM 4...) start on the same bus as their drum.
+- **The buses show their names** on their strips and in the OUTPUT and SEND menus. **Right-click a bus's name to rename it.** Leave it empty and it goes back to its number.
+- **Your older projects and presets stay as you left them.** Channels that went straight to their outputs still do, and their buses keep their numbers. BUS 4 to BUS 8 are free as before.
+
+**THE DRUM MACHINE: choose the drum on each pad.** Right-click a pad (or its name) and pick any of the 36 drums for that column. The drum that was there moves to the pad the new one came from, so no drum ever drops off the machine. **Every pad back in the kit's order** is at the bottom of the menu. The TUNE and DECAY knobs and the fader follow the drum you put there. Your pad order is saved with the project.
+
+**Tests:** the default buses and their names, renaming (with undo), a kit played through the buses identical to before, a bus fader moving only its drum, older presets and projects loading as they were, a layer's channel joining its drum's bus, the pads swapping and saved, the face's knobs following a moved drum. pluginval passes at strictness 10.
+
+**Not checked:** a real window on Windows.
+
 ## 0.38.0
 
 **THE DRUM MACHINE: a new view on DRUMS, as in the mockup you approved.** Click **MACHINE** (left of KIT VIEW) and the whole window under the tabs becomes a drum machine's face: PR7-K's pearl black, its neon knobs and keys, and PARAGON PR7-D with **ADVANCED DRUM COMPUTER** under it. The drum list, the keyboard and OUTPUT step aside while it's shown; its **VIEW** keys (KIT, DRUM, SEQ) bring them back.

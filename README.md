@@ -28,6 +28,7 @@ PR7-D is built in stages, each one released:
 | **7** | The kit view: a drawn kit (our own 3D kit, black with glowing rings) to click and play | **Works (0.14.0)**: click a drum to choose and hear it; each piece glows as it plays |
 | **9** | The sample engine: velocity layers, round-robins, mics, bleed, a mixer | **Works (0.20.0)**: drums from SFZ kits or folders of your own hits, with velocity layers, round-robins, hit variation, layer and voice limits; multi-mic kits through the MIXER's mic channels, with bleed per drum, time offset, release and outputs; 8 buses and two sends per channel or bus (into a bus, the FX page's insert buses, DELAY, REVERB) (0.21.0); four effect slots per channel and bus: EQ, COMPRESSOR, GATE, TRANSIENT, DRIVE, LO-FI, MOD (0.22.0); ROUTE MICS: each drum's mics to any channel, a new user channel or none, up to 8 user channels (0.23.0); simulated mics and a room for the synth drums (0.26.0) |
 | **10** | The drum machine: the kit as a drum machine's face, over the whole window | **Works (0.38.0)**: a column per drum (TUNE, DECAY, LEVEL, its pad) in two banks of 18, the tempo screen, PLAY on its own clock at TEMPO, REC into the pattern, TAP, the chosen drum's 16 steps, patterns A-D with COPY, CLEAR, FILL |
+| **11** | Drum buses by default: the kick's, snare's and toms' channels grouped | **Works (0.39.0)**: KICK, SNARE and TOMS buses in a new mixer (renamable), channels added later following their drum, older projects unchanged |
 | **8** | Articulations: each drum of the kit a piece played several ways | **Works (0.18.0)**: the articulation list (ALL, ON, level), the ride's edge, five hat openness steps, stand-ins for articulations switched off, the hi-hat pedal (CC 4) and its calibration, cymbals grabbed by note-off or aftertouch; a velocity curve and gate per drum; MIDI IN / E-DRUMS (incoming curve, channel, CC zones, LEARN, presets) and the MIDI monitor |
 
 ## Using it
@@ -49,7 +50,8 @@ PR7-D is built in stages, each one released:
     meter. The **steps** are the chosen drum's in the pattern shown, 16 at a time (< > for longer patterns; they follow the
     beat while it plays). **PATTERN** A-D (**COPY** then a letter copies the pattern there), **SONG** (lit: the beat follows
     the song; off: the patterns play from keys), **CLEAR** (the chosen drum's notes; SHIFT: all), **FILL** (every step
-    shown), **MUTE** / **SOLO** the chosen drum. The screen: pattern, time signature, bar and step, the preset, the tempo
+    shown), **MUTE** / **SOLO** the chosen drum. **Right-click a pad** (or its name) to put any drum on it (0.39.0; it
+    swaps with that drum's pad; saved with the project). The screen: pattern, time signature, bar and step, the preset, the tempo
     (DAW when the DAW leads), swing.
   - **ARTICULATIONS** (0.17.0, over the kit view's top left): the chosen drum's piece and the ways it's played (the
     snare's center, rimshot and sidestick; the hi-hat closed, open 1 to 4 and pedal; the ride's bow, bell and edge).

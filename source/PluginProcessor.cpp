@@ -25,9 +25,10 @@ namespace
     const juce::Identifier modulationKey { "Modulation" };
     const juce::Identifier midiLinksKey { "MidiLinks" };
     const juce::Identifier noteMapKey { "NoteMap" };
-    constexpr int parameterVersion = 4;   // 2: 0.17.0 (the articulations: older projects load with drums 21 to 23 off)
+    constexpr int parameterVersion = 5;   // 2: 0.17.0 (the articulations: older projects load with drums 21 to 23 off)
                                           // 3: 0.33.0 (drums 24 to 29 off; layers' instrument numbers moved)
                                           // 4: 0.36.0 (drums 30 to 36 likewise)
+                                          // 5: 0.39.0 (the drum buses: older projects keep their channels' routes)
 }
 
 //==============================================================================
@@ -1362,6 +1363,12 @@ ParagonX1AudioProcessor::SamplePackImport ParagonX1AudioProcessor::importSampleP
         const auto& name = info.userChannels[u];
         const auto level = name.contains ("TRIGGER") || name.contains ("FX") ? -12.0f : name.contains ("SUB") ? -6.0f : 0.0f;
         setParameterNow (ParamIDs::mix (channel, "Level"), level);
+        // 0.39.0: into the bus (or output) of the drum's own channel ("KICK SUB" with KICK IN onto the KICK bus).
+        if (const auto home = synth::mixer::channelForName (name); home >= 0 && home < synth::mixer::numChannels)
+        {
+            setParameterNow (ParamIDs::mix (channel, "Output"), (float) getMixerOutput (home));
+            setParameterNow (ParamIDs::mix (channel, "Route"), (float) getMixerRoute (home));
+        }
         m.userChannelNames[(size_t) u] = name.substring (0, 24);
     }
     setModMatrix (m);
@@ -1436,6 +1443,12 @@ int ParagonX1AudioProcessor::createLayerChannel (int slot)
         const auto piece = synth::drums::pieceOfSlot (slot);
         m.userChannelNames[(size_t) u] = (juce::String (piece >= 0 ? synth::drums::pieces[(size_t) piece].name : synth::drums::slotDefaults[(size_t) slot].key) + " LAYER").substring (0, 24);
         setModMatrix (m);
+        // 0.39.0: into the bus (or output) its drum's own channel goes to (the kick's layer onto the KICK bus).
+        if (const auto home = synth::drums::homeChannel (slot); home >= 0 && home < synth::mixer::numChannels)
+        {
+            setParameterNow (ParamIDs::mix (channel, "Output"), (float) getMixerOutput (home));
+            setParameterNow (ParamIDs::mix (channel, "Route"), (float) getMixerRoute (home));
+        }
         setParameterNow (ParamIDs::drum (slot, "LayerOut"), (float) (channel + 1));
         requestCheckpoint();
         return channel;
@@ -1642,6 +1655,48 @@ juce::String ParagonX1AudioProcessor::getMixerChannelName (int channel) const
         return name.isNotEmpty() ? name : "USER " + juce::String (channel - synth::mixer::numChannels + 1);
     }
     return {};
+}
+
+juce::String ParagonX1AudioProcessor::getMixerBusName (int bus) const
+{
+    if (bus < 0 || bus >= synth::mixer::numBuses)
+        return {};
+    const auto& name = matrix.busNames[(size_t) bus];
+    return name.isNotEmpty() ? name : synth::mixer::busNames[bus];
+}
+
+void ParagonX1AudioProcessor::renameBus (int bus, const juce::String& name)
+{
+    if (bus < 0 || bus >= synth::mixer::numBuses)
+        return;
+    auto m = matrix;
+    m.busNames[(size_t) bus] = name.trim().toUpperCase().substring (0, 24);
+    setModMatrix (m);
+    requestCheckpoint();
+}
+
+int ParagonX1AudioProcessor::getMachinePad (int place) const noexcept
+{
+    return place >= 0 && place < ParamIDs::numDrums ? machinePads[(size_t) place] : 0;
+}
+
+void ParagonX1AudioProcessor::setMachinePad (int place, int slot)
+{
+    if (place < 0 || place >= ParamIDs::numDrums || slot < 0 || slot >= ParamIDs::numDrums)
+        return;
+    // Swapped with the place that had it: every drum stays on one place.
+    const auto other = (int) (std::find (machinePads.begin(), machinePads.end(), slot) - machinePads.begin());
+    if (other < ParamIDs::numDrums)
+        machinePads[(size_t) other] = machinePads[(size_t) place];
+    machinePads[(size_t) place] = slot;
+    markModified();
+}
+
+void ParagonX1AudioProcessor::resetMachinePads()
+{
+    for (int i = 0; i < ParamIDs::numDrums; ++i)
+        machinePads[(size_t) i] = i;
+    markModified();
 }
 
 void ParagonX1AudioProcessor::renameUserChannel (int channel, const juce::String& name)
@@ -2628,6 +2683,18 @@ void ParagonX1AudioProcessor::getStateInformation (juce::MemoryBlock& destData)
     }
     if (! songData->isEmpty())
         state.appendChild (juce::ValueTree::fromXml (*songData->toXml()), nullptr);
+    // THE DRUM MACHINE's pads (0.39.0), when they aren't in the kit's order.
+    {
+        juce::StringArray pads;
+        auto moved = false;
+        for (int i = 0; i < ParamIDs::numDrums; ++i)
+        {
+            pads.add (juce::String (machinePads[(size_t) i]));
+            moved = moved || machinePads[(size_t) i] != i;
+        }
+        if (moved)
+            state.appendChild (juce::ValueTree ("MachinePads", { { "slots", pads.joinIntoString (" ") } }), nullptr);
+    }
 
     if (auto xml = state.createXml())
         copyXmlToBinary (*xml, destData);
@@ -2674,6 +2741,8 @@ void ParagonX1AudioProcessor::setStateInformation (const void* data, int sizeInB
             newMatrix = ModMatrix::fromXml (*xml);
         state.removeChild (saved, nullptr);
     }
+    if ((int) state.getProperty (parameterVersionKey, 1) < 5)
+        std::fill (newMatrix.busNames.begin(), newMatrix.busNames.end(), juce::String());   // before the drum buses: unnamed
     // MIDI LEARN's links: the project's, if it has any (else the ones this instance has: its default).
     if (auto saved = state.getChildWithName (midiLinksKey); saved.isValid())
     {
@@ -2704,6 +2773,29 @@ void ParagonX1AudioProcessor::setStateInformation (const void* data, int sizeInB
     }
     // THE SONG TRACK: the project's (none saved: an empty song).
     auto newSong = std::make_shared<song::Song>();
+    // THE DRUM MACHINE's pads (0.39.0): the project's order, if it's a whole one (else the kit's).
+    for (int i = 0; i < ParamIDs::numDrums; ++i)
+        machinePads[(size_t) i] = i;
+    if (auto saved = state.getChildWithName ("MachinePads"); saved.isValid())
+    {
+        const auto tokens = juce::StringArray::fromTokens (saved["slots"].toString(), " ", {});
+        std::array<int, ParamIDs::numDrums> pads {};
+        std::array<bool, ParamIDs::numDrums> seen {};
+        auto whole = tokens.size() == ParamIDs::numDrums;
+        for (int i = 0; whole && i < ParamIDs::numDrums; ++i)
+        {
+            const auto slot = tokens[i].getIntValue();
+            whole = slot >= 0 && slot < ParamIDs::numDrums && ! seen[(size_t) slot];
+            if (whole)
+            {
+                pads[(size_t) i] = slot;
+                seen[(size_t) slot] = true;
+            }
+        }
+        if (whole)
+            machinePads = pads;
+        state.removeChild (saved, nullptr);
+    }
     if (auto saved = state.getChildWithName ("Song"); saved.isValid())
     {
         if (const auto songXml = saved.createXml())
@@ -2719,6 +2811,16 @@ void ParagonX1AudioProcessor::setStateInformation (const void* data, int sizeInB
         startOff.addArray (ParamIDs::slotsAdded033Off);
     if ((int) state.getProperty (parameterVersionKey, 1) < 4)
         startOff.addArray (ParamIDs::slotsAdded036Off);   // 0.36.0's seven
+    // Before 0.39.0's drum buses: a route the project doesn't give is its channel's OUTPUT, as it was then.
+    if ((int) state.getProperty (parameterVersionKey, 1) < 5)
+        for (const auto& id : ParamIDs::routesOnBuses039)
+            if (! state.getChildWithProperty ("id", id).isValid())
+            {
+                juce::ValueTree param ("PARAM");
+                param.setProperty ("id", id, nullptr);
+                param.setProperty ("value", 0.0f, nullptr);
+                state.appendChild (param, nullptr);
+            }
     for (const auto& id : startOff)
         {
             auto param = state.getChildWithProperty ("id", id);

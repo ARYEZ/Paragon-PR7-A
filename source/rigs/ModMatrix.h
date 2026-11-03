@@ -131,12 +131,15 @@ struct ModMatrix
     std::int8_t& micRoute (int piece, int mic) { return micRoutes[(size_t) (piece * synth::mixer::numChannels + mic)]; }
     std::int8_t micRoute (int piece, int mic) const { return micRoutes[(size_t) (piece * synth::mixer::numChannels + mic)]; }
     std::vector<juce::String> userChannelNames = std::vector<juce::String> ((size_t) synth::mixer::numUserChannels);
+    // 0.39.0: the buses' names (empty: BUS n). A fresh mixer's are the drum buses' (KICK, SNARE, TOMS); every save writes
+    // all eight (XML "BusName" index / name), so one saved before 0.39.0 (none written) reads as unnamed.
+    std::vector<juce::String> busNames = [] { std::vector<juce::String> n; for (const auto& b : synth::mixer::defaultBusNames) n.push_back (b); return n; }();
 
     bool operator== (const ModMatrix& o) const noexcept
     {
         return drumPatterns == o.drumPatterns && drumEnvelopes == o.drumEnvelopes && drumVelocityCurves == o.drumVelocityCurves
             && mixerBleed == o.mixerBleed && mixerSends == o.mixerSends && mixerEffects == o.mixerEffects
-            && micRoutes == o.micRoutes && userChannelNames == o.userChannelNames;
+            && micRoutes == o.micRoutes && userChannelNames == o.userChannelNames && busNames == o.busNames;
     }
     bool isEmpty() const noexcept { return *this == ModMatrix {}; }
 
@@ -213,6 +216,12 @@ struct ModMatrix
                     e->setAttribute ("mic", mic + 1);
                     e->setAttribute ("to", to == synth::mixer::routeNone ? 0 : to + 1);   // 0: none, else the channel + 1
                 }
+        for (int b = 0; b < synth::mixer::numBuses; ++b)
+        {
+            auto* e = xml->createNewChildElement ("BusName");
+            e->setAttribute ("index", b + 1);
+            e->setAttribute ("name", busNames[(size_t) b]);
+        }
         for (int u = 0; u < synth::mixer::numUserChannels; ++u)
             if (userChannelNames[(size_t) u].isNotEmpty())
             {
@@ -284,6 +293,10 @@ struct ModMatrix
             if (piece >= 0 && piece < synth::mixer::numPieces && mic >= 0 && mic < synth::mixer::numChannels && to >= 0 && to <= synth::mixer::numMicChannels)
                 m.micRoute (piece, mic) = (std::int8_t) (to == 0 ? synth::mixer::routeNone : to - 1);
         }
+        std::fill (m.busNames.begin(), m.busNames.end(), juce::String());
+        for (const auto* e : xml.getChildWithTagNameIterator ("BusName"))
+            if (const auto b = e->getIntAttribute ("index") - 1; b >= 0 && b < synth::mixer::numBuses)
+                m.busNames[(size_t) b] = e->getStringAttribute ("name").substring (0, 24);
         for (const auto* e : xml.getChildWithTagNameIterator ("UserChannel"))
             if (const auto u = e->getIntAttribute ("index") - 1; u >= 0 && u < synth::mixer::numUserChannels)
                 m.userChannelNames[(size_t) u] = e->getStringAttribute ("name").substring (0, 24);

@@ -93,7 +93,7 @@ private:
     std::unique_ptr<MicSimPanel> micSimPanel;
     juce::TextButton micSimButton { "SIM MICS..." };
     juce::Array<int> shownUsers;
-    std::vector<juce::String> shownUserNames;
+    std::vector<juce::String> shownUserNames, shownBusNames;
     juce::TextButton routeButton { "ROUTE MICS..." };
     std::unique_ptr<EffectEditor> effectEditor;
     int chosenFx = 0;

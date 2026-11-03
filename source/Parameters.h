@@ -46,6 +46,9 @@ namespace ParamIDs
         return saved >= then && saved < 2 * then ? numDrums + (saved - then) : saved;
     }
     // The same for 0.36.0's seven (older presets, kits and projects: off, so their notes play the stand-ins).
+    // 0.39.0: the routes that start on a drum bus (mixer::defaultRouteOf). A preset or project saved before it that doesn't
+    // say has them on the channel's OUTPUT, as it was.
+    inline const juce::StringArray routesOnBuses039 { "mix1Route", "mix2Route", "mix3Route", "mix4Route", "mix6Route", "mix7Route", "mix8Route" };
     inline const juce::StringArray slotsAdded036Off { "drum30On", "drum31On", "drum32On", "drum33On", "drum34On", "drum35On", "drum36On" };
     inline const juce::StringArray slotsAdded033Off { "drum24On", "drum25On", "drum26On", "drum27On", "drum28On", "drum29On" };
     inline const juce::StringArray drumsPedalSteps { "drumsPedal1", "drumsPedal2", "drumsPedal3", "drumsPedal4" };

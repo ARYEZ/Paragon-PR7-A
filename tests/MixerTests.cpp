@@ -597,7 +597,9 @@ TEST_CASE ("MIXER page 0.21.0: bus strips, MICS / BUSES, the OUTPUT and SEND but
     // OUTPUT's words: the output, or the bus / FX bus it's routed into.
     CHECK (page.describeOutput (mixer::room) == "Main");
     p.processor->setMixerRoute (mixer::room, 3);
-    CHECK (page.describeOutput (mixer::room) == "Bus 3");
+    CHECK (page.describeOutput (mixer::room) == "TOMS");   // 0.39.0: the bus by its name (BUS 3 is the drum buses' TOMS)
+    p.processor->setMixerRoute (mixer::room, 4);
+    CHECK (page.describeOutput (mixer::room) == "BUS 4");
     p.processor->setMixerRoute (mixer::room, mixer::firstFxRoute + 1);
     CHECK (page.describeOutput (mixer::room) == "FX Bus B");
     p.processor->setMixerOutput (mixer::room, 4);
@@ -1143,4 +1145,169 @@ TEST_CASE ("MIC ROUTING page: ROUTE MICS... lists the drums and their mics (clos
     page.update();
     page.openRouter (false);
     CHECK (! page.isRouterOpen());
+}
+
+//==============================================================================
+// 0.39.0: THE DRUM BUSES
+TEST_CASE ("THE DRUM BUSES: a fresh mixer groups the kick's, snare's and toms' channels into KICK, SNARE and TOMS", "[mixer][drumbuses]")
+{
+    ParagonX1AudioProcessor p;
+    for (const auto c : { mixer::kickIn, mixer::kickOut })
+        CHECK (p.getMixerRoute (c) == 1);
+    for (const auto c : { mixer::snareTop, mixer::snareBottom })
+        CHECK (p.getMixerRoute (c) == 2);
+    for (const auto c : { mixer::tom1, mixer::tom2, mixer::tom3 })
+        CHECK (p.getMixerRoute (c) == 3);
+    for (const auto c : { mixer::hiHat, mixer::cymbals, mixer::overheads, mixer::room, mixer::ambience, mixer::other })
+        CHECK (p.getMixerRoute (c) == 0);
+    CHECK (p.getMixerRoute (mixer::stripOfChannel (mixer::numChannels)) == 0);   // USER 1
+    CHECK (p.getMixerBusName (0) == "KICK");
+    CHECK (p.getMixerBusName (1) == "SNARE");
+    CHECK (p.getMixerBusName (2) == "TOMS");
+    CHECK (p.getMixerBusName (3) == "BUS 4");
+
+    // Renamed (one undo step); empty is its number again.
+    p.renameBus (3, "fx bus");
+    CHECK (p.getMixerBusName (3) == "FX BUS");
+    p.flushUndoStep();
+    p.undo();
+    CHECK (p.getMixerBusName (3) == "BUS 4");
+    p.renameBus (0, "");
+    CHECK (p.getMixerBusName (0) == "BUS 1");
+}
+
+TEST_CASE ("THE DRUM BUSES: through them, a kit sounds exactly as it did on the channels' outputs", "[mixer][drumbuses]")
+{
+    TempFolder temp;
+    const auto render = [&] (bool buses)
+    {
+        Plugin p (temp.folder.getChildFile ("presets"));
+        p.processor->importSfzKit (writeKit (temp.folder), drums::notemap::Layout::generalMidi);
+        REQUIRE (p.processor->waitForInstruments());
+        p.set (ParamIDs::drumsMap, (float) drums::notemap::Layout::generalMidi);
+        if (! buses)
+            for (int c = 0; c < mixer::numChannels; ++c)
+                p.processor->setMixerRoute (c, 0);
+        auto kick = p.play (36);
+        const auto snare = p.play (38);
+        kick[0].insert (kick[0].end(), snare[0].begin(), snare[0].end());
+        kick[1].insert (kick[1].end(), snare[1].begin(), snare[1].end());
+        return kick;
+    };
+    const auto onBuses = render (true), direct = render (false);
+    REQUIRE (onBuses[0].size() == direct[0].size());
+    auto peak = 0.0f, worst = 0.0f;
+    for (size_t c = 0; c < 2; ++c)
+        for (size_t i = 0; i < direct[c].size(); ++i)
+        {
+            peak = std::max (peak, std::abs (direct[c][i]));
+            worst = std::max (worst, std::abs (direct[c][i] - onBuses[c][i]));
+        }
+    CHECK (peak > 0.05f);
+    CHECK (worst < 1.0e-6f);
+
+    // And a bus fader moves its drum's channels together: KICK at -6 dB, the kick half as loud (its overheads too
+    // stay: they're the OVERHEADS channel's, not the bus's).
+    Plugin p (temp.folder.getChildFile ("presets"));
+    p.processor->importSfzKit (writeKit (temp.folder), drums::notemap::Layout::generalMidi);
+    REQUIRE (p.processor->waitForInstruments());
+    p.set (ParamIDs::drumsMap, (float) drums::notemap::Layout::generalMidi);
+    const auto inBefore = p.level (36, 100.0), ohBefore = p.level (36, 1000.0);
+    p.set (ParamIDs::mixBus (0, "Level"), -6.0f);
+    CHECK (std::abs (juce::Decibels::gainToDecibels (p.level (36, 100.0) / inBefore) + 6.0) < 0.1);
+    CHECK (std::abs (juce::Decibels::gainToDecibels (p.level (36, 1000.0) / ohBefore)) < 0.1);
+}
+
+TEST_CASE ("THE DRUM BUSES: presets and projects from before keep their routes; new ones keep the buses", "[mixer][drumbuses]")
+{
+    // A preset saved before 0.39.0 (parameterVersion 4) that doesn't give the routes: on their outputs, buses unnamed.
+    ParagonX1AudioProcessor p;
+    auto xml = p.captureRig().toXml();
+    REQUIRE (xml != nullptr);
+    xml->setAttribute ("parameterVersion", 4);
+    for (auto* e = xml->getFirstChildElement(); e != nullptr;)
+    {
+        auto* next = e->getNextElement();
+        if (e->hasTagName ("Param") && ParamIDs::routesOnBuses039.contains (e->getStringAttribute ("id")))
+            xml->removeChildElement (e, true);
+        e = next;
+    }
+    if (auto* modulation = xml->getChildByName ("Modulation"))
+        while (auto* name = modulation->getChildByName ("BusName"))
+            modulation->removeChildElement (name, true);
+    const auto old = Rig::fromXml (*xml);
+    REQUIRE (old.has_value());
+    for (const auto& id : ParamIDs::routesOnBuses039)
+        CHECK (juce::roundToInt (old->parameters.at (id)) == 0);
+    CHECK (old->modulation.busNames[0].isEmpty());
+
+    // One saved now: the buses as they were.
+    const auto now = Rig::fromXml (*p.captureRig().toXml());
+    REQUIRE (now.has_value());
+    CHECK (juce::roundToInt (now->parameters.at ("mix1Route")) == 1);
+    CHECK (now->modulation.busNames[0] == "KICK");
+
+    // A project from before: the same.
+    juce::MemoryBlock state;
+    p.getStateInformation (state);
+    auto project = juce::AudioProcessor::getXmlFromBinary (state.getData(), (int) state.getSize());
+    REQUIRE (project != nullptr);
+    project->setAttribute ("parameterVersion", 4);
+    for (auto* e = project->getFirstChildElement(); e != nullptr;)
+    {
+        auto* next = e->getNextElement();
+        if (ParamIDs::routesOnBuses039.contains (e->getStringAttribute ("id")))
+            project->removeChildElement (e, true);
+        e = next;
+    }
+    juce::MemoryBlock oldState;
+    juce::AudioProcessor::copyXmlToBinary (*project, oldState);
+    ParagonX1AudioProcessor q;
+    q.setStateInformation (oldState.getData(), (int) oldState.getSize());
+    CHECK (q.getMixerRoute (mixer::kickIn) == 0);
+    CHECK (q.getMixerRoute (mixer::tom2) == 0);
+    CHECK (q.getMixerBusName (0) == "BUS 1");
+
+    // A project saved now keeps them.
+    ParagonX1AudioProcessor r;
+    r.setStateInformation (state.getData(), (int) state.getSize());
+    CHECK (r.getMixerRoute (mixer::kickIn) == 1);
+    CHECK (r.getMixerBusName (0) == "KICK");
+}
+
+TEST_CASE ("THE DRUM BUSES: a drum's layer channel goes where its drum's channel goes", "[mixer][drumbuses]")
+{
+    TempFolder temp;
+    Plugin p (temp.folder.getChildFile ("presets"));
+    p.processor->importSfzKit (writeKit (temp.folder), drums::notemap::Layout::generalMidi);
+    REQUIRE (p.processor->waitForInstruments());
+    const auto layer = temp.folder.getChildFile ("layer.wav");
+    writeSine (layer, 60.0, 0.25f);
+    p.processor->loadLayer (0, layer);   // the kick: a multi-mic instrument, so its layer gets a USER channel
+    REQUIRE (p.processor->waitForInstruments());
+    const auto out = juce::roundToInt (p.processor->getParameters().getRawParameterValue (ParamIDs::drum (0, "LayerOut"))->load());
+    REQUIRE (out > 0);
+    CHECK (p.processor->getMixerRoute (mixer::stripOfChannel (out - 1)) == 1);   // onto KICK
+}
+
+TEST_CASE ("THE DRUM MACHINE 0.39.0: a pad takes another drum (swapped with its own pad), kept in the project", "[machine]")
+{
+    ParagonX1AudioProcessor p;
+    CHECK (p.getMachinePad (0) == 0);
+    p.setMachinePad (0, 30);   // CRASH 4 onto the first pad: the kick onto CRASH 4's
+    CHECK (p.getMachinePad (0) == 30);
+    CHECK (p.getMachinePad (30) == 0);
+    std::array<bool, ParamIDs::numDrums> seen {};
+    for (int i = 0; i < ParamIDs::numDrums; ++i)
+        seen[(size_t) p.getMachinePad (i)] = true;
+    CHECK (std::all_of (seen.begin(), seen.end(), [] (bool b) { return b; }));
+
+    juce::MemoryBlock state;
+    p.getStateInformation (state);
+    ParagonX1AudioProcessor q;
+    q.setStateInformation (state.getData(), (int) state.getSize());
+    CHECK (q.getMachinePad (0) == 30);
+    CHECK (q.getMachinePad (30) == 0);
+    q.resetMachinePads();
+    CHECK (q.getMachinePad (0) == 0);
 }

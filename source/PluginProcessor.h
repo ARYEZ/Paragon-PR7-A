@@ -228,6 +228,14 @@ public:
     juce::Array<int> getUserChannelsInUse() const;
     juce::String getMixerChannelName (int channel) const;
     void renameUserChannel (int channel, const juce::String& name);
+    // 0.39.0: a bus's name (its own, else BUS n), and renaming it (empty: BUS n again). One undo step.
+    juce::String getMixerBusName (int bus) const;
+    void renameBus (int bus, const juce::String& name);
+    // THE DRUM MACHINE's pads (0.39.0): which drum each of its 36 places (2 banks x 18 columns) plays, all 36 drums in some
+    // order (setting one swaps it with the place that had that drum). Kept in the project, not in presets.
+    int getMachinePad (int place) const noexcept;
+    void setMachinePad (int place, int slot);
+    void resetMachinePads();
     void applyMixerOutputs (bool multichannel);
     static int multichannelOutputOf (int channel) noexcept;
     // A channel's or bus's (strip: the channels, then the buses) destination as its OUTPUT menu shows it: a route
@@ -723,6 +731,7 @@ private:
     // THE DRUM MACHINE's clock and REC (audio thread but the atomics): the sequencer's song position and tempo this block
     // (the DAW's while it plays, else PLAY's own, else -1), and the notes on their way to the pattern.
     std::atomic<bool> machinePlaying { false }, machineRestart { false }, machineRecording { false }, dawPlaying { false };
+    std::array<int, ParamIDs::numDrums> machinePads = [] { std::array<int, ParamIDs::numDrums> a {}; for (int i = 0; i < ParamIDs::numDrums; ++i) a[(size_t) i] = i; return a; }();
     double machineBeat = 0.0, seqPpq = -1.0, seqBpm = 120.0;
     struct MachineNote { double step = 0.0; int slot = 0; float velocity = 1.0f; int pattern = 0; };
     juce::AbstractFifo machineFifo { 1024 };

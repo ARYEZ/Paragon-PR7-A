@@ -28,7 +28,7 @@ namespace
     bool isUser (int strip) noexcept { return mixer::isUserChannel (mixer::channelOfStrip (strip)); }
     juce::String stripName (const ParagonX1AudioProcessor& p, int strip)
     {
-        return isBus (strip) ? mixer::busNames[strip - mixer::numChannels] : p.getMixerChannelName (mixer::channelOfStrip (strip));
+        return isBus (strip) ? p.getMixerBusName (strip - mixer::numChannels) : p.getMixerChannelName (mixer::channelOfStrip (strip));
     }
     juce::String stripId (int strip, const char* what)
     {
@@ -230,18 +230,27 @@ public:
     {
         if (e.y > getHeight() - 30 || (isBus (strip) && e.y < 66))
             page.selectStrip (strip);
-        // A user channel's name: right-click to rename it (0.23.0).
-        if (isUser (strip) && e.y > getHeight() - 30 && e.mods.isPopupMenu())
+        // A user channel's or (0.39.0) a bus's name: right-click to rename it (0.23.0).
+        if ((isUser (strip) || isBus (strip)) && e.y > getHeight() - 30 && e.mods.isPopupMenu())
         {
-            auto* window = new juce::AlertWindow ("RENAME CHANNEL", "A name for this channel:", juce::MessageBoxIconType::NoIcon);
-            window->addTextEditor ("name", page.processor.getMixerChannelName (mixer::channelOfStrip (strip)));
+            const auto bus = isBus (strip);
+            auto* window = new juce::AlertWindow (bus ? "RENAME BUS" : "RENAME CHANNEL", bus ? "A name for this bus (empty: its number):"
+                                                                                            : "A name for this channel:",
+                                                  juce::MessageBoxIconType::NoIcon);
+            window->addTextEditor ("name", stripName (page.processor, strip));
             window->addButton ("OK", 1, juce::KeyPress (juce::KeyPress::returnKey));
             window->addButton ("CANCEL", 0, juce::KeyPress (juce::KeyPress::escapeKey));
             juce::Component::SafePointer<Strip> safe (this);
             window->enterModalState (true, juce::ModalCallbackFunction::create ([safe, window] (int result)
             {
                 if (safe != nullptr && result == 1)
-                    safe->page.processor.renameUserChannel (mixer::channelOfStrip (safe->strip), window->getTextEditorContents ("name"));
+                {
+                    if (isBus (safe->strip))
+                        safe->page.processor.renameBus (safe->strip - mixer::numChannels, window->getTextEditorContents ("name"));
+                    else
+                        safe->page.processor.renameUserChannel (mixer::channelOfStrip (safe->strip), window->getTextEditorContents ("name"));
+                    safe->repaint();
+                }
             }), true);
         }
     }
@@ -412,7 +421,10 @@ public:
         refreshing = true;
         target.setSelectedId (d.target + 1, juce::dontSendNotification);
         for (int b = 0; b < mixer::numBuses; ++b)
+        {
+            target.changeItemText (b + 2, page.processor.getMixerBusName (b));   // 0.39.0: the buses by their names
             target.setItemEnabled (b + 2, mixer::canFeedBus (strip, b));
+        }
         mode.setSelectedId ((int) d.mode + 1, juce::dontSendNotification);
         link.setToggleState (d.link, juce::dontSendNotification);
         directOn.setToggleState (d.directOn, juce::dontSendNotification);
@@ -1277,7 +1289,7 @@ juce::String MixerPage::describeOutput (int strip) const
 {
     const auto route = processor.getMixerRoute (strip);
     if (const auto b = mixer::busOfTarget (route); b >= 0 && mixer::canFeedBus (strip, b))
-        return mixer::routeNames[route];
+        return processor.getMixerBusName (b);
     if (mixer::fxBusOfTarget (route) >= 0)
         return mixer::routeNames[route];
     return ParamIDs::outputNames[juce::jlimit (0, ParamIDs::numOutputs - 1, processor.getMixerOutput (strip))];
@@ -1286,6 +1298,8 @@ juce::String MixerPage::describeOutput (int strip) const
 juce::String MixerPage::describeSend (int strip, int slot) const
 {
     const auto& d = processor.getModMatrix().send (strip, slot);
+    if (const auto b = mixer::busOfTarget (d.target); d.isOn() && b >= 0)
+        return processor.getMixerBusName (b);
     return d.isOn() ? mixer::sendTargetNames[d.target] : juce::String ("+ SEND");
 }
 
@@ -1299,7 +1313,7 @@ void MixerPage::showOutputMenu (int strip, juce::Component& from)
         menu.addItem (1 + o, ParamIDs::outputNames[o], true, route == 0 && output == o && current == ParamIDs::outputNames[o]);
     menu.addSectionHeader ("BUSES");
     for (int b = 0; b < mixer::numBuses; ++b)
-        menu.addItem (101 + b, mixer::routeNames[b + 1], mixer::canFeedBus (strip, b), route == b + 1);
+        menu.addItem (101 + b, processor.getMixerBusName (b), mixer::canFeedBus (strip, b), route == b + 1);
     menu.addSectionHeader ("FX BUSES (THE FX PAGE'S INSERT BUSES)");
     for (int f = 0; f < mixer::numFxBuses; ++f)
         menu.addItem (201 + f, mixer::routeNames[mixer::firstFxRoute + f], true, route == mixer::firstFxRoute + f);
@@ -1327,7 +1341,7 @@ void MixerPage::showSendMenu (int strip, int slot, juce::Component& from)
     menu.addItem (1000, "Off", current != 0, current == 0);
     menu.addSectionHeader ("BUSES");
     for (int b = 0; b < mixer::numBuses; ++b)
-        menu.addItem (b + 1, mixer::sendTargetNames[b + 1], mixer::canFeedBus (strip, b), current == b + 1);
+        menu.addItem (b + 1, processor.getMixerBusName (b), mixer::canFeedBus (strip, b), current == b + 1);
     menu.addSectionHeader ("FX BUSES (THE FX PAGE'S INSERT BUSES)");
     for (int f = 0; f < mixer::numFxBuses; ++f)
         menu.addItem (mixer::firstFxRoute + f, mixer::sendTargetNames[mixer::firstFxRoute + f], true, current == mixer::firstFxRoute + f);
@@ -1616,10 +1630,12 @@ void MixerPage::update()
         effectEditor->showReductions();
     }
     // The user channels in use and their names (routes changed by undo, a preset, the panel).
-    if (const auto users = processor.getUserChannelsInUse(); users != shownUsers || processor.getModMatrix().userChannelNames != shownUserNames)
+    if (const auto users = processor.getUserChannelsInUse(); users != shownUsers || processor.getModMatrix().userChannelNames != shownUserNames
+                                                              || processor.getModMatrix().busNames != shownBusNames)
     {
         shownUsers = users;
         shownUserNames = processor.getModMatrix().userChannelNames;
+        shownBusNames = processor.getModMatrix().busNames;   // 0.39.0
         if (! isStripShown (selected))
             selectStrip (0);
         resized();

@@ -199,7 +199,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
             add (layout, mix (c, "Release"), name + "Release", { 0.0f, 2000.0f, 1.0f }, 0.0f,
                  [] (float v, int) { return v < 0.5f ? juce::String ("Off") : juce::String (juce::roundToInt (v)) + " ms"; }, hint020);
             addChoice (layout, mix (c, "Output"), name + "Output", outputNames, 0, hint020);
-            addChoice (layout, mix (c, "Route"), name + "Route", synth::mixer::routeNames, 0, hint021);
+            addChoice (layout, mix (c, "Route"), name + "Route", synth::mixer::routeNames,
+                       user ? 0 : synth::mixer::defaultRouteOf (c), hint021);   // 0.39.0: the drum buses
         }
         for (int b = 0; b < synth::mixer::numBuses; ++b)
         {

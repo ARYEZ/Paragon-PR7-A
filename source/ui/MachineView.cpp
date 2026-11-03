@@ -129,7 +129,7 @@ private:
 class MachineView::Pad final : public juce::Component, public juce::SettableTooltipClient
 {
 public:
-    std::function<void()> onHit;
+    std::function<void()> onHit, onMenu;
 
     void setLight (float newLight)
     {
@@ -176,8 +176,14 @@ public:
         }
     }
 
-    void mouseDown (const juce::MouseEvent&) override
+    void mouseDown (const juce::MouseEvent& e) override
     {
+        if (e.mods.isPopupMenu())
+        {
+            if (onMenu)
+                onMenu();
+            return;
+        }
         pressed = true;
         repaint();
         if (onHit)
@@ -243,6 +249,7 @@ MachineView::MachineView (ParagonX1AudioProcessor& p) : processor (p)
                 onChoose (slot);
             processor.previewDrum (slot);
         };
+        pads[(size_t) c]->onMenu = [this, c] { showPadMenu (c); };
         addAndMakeVisible (*pads[(size_t) c]);
     }
 
@@ -309,6 +316,60 @@ MachineView::MachineView (ParagonX1AudioProcessor& p) : processor (p)
 
 MachineView::~MachineView() = default;
 
+int MachineView::slotOfColumn (int column) const noexcept
+{
+    return processor.getMachinePad (bank * numColumns + juce::jlimit (0, numColumns - 1, column));
+}
+
+void MachineView::assignPad (int column, int slot)
+{
+    processor.setMachinePad (bank * numColumns + juce::jlimit (0, numColumns - 1, column), slot);
+    update();   // the columns rebound
+}
+
+void MachineView::showPadMenu (int column)
+{
+    const auto current = slotOfColumn (column);
+    juce::PopupMenu menu;
+    menu.addSectionHeader ("THE DRUM ON THIS PAD (IT SWAPS WITH ITS OWN PAD)");
+    for (int slot = 0; slot < ParamIDs::numDrums; ++slot)
+    {
+        const auto place = [this, slot]
+        {
+            for (int i = 0; i < ParamIDs::numDrums; ++i)
+                if (processor.getMachinePad (i) == slot)
+                    return i;
+            return -1;
+        }();
+        const auto where = place >= 0 ? (place < numColumns ? "  (bank 1-18)" : "  (bank 19-36)") : "";
+        menu.addItem (slot + 1, nameOf (slot) + where, true, slot == current);
+    }
+    menu.addSeparator();
+    menu.addItem (1000, "Every pad back in the kit's order");
+    juce::Component::SafePointer<MachineView> safe (this);
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (pads[(size_t) column].get()), [safe, column] (int chosen)
+    {
+        if (safe == nullptr || chosen == 0)
+            return;
+        if (chosen == 1000)
+        {
+            safe->processor.resetMachinePads();
+            safe->update();
+        }
+        else
+            safe->assignPad (column, chosen - 1);
+    });
+}
+
+void MachineView::mouseDown (const juce::MouseEvent& e)
+{
+    // A drum's name: right-click to put another drum on its pad.
+    if (e.mods.isPopupMenu() && namesArea.contains (e.getPosition()))
+        for (int c = 0; c < numColumns; ++c)
+            if (at (column (c) - 8, 778, 102, 16).contains (e.position))
+                showPadMenu (c);
+}
+
 juce::String MachineView::nameOf (int slot)
 {
     return slot >= 0 && slot < (int) std::size (padNames) ? padNames[slot] : "";
@@ -354,7 +415,8 @@ void MachineView::bindColumns()
         bindKnob (*tunes[(size_t) c], ParamIDs::drum (slot, "Pitch"), "TUNE: its pitch, in semitones (the DRUM view's PITCH)");
         bindKnob (*decays[(size_t) c], ParamIDs::drum (slot, "Decay"), "DECAY: how long it rings");
         faders[(size_t) c]->bind (state.getParameter (ParamIDs::drum (slot, "Level")));
-        pads[(size_t) c]->setTooltip (name + ": click to choose it and hear it (its steps below)");
+        pads[(size_t) c]->setTooltip (name + ": click to choose it and hear it (its steps below). Right-click: put another drum "
+                                      "on this pad.");
     }
 }
 
@@ -599,6 +661,19 @@ void MachineView::refreshKeys()
 
 void MachineView::update()
 {
+    // The pads' drums (0.39.0): rebound when they change (a pad picked, a project loaded).
+    {
+        std::array<int, numColumns> slots {};
+        for (int c = 0; c < numColumns; ++c)
+            slots[(size_t) c] = slotOfColumn (c);
+        if (slots != shownSlots)
+        {
+            shownSlots = slots;
+            bindColumns();
+            shownChosen = -1;
+            repaint (namesArea);
+        }
+    }
     if (processor.isMachineRecording())
         processor.mergeMachineNotes();
     const auto& kit = processor.getDrumKit();

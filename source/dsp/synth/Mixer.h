@@ -96,6 +96,21 @@ namespace synth::mixer
     inline const juce::StringArray routeNames { "Output", "Bus 1", "Bus 2", "Bus 3", "Bus 4", "Bus 5", "Bus 6", "Bus 7", "Bus 8",
                                                 "FX Bus A", "FX Bus B", "FX Bus C", "FX Bus D" };
     inline constexpr int firstFxRoute = 9, numFxBuses = 4;
+    // 0.39.0, THE DRUM BUSES: a fresh mixer groups each drum's channels (the owner's ask): the kick's (KICK IN, KICK OUT)
+    // into BUS 1, the snare's (TOP, BOTTOM) into BUS 2, the toms' into BUS 3, named KICK, SNARE and TOMS (`defaultBusNames`:
+    // a bus with no name of its own shows BUS n). A channel made later for a drum (its layer, a sample pack's extra mics)
+    // follows its drum's channel there. At 0 dB and centred a bus adds its channels up unchanged, so nothing sounds different.
+    inline int defaultRouteOf (int channel) noexcept
+    {
+        switch (channel)
+        {
+            case kickIn: case kickOut: return 1;
+            case snareTop: case snareBottom: return 2;
+            case tom1: case tom2: case tom3: return 3;
+            default: return 0;
+        }
+    }
+    inline const juce::StringArray defaultBusNames { "KICK", "SNARE", "TOMS", "", "", "", "", "" };
     // A send's TARGET, by index (saved: only append): 0 off, 1-8 BUS 1-8, 9-12 FX BUS A-D, 13 DELAY, 14 REVERB.
     inline const juce::StringArray sendTargetNames { "Off", "Bus 1", "Bus 2", "Bus 3", "Bus 4", "Bus 5", "Bus 6", "Bus 7", "Bus 8",
                                                      "FX Bus A", "FX Bus B", "FX Bus C", "FX Bus D", "Delay", "Reverb" };
