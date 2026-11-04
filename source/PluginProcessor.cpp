@@ -37,6 +37,7 @@ namespace
 juce::AudioProcessor::BusesProperties ParagonX1AudioProcessor::makeOutputBuses()
 {
     static_assert (synth::numOutputs == ParamIDs::numOutputs);
+    static_assert (synth::drums::numLayers == ParamIDs::numLayers);
     auto buses = BusesProperties().withOutput ("Main", juce::AudioChannelSet::stereo(), true);
     for (int o = 1; o < synth::numOutputs; ++o)
         buses = buses.withOutput (ParamIDs::outputNames[o], juce::AudioChannelSet::stereo(), false);
@@ -983,6 +984,8 @@ void ParagonX1AudioProcessor::compileMatrix()
         compiled->drumEnvelopes[k] = matrix.drumEnvelopes[k].toShape();
     for (size_t k = 0; k < compiled->velocityCurves.size() && k < matrix.drumVelocityCurves.size(); ++k)
         compiled->velocityCurves[k] = matrix.drumVelocityCurves[k];
+    for (size_t i = 0; i < compiled->layers.size() && i < matrix.drumLayers.size(); ++i)   // 0.50.0
+        compiled->layers[i] = matrix.drumLayers[i];
     for (int c = 0; c < synth::mixer::numChannels; ++c)
         for (int p = 0; p < synth::mixer::numPieces; ++p)
             compiled->bleed[(size_t) c][(size_t) p] = matrix.bleed (c, p);
@@ -1041,7 +1044,7 @@ bool ParagonX1AudioProcessor::loadDrumSample (int slot, const juce::File& file)
     slot = juce::jlimit (0, ParamIDs::numDrums - 1, slot);
     setDrumSample (slot, std::move (sample));
     setDrumInstrument (slot, nullptr);   // one file in place of an instrument
-    instrumentRefs[(size_t) slot] = {};
+    forgetLoad ((int) slot);
     // A new file plays whole: START and END go back to its ends.
     for (const auto& [what, value] : { std::pair { "SampleStart", 0.0f }, std::pair { "SampleEnd", 1.0f } })
         if (auto* parameter = parameters.getParameter (ParamIDs::drum (slot, what)))
@@ -1070,7 +1073,7 @@ void ParagonX1AudioProcessor::clearDrumSample (int slot)
 {
     setDrumSample (slot, nullptr);
     setDrumInstrument (slot, nullptr);
-    instrumentRefs[(size_t) juce::jlimit (0, ParamIDs::numDrums - 1, slot)] = {};
+    forgetLoad ((int) juce::jlimit (0, ParamIDs::numDrums - 1, slot));
     markModified();
     requestCheckpoint();
 }
@@ -1079,12 +1082,12 @@ void ParagonX1AudioProcessor::clearDrumSample (int slot)
 // THE SAMPLE ENGINE (0.19.0)
 std::shared_ptr<const synth::drums::Instrument> ParagonX1AudioProcessor::getDrumInstrument (int slot) const
 {
-    return drumInstruments[(size_t) juce::jlimit (0, 2 * ParamIDs::numDrums - 1, slot)];
+    return drumInstruments[(size_t) juce::jlimit (0, ParamIDs::numInstruments - 1, slot)];
 }
 
 void ParagonX1AudioProcessor::setDrumInstrument (int slot, std::shared_ptr<const synth::drums::Instrument> instrument)
 {
-    slot = juce::jlimit (0, 2 * ParamIDs::numDrums - 1, slot);   // 0.29.0: a layer's too
+    slot = juce::jlimit (0, ParamIDs::numInstruments - 1, slot);   // 0.29.0: a layer's too
     if (drumInstruments[(size_t) slot] == instrument)
         return;
     // A replaced instrument stays until its longest hit can't still be playing (0.28.0: a streamed cymbal rings for
@@ -1110,7 +1113,10 @@ void ParagonX1AudioProcessor::startLoading (std::vector<std::pair<int, juce::Str
 {
     const auto generation = ++loadGeneration;
     for (const auto& [slot, ref] : refs)
+    {
         instrumentRefs[(size_t) slot] = ref;
+        slotLoadGeneration[(size_t) slot] = generation;
+    }
     if (refs.empty())
         return;
     ++pendingLoads;
@@ -1128,8 +1134,10 @@ void ParagonX1AudioProcessor::startLoading (std::vector<std::pair<int, juce::Str
         loadsDone = 0;
         for (const auto& [slot, ref] : refs)
         {
-            if (alive.expired() || loadGeneration.load() != generation)
+            if (alive.expired())
                 break;
+            if (slotLoadGeneration[(size_t) slot].load() != generation)   // a newer load of this slot has it
+                continue;
             if (loadGeneration.load() == generation)
                 loadsDone = (int) done.size();
             const auto parts = juce::StringArray::fromTokens (ref, "|", {});
@@ -1198,9 +1206,16 @@ void ParagonX1AudioProcessor::startLoading (std::vector<std::pair<int, juce::Str
         }
         {
             const std::scoped_lock lock (loadedLock);
-            if (loadGeneration.load() == generation)
+            auto any = false;
+            for (const auto& item : done)
+                if (slotLoadGeneration[(size_t) item.first].load() == generation)
+                {
+                    loadedInstruments.push_back (item);
+                    loadedGenerations.push_back (generation);
+                    any = true;
+                }
+            if (any || loadGeneration.load() == generation)
             {
-                loadedInstruments.insert (loadedInstruments.end(), done.begin(), done.end());
                 problems.removeDuplicates (false);
                 loadProblems = problems;
             }
@@ -1214,15 +1229,26 @@ void ParagonX1AudioProcessor::startLoading (std::vector<std::pair<int, juce::Str
     });
 }
 
+void ParagonX1AudioProcessor::forgetLoad (int slot)
+{
+    // Taken away: no load still running for it puts anything there (and the loader skips it).
+    instrumentRefs[(size_t) slot] = {};
+    slotLoadGeneration[(size_t) slot] = ++loadGeneration;
+}
+
 void ParagonX1AudioProcessor::installLoadedInstruments()
 {
     std::vector<std::pair<int, std::shared_ptr<const synth::drums::Instrument>>> ready;
+    std::vector<int> generations;
     {
         const std::scoped_lock lock (loadedLock);
         ready.swap (loadedInstruments);
+        generations.swap (loadedGenerations);
     }
-    for (const auto& [slot, instrument] : ready)
-        setDrumInstrument (slot, instrument);
+    // Only what's still wanted: no newer load of that slot since, and not taken away meanwhile.
+    for (size_t i = 0; i < ready.size(); ++i)
+        if (const auto slot = ready[i].first; slotLoadGeneration[(size_t) slot].load() == generations[i] && instrumentRefs[(size_t) slot].isNotEmpty())
+            setDrumInstrument (slot, ready[i].second);
 }
 
 juce::StringArray ParagonX1AudioProcessor::getInstrumentProblems() const
@@ -1355,7 +1381,8 @@ ParagonX1AudioProcessor::SamplePackImport ParagonX1AudioProcessor::importSampleP
         setDrumSample (slot, nullptr);
         makeSlotPlaySample (slot);
         setParameterNow (ParamIDs::drum (slot, "On"), 1.0f);
-        setParameterNow (ParamIDs::drum (slot, "LayerOut"), 0.0f);   // (a layer's USER channel may be one of the pack's now)
+        for (int n = 0; n < ParamIDs::numLayers; ++n)   // (a layer's USER channel may be one of the pack's now)
+            setParameterNow (ParamIDs::drum (slot, ParamIDs::layerOut (n)), 0.0f);
         refs.emplace_back (slot, "pack2|" + juce::String (slot) + "|{kit:" + info.name + "}/");
     }
     using namespace synth::drums::notemap;
@@ -1404,16 +1431,25 @@ void ParagonX1AudioProcessor::loadInstrumentRef (int slot, const juce::String& r
     requestCheckpoint();
 }
 
-void ParagonX1AudioProcessor::loadLayer (int slot, const juce::File& fileOrFolder)
+void ParagonX1AudioProcessor::loadLayer (int slot, const juce::File& fileOrFolder, int n)
 {
     slot = juce::jlimit (0, ParamIDs::numDrums - 1, slot);
-    startLoading ({ { layerOf (slot), (fileOrFolder.isDirectory() ? "folder||" : "file||") + fileOrFolder.getFullPathName() } });
-    // Through the mixer (a multi-mic drum, or one heard through SIMULATED MICS): a channel of its own, the drum's own
-    // close mics 10 dB down so the layer leads (its room, overheads and bleed stay as they are).
+    n = juce::jlimit (0, ParamIDs::numLayers - 1, n);
+    // The drum had no layer yet: this one leads (its own close mics 10 dB down, below).
+    auto first = true;
+    for (int other = 0; other < ParamIDs::numLayers; ++other)
+        if (other != n && getLayerRef (slot, other).isNotEmpty())
+            first = false;
+    const auto ref = juce::String (fileOrFolder.isDirectory() ? "folder||" : "file||") + fileOrFolder.getFullPathName();
+    startLoading ({ { layerOf (slot, n), ref } });
+    // Through the mixer (a multi-mic drum, or one heard through SIMULATED MICS, or a multi-mic layer): a channel of its
+    // own, and with the first layer the drum's own close mics 10 dB down so the layer leads (its room, overheads and
+    // bleed stay as they are).
     const auto instrument = drumInstruments[(size_t) slot];
     const auto micSim = param (ParamIDs::drumsMicSim) > 0.5f;
-    if ((instrument != nullptr && instrument->hasMics()) || micSim)
-        if (createLayerChannel (slot) >= 0)
+    const auto multiMicLayer = fileOrFolder.isDirectory() && synth::drums::instruments::hasMicFolders (fileOrFolder);
+    if ((instrument != nullptr && instrument->hasMics()) || micSim || multiMicLayer)
+        if (createLayerChannel (slot, n) >= 0 && first)
         {
             const auto piece = synth::drums::pieceOfSlot (slot);
             for (int c = 0; c < synth::mixer::numChannels && piece >= 0; ++c)
@@ -1428,18 +1464,255 @@ void ParagonX1AudioProcessor::loadLayer (int slot, const juce::File& fileOrFolde
     requestCheckpoint();
 }
 
-void ParagonX1AudioProcessor::clearLayer (int slot)
+void ParagonX1AudioProcessor::clearLayer (int slot, int n)
 {
     slot = juce::jlimit (0, ParamIDs::numDrums - 1, slot);
-    setDrumInstrument (layerOf (slot), nullptr);
-    instrumentRefs[(size_t) layerOf (slot)] = {};
+    n = juce::jlimit (0, ParamIDs::numLayers - 1, n);
+    setDrumInstrument (layerOf (slot, n), nullptr);
+    forgetLoad ((int) layerOf (slot, n));
+    // Its settings back to new, and its USER channel let go (it can't be used by anything else then).
+    auto m = matrix;
+    m.layer (slot, n) = {};
+    setModMatrix (m);
+    setParameterNow (ParamIDs::drum (slot, ParamIDs::layerOut (n)), 0.0f);
     markModified();
     requestCheckpoint();
 }
 
-int ParagonX1AudioProcessor::createLayerChannel (int slot)
+int ParagonX1AudioProcessor::firstFreeLayer (int slot) const
+{
+    for (int n = 0; n < ParamIDs::numLayers; ++n)
+        if (getLayerRef (slot, n).isEmpty())
+            return n;
+    return -1;
+}
+
+void ParagonX1AudioProcessor::setLayerTweak (int slot, int n, const synth::drums::LayerTweak& tweak, bool final)
 {
     slot = juce::jlimit (0, ParamIDs::numDrums - 1, slot);
+    n = juce::jlimit (0, ParamIDs::numLayers - 1, n);
+    auto t = tweak;
+    t.pitch = juce::jlimit (-24.0f, 24.0f, t.pitch);
+    t.offsetMs = juce::jlimit (-50.0f, 50.0f, t.offsetMs);
+    t.lengthMs = juce::jlimit (0.0f, 5000.0f, t.lengthMs);
+    t.velLo = juce::jlimit (0, 127, t.velLo);
+    t.velHi = juce::jlimit (t.velLo, 127, t.velHi);
+    if (! (matrix.layer (slot, n) == t))
+    {
+        auto m = matrix;
+        m.layer (slot, n) = t;
+        setModMatrix (m);
+        markModified();
+    }
+    if (final)
+        modMatrixEditFinished();
+}
+
+namespace
+{
+    // A hit as one line of samples: its channels averaged.
+    ParagonX1AudioProcessor::ReferenceHit monoOf (const synth::drums::Sample* sample)
+    {
+        ParagonX1AudioProcessor::ReferenceHit hit;
+        if (sample == nullptr || sample->length() < 2 || sample->channels.empty())
+            return hit;
+        hit.sampleRate = sample->sampleRate;
+        hit.samples.assign ((size_t) sample->length(), 0.0f);
+        const auto share = 1.0f / (float) sample->channels.size();
+        for (const auto& c : sample->channels)
+            for (size_t i = 0; i < hit.samples.size() && i < c.size(); ++i)
+                hit.samples[i] += c[i] * share;
+        return hit;
+    }
+
+    // The part of an instrument's hit that's the drum's own close sound: its close mic (the slot's home channel first,
+    // then another of its direct ones), else the hit (its files summed).
+    const synth::drums::Sample* closeSoundOf (const synth::drums::Instrument& instrument, int slot, int velocity)
+    {
+        const auto layer = instrument.layerFor (velocity);
+        if (layer < 0 || instrument.layers[(size_t) layer].hits.empty())
+            return nullptr;
+        const auto& hit = instrument.layers[(size_t) layer].hits.front();
+        const synth::drums::Sample* found = nullptr;
+        const auto home = synth::drums::homeChannel (slot);
+        for (const auto& mic : hit.mics)
+        {
+            const auto channel = mic.channel >= 0 ? mic.channel : home;
+            if (channel == home && mic.sample != nullptr)
+                return mic.sample.get();
+            if (found == nullptr && mic.sample != nullptr
+                && (channel >= synth::mixer::numChannels || (synth::drums::isDirect (slot, channel) && ! synth::mixer::hearsWholeKit (channel))))
+                found = mic.sample.get();
+        }
+        return found != nullptr ? found : hit.sample.get();
+    }
+}
+
+ParagonX1AudioProcessor::ReferenceHit ParagonX1AudioProcessor::getDrumHitForAlign (int slot, int velocity) const
+{
+    slot = juce::jlimit (0, ParamIDs::numDrums - 1, slot);
+    velocity = juce::jlimit (1, 127, velocity);
+    const auto kit = getKitSettings();
+    const auto& s = kit.slots[(size_t) slot];
+    if (s.model == synth::drums::Model::sample)
+    {
+        if (const auto& instrument = drumInstruments[(size_t) slot])
+            return monoOf (closeSoundOf (*instrument, slot, velocity));
+        return monoOf (drumSamples[(size_t) slot].get());
+    }
+    // A drum synth: its hit, made now (at the plugin's rate), its VOLUME and the rest left out.
+    auto plain = s;
+    plain.gain = plain.trim = 1.0f;
+    plain.envelope = nullptr;
+    plain.delay = 0.0f;
+    plain.layers = {};
+    const auto rate = getSampleRate() > 0.0 ? getSampleRate() : 48000.0;
+    const auto buffer = synth::drums::Kit::renderHit (plain, (float) velocity / 127.0f, rate, 0.25);
+    ReferenceHit hit;
+    hit.sampleRate = rate;
+    hit.samples.assign ((size_t) buffer.getNumSamples(), 0.0f);
+    for (int c = 0; c < buffer.getNumChannels(); ++c)
+        for (int i = 0; i < buffer.getNumSamples(); ++i)
+            hit.samples[(size_t) i] += buffer.getSample (c, i) / (float) buffer.getNumChannels();
+    return hit;
+}
+
+ParagonX1AudioProcessor::ReferenceHit ParagonX1AudioProcessor::getLayerHitForAlign (int slot, int n, int velocity) const
+{
+    const auto layer = getLayer (slot, n);
+    if (layer == nullptr)
+        return {};
+    return monoOf (closeSoundOf (*layer, juce::jlimit (0, ParamIDs::numDrums - 1, slot), juce::jlimit (1, 127, velocity)));
+}
+
+ParagonX1AudioProcessor::Alignment ParagonX1AudioProcessor::findAlignment (const ReferenceHit& drum, const ReferenceHit& layer)
+{
+    Alignment result;
+    if (drum.samples.size() < 64 || layer.samples.size() < 64 || drum.sampleRate <= 0.0 || layer.sampleRate <= 0.0)
+    {
+        result.problem = "One of the two has no hit to compare.";
+        return result;
+    }
+    // Both at one rate (the drum's), the layer read in between its samples where its rate differs.
+    const auto rate = drum.sampleRate;
+    std::vector<float> l;
+    {
+        const auto ratio = layer.sampleRate / rate;
+        const auto count = (size_t) ((double) layer.samples.size() / ratio);
+        l.resize (count);
+        for (size_t i = 0; i < count; ++i)
+        {
+            const auto x = (double) i * ratio;
+            const auto i0 = (size_t) x;
+            const auto f = (float) (x - (double) i0);
+            const auto a = layer.samples[juce::jmin (i0, layer.samples.size() - 1)];
+            const auto b = layer.samples[juce::jmin (i0 + 1, layer.samples.size() - 1)];
+            l[i] = a + (b - a) * f;
+        }
+    }
+    const auto& d = drum.samples;
+    // Each one's start: the first sample past a tenth of its peak, moved back to where its rise begins (a twentieth).
+    const auto onsetOf = [] (const std::vector<float>& x)
+    {
+        float peak = 0.0f;
+        for (const auto v : x)
+            peak = juce::jmax (peak, std::abs (v));
+        if (peak <= 1.0e-6f)
+            return -1;
+        auto i = 0;
+        while (i < (int) x.size() && std::abs (x[(size_t) i]) < 0.1f * peak)
+            ++i;
+        while (i > 0 && std::abs (x[(size_t) i - 1]) > 0.02f * peak)
+            --i;
+        return i;
+    };
+    const auto od = onsetOf (d), ol = onsetOf (l);
+    if (od < 0 || ol < 0)
+    {
+        result.problem = "One of the two is silent.";
+        return result;
+    }
+    // Then the delay, in two steps, over the drum's first 20 ms (from 1 ms before its start), within 3 ms of the starts
+    // lining up. First their loudness shapes (each sample's size, smoothed over 1.5 ms: longer than a low drum's wave's half cycle, so its ripple doesn't count): two different
+    // drums (another pitch, another decay) still rise together, where comparing their waveforms alone could lock onto
+    // the wrong cycle. Then the waveforms within 0.3 ms of that, for the exact sample and the polarity. The lag: the
+    // layer's sample i + lag matches the drum's sample i.
+    const auto from = juce::jmax (0, od - (int) (0.001 * rate));
+    const auto window = (int) (0.02 * rate);
+    const auto reach = (int) (0.003 * rate);
+    const auto centre = ol - od;
+    const auto envelopeOf = [rate] (const std::vector<float>& x)
+    {
+        std::vector<float> e (x.size());
+        const auto coef = (float) std::exp (-1.0 / (0.0015 * rate));
+        float state = 0.0f;
+        for (size_t i = 0; i < x.size(); ++i)
+            e[i] = state = std::abs (x[i]) + coef * (state - std::abs (x[i]));
+        return e;
+    };
+    // How alike two lines are at a lag (-1 to 1: turned over), over the window.
+    const auto likeness = [from, window] (const std::vector<float>& a, const std::vector<float>& b, int lag)
+    {
+        double sum = 0.0, ea = 0.0, eb = 0.0;
+        for (int i = from; i < from + window && i < (int) a.size(); ++i)
+        {
+            const auto j = i + lag;
+            const auto y = j >= 0 && j < (int) b.size() ? (double) b[(size_t) j] : 0.0;
+            sum += (double) a[(size_t) i] * y;
+            ea += (double) a[(size_t) i] * a[(size_t) i];
+            eb += y * y;
+        }
+        return ea > 0.0 && eb > 0.0 ? sum / std::sqrt (ea * eb) : 0.0;
+    };
+    const auto ed = envelopeOf (d), el = envelopeOf (l);
+    auto shapeLag = centre;
+    {
+        auto best = -2.0;
+        for (int lag = centre - reach; lag <= centre + reach; ++lag)
+            if (const auto v = likeness (ed, el, lag); v > best)
+            {
+                best = v;
+                shapeLag = lag;
+            }
+    }
+    const auto fine = (int) (0.0003 * rate);
+    double bestNorm = 0.0, bestValue = 0.0;
+    auto bestLag = shapeLag;
+    for (int lag = shapeLag - fine; lag <= shapeLag + fine; ++lag)
+        if (const auto v = likeness (d, l, lag); std::abs (v) > std::abs (bestNorm))
+        {
+            bestNorm = v;
+            bestLag = lag;
+        }
+    juce::ignoreUnused (bestValue);
+    result.found = true;
+    // The layer's sound at its sample i + lag belongs at the drum's i: played lag samples later (or skipped into).
+    result.offsetMs = -1000.0 * (double) bestLag / rate;
+    result.invert = bestNorm < 0.0;
+    result.match = std::abs (bestNorm);
+    return result;
+}
+
+ParagonX1AudioProcessor::Alignment ParagonX1AudioProcessor::alignLayer (int slot, int n, int velocity)
+{
+    slot = juce::jlimit (0, ParamIDs::numDrums - 1, slot);
+    n = juce::jlimit (0, ParamIDs::numLayers - 1, n);
+    auto result = findAlignment (getDrumHitForAlign (slot, velocity), getLayerHitForAlign (slot, n, velocity));
+    if (! result.found)
+        return result;
+    // Their own pitch moves the layer's sound in time a little: ignored (it's the start that matters, and that's 0).
+    auto t = getLayerTweak (slot, n);
+    t.offsetMs = (float) juce::jlimit (-50.0, 50.0, result.offsetMs);
+    t.invert = result.invert;
+    setLayerTweak (slot, n, t, true);
+    result.offsetMs = t.offsetMs;
+    return result;
+}
+
+int ParagonX1AudioProcessor::createLayerChannel (int slot, int n)
+{
+    slot = juce::jlimit (0, ParamIDs::numDrums - 1, slot);
+    n = juce::jlimit (0, ParamIDs::numLayers - 1, n);
     // The first USER channel no mic route and no other layer uses: settings back to new, named, the layer into it.
     auto used = getUserChannelsInUse();
     for (int u = 0; u < synth::mixer::numUserChannels; ++u)
@@ -1456,7 +1729,8 @@ int ParagonX1AudioProcessor::createLayerChannel (int slot)
             }
         auto m = matrix;
         const auto piece = synth::drums::pieceOfSlot (slot);
-        m.userChannelNames[(size_t) u] = (juce::String (piece >= 0 ? synth::drums::pieces[(size_t) piece].name : synth::drums::slotDefaults[(size_t) slot].key) + " LAYER").substring (0, 24);
+        m.userChannelNames[(size_t) u] = (juce::String (piece >= 0 ? synth::drums::pieces[(size_t) piece].name : synth::drums::slotDefaults[(size_t) slot].key)
+                                          + " LAYER" + (n > 0 ? " " + juce::String (n + 1) : juce::String())).substring (0, 24);
         setModMatrix (m);
         // 0.39.0: into the bus (or output) its drum's own channel goes to (the kick's layer onto the KICK bus).
         if (const auto home = synth::drums::homeChannel (slot); home >= 0 && home < synth::mixer::numChannels)
@@ -1464,7 +1738,7 @@ int ParagonX1AudioProcessor::createLayerChannel (int slot)
             setParameterNow (ParamIDs::mix (channel, "Output"), (float) getMixerOutput (home));
             setParameterNow (ParamIDs::mix (channel, "Route"), (float) getMixerRoute (home));
         }
-        setParameterNow (ParamIDs::drum (slot, "LayerOut"), (float) (channel + 1));
+        setParameterNow (ParamIDs::drum (slot, ParamIDs::layerOut (n)), (float) (channel + 1));
         requestCheckpoint();
         return channel;
     }
@@ -1620,11 +1894,18 @@ juce::Array<int> ParagonX1AudioProcessor::getUserChannelsInUse() const
             for (const auto c : instrument->micChannels())
                 if (synth::mixer::isUserChannel (c))
                     used.addIfNotAlreadyThere (c);
-    // 0.29.0: and the drums' layers' channels.
+    // 0.29.0: and the drums' layers' channels (and a multi-mic layer's own USER mics).
     for (int k = 0; k < ParamIDs::numDrums; ++k)
-        if (auto* out = parameters.getRawParameterValue (ParamIDs::drum (k, "LayerOut")))
-            if (const auto channel = juce::roundToInt (out->load()) - 1; synth::mixer::isUserChannel (channel))
-                used.addIfNotAlreadyThere (channel);
+        for (int n = 0; n < ParamIDs::numLayers; ++n)
+        {
+            if (auto* out = parameters.getRawParameterValue (ParamIDs::drum (k, ParamIDs::layerOut (n))))
+                if (const auto channel = juce::roundToInt (out->load()) - 1; synth::mixer::isUserChannel (channel))
+                    used.addIfNotAlreadyThere (channel);
+            if (const auto& layer = drumInstruments[(size_t) layerOf (k, n)])
+                for (const auto c : layer->micChannels())
+                    if (synth::mixer::isUserChannel (c))
+                        used.addIfNotAlreadyThere (c);
+        }
     used.sort();
     return used;
 }
@@ -1908,11 +2189,21 @@ synth::drums::KitSettings ParagonX1AudioProcessor::getKitSettings() const noexce
         s.randomize = get (drumSetting ("Randomize")) > 0.5f;
         s.adjacent = get (drumSetting ("Adjacent")) > 0.5f;
         s.velocityToVolume = get (drumSetting ("VelToVol")) > 0.5f;
-        // 0.29.0: ITS LAYER.
-        s.layer = instrumentsForAudio[(size_t) layerOf (k)].load();
-        const auto layerDb = get (drumSetting ("LayerLevel"));
-        s.layerGain = layerDb <= -59.95f ? 0.0f : juce::Decibels::decibelsToGain (layerDb);
-        s.layerChannel = juce::roundToInt (get (drumSetting ("LayerOut"))) - 1;
+        // 0.29.0: ITS LAYERS (three since 0.50.0).
+        {
+            static constexpr int levels[] = { drumSetting ("LayerLevel"), drumSetting ("Layer2Level"), drumSetting ("Layer3Level") };
+            static constexpr int outs[] = { drumSetting ("LayerOut"), drumSetting ("Layer2Out"), drumSetting ("Layer3Out") };
+            const auto* compiled = matrixForAudio.load();
+            for (int n = 0; n < synth::drums::numLayers; ++n)
+            {
+                auto& layer = s.layers[(size_t) n];
+                layer.instrument = instrumentsForAudio[(size_t) layerOf ((int) k, n)].load();
+                const auto layerDb = get (levels[n]);
+                layer.gain = layerDb <= -59.95f ? 0.0f : juce::Decibels::decibelsToGain (layerDb);
+                layer.channel = juce::roundToInt (get (outs[n])) - 1;
+                layer.tweak = compiled != nullptr ? &compiled->layers[k * (size_t) synth::drums::numLayers + (size_t) n] : nullptr;
+            }
+        }
         s.layerLimit = juce::roundToInt (get (drumSetting ("LayerLimit")));
         s.voices = juce::jlimit (1, synth::drums::Kit::maxVoices, juce::roundToInt (get (drumSetting ("Voices"))));
         s.position = get (drumSetting ("Position"));
@@ -2131,7 +2422,7 @@ std::unique_ptr<juce::XmlElement> ParagonX1AudioProcessor::captureDrumKit() cons
             e->setAttribute ("index", k + 1);
             e->setAttribute ("curve", curve.encode());
         }
-        for (const auto index : { k, layerOf (k) })   // 0.29.0: its layer as "slot" numDrums + k + 1
+        for (const auto index : instrumentsOf (k))   // 0.29.0: its layers as "slot" numDrums x (1 + n) + k + 1
             if (instrumentRefs[(size_t) index].isNotEmpty())
             {
                 auto* e = xml->createNewChildElement ("DrumInstrument");
@@ -2139,6 +2430,7 @@ std::unique_ptr<juce::XmlElement> ParagonX1AudioProcessor::captureDrumKit() cons
                 e->setAttribute ("ref", instrumentRefs[(size_t) index]);
             }
     }
+    matrix.writeLayers (*xml);   // 0.50.0: the layers' settings
     return xml;
 }
 
@@ -2207,25 +2499,26 @@ bool ParagonX1AudioProcessor::applyDrumKit (const juce::XmlElement& xml)
         curve = {};
     {
         std::vector<std::pair<int, juce::String>> refs;
-        std::array<bool, 2 * ParamIDs::numDrums> has {};
+        std::array<bool, ParamIDs::numInstruments> has {};
         const auto savedBy = xml.getIntAttribute ("version", 1);
         for (const auto* e : xml.getChildWithTagNameIterator ("DrumInstrument"))
-            if (const auto slot = ParamIDs::instrumentIndexFrom (e->getIntAttribute ("slot") - 1, savedBy); slot >= 0 && slot < 2 * ParamIDs::numDrums)
+            if (const auto slot = ParamIDs::instrumentIndexFrom (e->getIntAttribute ("slot") - 1, savedBy); slot >= 0 && slot < ParamIDs::numInstruments)
             {
                 refs.emplace_back (slot, e->getStringAttribute ("ref"));
                 has[(size_t) slot] = true;
             }
-        for (int k = 0; k < 2 * ParamIDs::numDrums; ++k)
+        for (int k = 0; k < ParamIDs::numInstruments; ++k)
             if (! has[(size_t) k])
             {
                 setDrumInstrument (k, nullptr);
-                instrumentRefs[(size_t) k] = {};
+                forgetLoad ((int) k);
             }
         startLoading (refs);
     }
     for (const auto* e : xml.getChildWithTagNameIterator ("VelocityCurve"))
         if (const auto index = e->getIntAttribute ("index") - 1; index >= 0 && index < ModMatrix::numDrumSlots)
             m.drumVelocityCurves[(size_t) index] = synth::drums::VelocityCurve::decode (e->getStringAttribute ("curve"));
+    m.readLayers (xml);   // 0.50.0
     setModMatrix (m);
     markModified();
     requestCheckpoint();
@@ -2470,7 +2763,7 @@ Rig ParagonX1AudioProcessor::captureRig() const
     {
         if (drumSamples[(size_t) k] != nullptr)
             rig.drumSamples[k] = drumSamples[(size_t) k];
-        for (const auto index : { k, layerOf (k) })
+        for (const auto index : instrumentsOf (k))
             if (instrumentRefs[(size_t) index].isNotEmpty())
                 rig.drumInstruments[index] = instrumentRefs[(size_t) index];
     }
@@ -2504,7 +2797,7 @@ void ParagonX1AudioProcessor::applyRig (const Rig& rig)
     // THE SAMPLE ENGINE: the preset's instruments loaded again (the ones it already has kept).
     {
         std::vector<std::pair<int, juce::String>> refs;
-        for (int k = 0; k < 2 * ParamIDs::numDrums; ++k)
+        for (int k = 0; k < ParamIDs::numInstruments; ++k)
         {
             const auto found = rig.drumInstruments.find (k);
             const auto ref = found != rig.drumInstruments.end() ? found->second : juce::String();
@@ -2513,7 +2806,7 @@ void ParagonX1AudioProcessor::applyRig (const Rig& rig)
             if (ref.isEmpty())
             {
                 setDrumInstrument (k, nullptr);
-                instrumentRefs[(size_t) k] = {};
+                forgetLoad ((int) k);
             }
             else
                 refs.emplace_back (k, ref);
@@ -2674,7 +2967,7 @@ void ParagonX1AudioProcessor::getStateInformation (juce::MemoryBlock& destData)
                                                                     { "data", synth::drums::sampleFiles::encode (*sample) } }), nullptr);
     state.appendChild (kitSamples, nullptr);
     juce::ValueTree instruments ("DrumInstruments");
-    for (int k = 0; k < 2 * ParamIDs::numDrums; ++k)
+    for (int k = 0; k < ParamIDs::numInstruments; ++k)
         if (instrumentRefs[(size_t) k].isNotEmpty())
             instruments.appendChild (juce::ValueTree ("DrumInstrument", { { "slot", k + 1 }, { "ref", instrumentRefs[(size_t) k] } }), nullptr);
     if (instruments.getNumChildren() > 0)
@@ -2740,7 +3033,7 @@ void ParagonX1AudioProcessor::setStateInformation (const void* data, int sizeInB
     {
         const auto savedBy = (int) state.getProperty (parameterVersionKey, 1);
         for (const auto& e : saved)
-            if (const auto slot = ParamIDs::instrumentIndexFrom ((int) e["slot"] - 1, savedBy); slot >= 0 && slot < 2 * ParamIDs::numDrums)
+            if (const auto slot = ParamIDs::instrumentIndexFrom ((int) e["slot"] - 1, savedBy); slot >= 0 && slot < ParamIDs::numInstruments)
                 instrumentsToLoad.emplace_back (slot, e["ref"].toString());
         state.removeChild (saved, nullptr);
     }
@@ -2848,10 +3141,10 @@ void ParagonX1AudioProcessor::setStateInformation (const void* data, int sizeInB
     for (int k = 0; k < ParamIDs::numDrums; ++k)
     {
         setDrumSample (k, kitSamples[(size_t) k]);
-        for (const auto index : { k, layerOf (k) })
+        for (const auto index : instrumentsOf (k))
         {
             setDrumInstrument (index, nullptr);
-            instrumentRefs[(size_t) index] = {};
+            forgetLoad ((int) index);
         }
     }
     startLoading (instrumentsToLoad);

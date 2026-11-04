@@ -9,6 +9,7 @@
 #include "dsp/synth/DiskStreamer.h"
 #include "dsp/synth/Noise.h"
 #include "dsp/synth/VelocityCurve.h"
+#include "dsp/synth/LayerTweak.h"
 
 #include <algorithm>
 #include <array>
@@ -298,6 +299,8 @@ namespace synth::drums
     // THE SAMPLE ENGINE (0.19.0, Instrument.h): a drum played from many recorded hits; and what the kit remembers of
     // each drum's last hits, to choose the next (which hit each layer played last, a random number).
     struct Instrument;
+
+    // LAYERS (0.50.0): numLayers and LayerTweak are in LayerTweak.h.
     struct HitMemory
     {
         std::array<std::int16_t, 32> last {};
@@ -348,11 +351,18 @@ namespace synth::drums
         float position = 0.3f, shell = 0.4f, variation = 0.3f;
         // SIMULATED MICS (0.26.0): while the kit's are on, this drum is heard through them (else its own way).
         bool miked = true;
-        // ITS LAYER (0.29.0): a sample (or folder of hits) of the user's played with every hit, at `layerGain` (velocity
-        // as the drum's), into the mixer's mic channel `layerChannel` (-1: the drum's own way, its VOLUME, PAN, INSERT...).
-        const Instrument* layer = nullptr;
-        float layerGain = 1.0f;
-        int layerChannel = -1;
+        // ITS LAYERS (0.29.0, three since 0.50.0): a sample (or folder of hits, or multi-mic instrument) of the user's
+        // played with every hit, at `gain` (velocity as the drum's), into the mixer's mic channel `channel` (-1: the
+        // drum's own way, its VOLUME, PAN, INSERT...; a multi-mic layer's mics into their channels, its close mics into
+        // `channel` when set), changed by its tweak (null: none).
+        struct Layer
+        {
+            const Instrument* instrument = nullptr;
+            float gain = 1.0f;
+            int channel = -1;
+            const LayerTweak* tweak = nullptr;
+        };
+        std::array<Layer, numLayers> layers {};
 
         bool filtered() const noexcept { return lowPass < 19999.0f || highPass > 20.01f; }
         // The sequencer's lead for the anchor (seconds early).
@@ -591,6 +601,7 @@ namespace synth::drums
         // The note's own pan (a balance on top of the slot's) and gate.
         float panLeft = 1.0f, panRight = 1.0f;
         int gateLeft = -1;
+        double gateFade = 0.003;           // 0.50.0: how long the gate's fade takes (a layer's LENGTH: longer)
         // The drawn envelope (6c): where it is across the hit (0 to 1), gliding between points worked out every
         // 8 samples; DELAY's wait before the hit starts.
         const mod::Shape* shape = nullptr;
@@ -737,7 +748,7 @@ namespace synth::drums
         std::uint64_t ages = 0;
         std::uint32_t noiseSeed = 0x2545f491u;
         std::array<HitMemory, numSlots> hitMemory {};   // THE SAMPLE ENGINE's round-robins (0.19.0)
-        std::array<HitMemory, numSlots> layerMemory {}; // 0.29.0: each drum's layer's
+        std::array<std::array<HitMemory, numLayers>, numSlots> layerMemory {}; // 0.29.0: each drum's layers'
         std::array<std::atomic<int>, numSlots> lastChoice {};   // layer x 1000 + hit + 1 (0: none)
         std::atomic<int> pedal { 127 };   // CC 4: before any arrives, closed
         std::array<std::uint8_t, 128> controllers {};   // each controller's last value (CC ZONES)

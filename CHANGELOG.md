@@ -2,6 +2,34 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.50.0
+
+**THREE LAYERS per drum, built for reinforcing a kit** (the Djent Drums kit with renders bounced out of another drum program, say). Up to three of your own sounds play with each of a drum's hits, each with its own settings, and AUTO-ALIGN lines each one up with the drum.
+
+**The LAYERS tab** (DRUMS > the DRUM view, beside ENVELOPE and VELOCITY). A row per layer:
+- **LOAD... / REMOVE:** a file (one hit), a folder of hits (named by velocity layer and round robin, "..._V1_RR2", or sorted by loudness), or a folder holding a folder per mic (SNARE TOP, OH, ROOM...).
+- **LEVEL** and **OUT:** WITH THE DRUM (its VOLUME, PAN, INSERT, OUTPUT), or a mixer channel with its own fader, effects and sends.
+- **PITCH:** semitones and hundredths, to tune it to the drum.
+- **OFFSET:** later (+) or earlier (-) than the drum, to the sample. Earlier works by starting a little way into the layer's sound, so nothing has to wait.
+- **INVERT:** the layer's polarity turned over.
+- **VEL LOW / VEL HIGH:** the hits it plays on (e.g. a crack layer only above 90).
+- **LENGTH:** WHOLE, or it fades out after that many ms (just a layer's attack, say).
+- **AUTO-ALIGN:** sets OFFSET and INVERT so the layer lines up with the drum's own hit (its close mic).
+  - Two sounds a fraction of a millisecond apart, or one turned over, partly cancel each other: the drum gets thinner, not bigger.
+  - It finds both hits' starts, lines up their loudness shapes, then the waveforms within 0.3 ms of that, keeping the delay where the two add up the most.
+  - It reports the offset, whether it turned the layer over, and how alike the two are (MATCH).
+- **The picture under the rows:** the drum's hit (white) and each layer's (orange, pink, gold) from 2 ms before the drum's start, as they'll play, their offsets and polarities included. Lined up, they rise together.
+
+**Multi-mic layers.** A folder of mic folders (a render bounced out a channel at a time) plays like a multi-mic drum: its close mics into the layer's own channel, its overheads and room into OVERHEADS and ROOM. It gets a USER channel of its own when it's loaded ("SNARE LAYER", "SNARE LAYER 2"...), onto the drum's bus. The first layer of a drum through the mixer still turns the drum's own close mics down 10 dB so the layer leads.
+
+**Old presets, kits and projects** load their one layer as LAYER 1, as it sounded. Presets, kits (.pr7kit) and projects keep all three layers and their settings.
+
+**Fixed:** loading two things one straight after the other (two layers, or two drums' samples) could lose the first: every load stopped the one before it. Now a load only replaces an earlier load of the same drum or layer.
+
+**Tests:** three layers at their levels, velocity ranges, PITCH (an octave up measured at the frequency), OFFSET to the sample both ways, INVERT cancelling an identical hit, LENGTH, AUTO-ALIGN (a hit late by 37 samples and turned over: found to the sample, then the two add up to exactly twice the drum; an early one; a different drum), multi-mic layers' channels, and saving in presets, kits and projects.
+
+**Not checked here:** how your renders sound layered (your ears).
+
 ## 0.49.0
 
 **A quicker plugin**, from a second round of measuring (as in 0.40.0): timings and instruction counts of each page's drawing, opening the window, and the factory presets playing. Nothing sounds different: every audio change gives the same samples, bit for bit.

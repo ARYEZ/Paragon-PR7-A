@@ -5,7 +5,7 @@ cmake_minimum_required(VERSION 3.24)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS version")
 set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "macOS architectures")
 
-project(ParagonX1 VERSION 0.49.0 LANGUAGES C CXX)
+project(ParagonX1 VERSION 0.50.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -127,6 +127,7 @@ target_sources(ParagonX1
         source/ui/SynthDisplays.cpp
         source/ui/MultiPointEditor.cpp
         source/ui/DrumPage.cpp
+        source/ui/LayerPanel.cpp
         source/ui/KitView.cpp
         source/ui/MachineView.cpp
         source/ui/PedalBody.cpp

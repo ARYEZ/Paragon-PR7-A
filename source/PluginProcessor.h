@@ -202,17 +202,52 @@ public:
             return -1.0;
         return loadsTotal.load() > 0 ? juce::jlimit (0.0, 1.0, (double) loadsDone.load() / (double) loadsTotal.load()) : 0.0;
     }
-    juce::String getInstrumentRef (int slot) const { return instrumentRefs[(size_t) juce::jlimit (0, 2 * ParamIDs::numDrums - 1, slot)]; }
-    // A DRUM'S LAYER (0.29.0): a sample or a folder of hits of the user's played with each of the drum's hits. It's kept
-    // as the drum's second instrument (index layerOf (slot): presets, kits and projects keep its file, as an
-    // instrument's). Loading one onto a drum whose sound comes through the mixer gives it a USER channel of its own
-    // (named "<PIECE> LAYER"), and turns the drum's own close mics down 10 dB so the layer leads (one undo step).
-    static constexpr int layerOf (int slot) noexcept { return ParamIDs::numDrums + slot; }
-    void loadLayer (int slot, const juce::File& fileOrFolder);
-    void clearLayer (int slot);
-    juce::String getLayerRef (int slot) const { return getInstrumentRef (layerOf (juce::jlimit (0, ParamIDs::numDrums - 1, slot))); }
-    std::shared_ptr<const synth::drums::Instrument> getLayer (int slot) const { return getDrumInstrument (layerOf (juce::jlimit (0, ParamIDs::numDrums - 1, slot))); }
-    int createLayerChannel (int slot);   // the USER channel it took (-1: none free)
+    juce::String getInstrumentRef (int slot) const { return instrumentRefs[(size_t) juce::jlimit (0, ParamIDs::numInstruments - 1, slot)]; }
+    // A DRUM'S LAYERS (0.29.0; three since 0.50.0): a sample, a folder of hits or a multi-mic folder of the user's played
+    // with each of the drum's hits. Each is kept as one of the drum's instruments (index layerOf (slot, n): presets, kits
+    // and projects keep its file, as an instrument's). Loading one onto a drum whose sound comes through the mixer gives
+    // it a USER channel of its own (named "<PIECE> LAYER", "<PIECE> LAYER 2"...), and the first layer turns the drum's
+    // own close mics down 10 dB so the layer leads (one undo step). A multi-mic layer's overheads and room go into
+    // theirs; its close mics into its channel.
+    static constexpr int layerOf (int slot, int n = 0) noexcept { return ParamIDs::numDrums * (1 + n) + slot; }
+    static std::array<int, 1 + ParamIDs::numLayers> instrumentsOf (int slot) noexcept
+    {
+        std::array<int, 1 + ParamIDs::numLayers> all {};
+        for (int i = 0; i < (int) all.size(); ++i)
+            all[(size_t) i] = ParamIDs::numDrums * i + slot;
+        return all;
+    }
+    void loadLayer (int slot, const juce::File& fileOrFolder, int n = 0);
+    void clearLayer (int slot, int n = 0);
+    int firstFreeLayer (int slot) const;   // the first layer with nothing in it (-1: all three used)
+    juce::String getLayerRef (int slot, int n = 0) const { return getInstrumentRef (layerOf (juce::jlimit (0, ParamIDs::numDrums - 1, slot), juce::jlimit (0, ParamIDs::numLayers - 1, n))); }
+    std::shared_ptr<const synth::drums::Instrument> getLayer (int slot, int n = 0) const { return getDrumInstrument (layerOf (juce::jlimit (0, ParamIDs::numDrums - 1, slot), juce::jlimit (0, ParamIDs::numLayers - 1, n))); }
+    int createLayerChannel (int slot, int n = 0);   // the USER channel it took (-1: none free)
+    // 0.50.0: a layer's PITCH, OFFSET, POLARITY, velocities and LENGTH (preset data; `final`: an undo step).
+    const synth::drums::LayerTweak& getLayerTweak (int slot, int n) const { return matrix.layer (juce::jlimit (0, ParamIDs::numDrums - 1, slot), juce::jlimit (0, ParamIDs::numLayers - 1, n)); }
+    void setLayerTweak (int slot, int n, const synth::drums::LayerTweak&, bool final = true);
+    // AUTO-ALIGN (0.50.0): the layer's hit lined up with the drum's (its close mic's): the delay where the two match best
+    // (their starts found, then compared sample by sample within 3 ms of that), and whether it's turned over there. Sets
+    // the layer's OFFSET and POLARITY (one undo step). Compares the hits each plays at `velocity`.
+    struct Alignment
+    {
+        bool found = false;
+        double offsetMs = 0.0;     // what OFFSET was set to
+        bool invert = false;       // and POLARITY
+        double match = 0.0;        // how alike they are there (0 to 1)
+        juce::String problem;      // why not, when not found
+    };
+    Alignment alignLayer (int slot, int n, int velocity = 100);
+    // The hits AUTO-ALIGN compares (mono, at their own rate): the drum's (its close mic, or its sample / rendered hit)
+    // and the layer's (its close mic), with their rates. For the LAYERS page's picture too.
+    struct ReferenceHit
+    {
+        std::vector<float> samples;
+        double sampleRate = 0.0;
+    };
+    ReferenceHit getDrumHitForAlign (int slot, int velocity = 100) const;
+    ReferenceHit getLayerHitForAlign (int slot, int n, int velocity = 100) const;
+    static Alignment findAlignment (const ReferenceHit& drum, const ReferenceHit& layer);
     juce::StringArray getInstrumentProblems() const;
     bool waitForInstruments (int timeoutMs = 60000);   // the loads finished and installed (tests; snapshots)
     // Which hit an instrument slot played last (layer, hit), for the page; -1, -1: none.
@@ -668,21 +703,26 @@ private:
     std::array<std::atomic<const synth::drums::Sample*>, ParamIDs::numDrums> samplesForAudio {};
     std::vector<std::pair<std::shared_ptr<const synth::drums::Sample>, double>> retiredSamples;
     // THE SAMPLE ENGINE (0.19.0).
-    std::array<std::shared_ptr<const synth::drums::Instrument>, 2 * ParamIDs::numDrums> drumInstruments;   // 0.29.0: then the layers
-    std::array<std::atomic<const synth::drums::Instrument*>, 2 * ParamIDs::numDrums> instrumentsForAudio {};
+    std::array<std::shared_ptr<const synth::drums::Instrument>, ParamIDs::numInstruments> drumInstruments;   // 0.29.0: then the layers
+    std::array<std::atomic<const synth::drums::Instrument*>, ParamIDs::numInstruments> instrumentsForAudio {};
     std::vector<std::pair<std::shared_ptr<const synth::drums::Instrument>, double>> retiredInstruments;   // 0.28.0: kept until its longest hit is over
     // DISK STREAMING (0.28.0): made when the first streamed instrument arrives (its rings take memory).
     std::unique_ptr<synth::drums::Streamer> diskStreamer;
     std::atomic<synth::drums::Streamer*> streamerForAudio { nullptr };
-    std::array<juce::String, 2 * ParamIDs::numDrums> instrumentRefs;   // what each slot holds or is loading (then each layer)
+    std::array<juce::String, ParamIDs::numInstruments> instrumentRefs;   // what each slot holds or is loading (then each layer)
     std::unique_ptr<juce::ThreadPool> instrumentPool;   // made on the first load (most instances never load one)
     mutable std::mutex loadedLock;
     std::vector<std::pair<int, std::shared_ptr<const synth::drums::Instrument>>> loadedInstruments;
     juce::StringArray loadProblems;
     std::atomic<int> pendingLoads { 0 }, loadGeneration { 0 }, loadsTotal { 0 }, loadsDone { 0 };
+    // 0.50.0: the load each slot is waiting for: a newer load of the same slot replaces an older one, a load of other
+    // slots leaves it be (loading layer 1 then layer 2 at once lost layer 1: every load stopped the one before).
+    std::array<std::atomic<int>, ParamIDs::numInstruments> slotLoadGeneration {};
+    std::vector<int> loadedGenerations;   // beside loadedInstruments
     std::shared_ptr<int> lifeToken = std::make_shared<int> (0);
     void startLoading (std::vector<std::pair<int, juce::String>> refs);   // the slots' instruments from their refs
     void installLoadedInstruments();
+    void forgetLoad (int slot);   // 0.50.0: a slot's instrument taken away (its ref emptied, any load of it dropped)
     void makeSlotPlaySample (int slot);   // SAMPLE, its shaping neutral (if it wasn't already SAMPLE)
     static juce::String refFor (const synth::drums::Instrument&);
     juce::File knownKitsFile() const;
@@ -868,6 +908,7 @@ private:
         synth::drumseq::Patterns drumPatterns {};
         std::array<synth::mod::Shape, synth::drums::numSlots> drumEnvelopes {};
         std::array<synth::drums::VelocityCurve, synth::drums::numSlots> velocityCurves {};   // 0.18.0
+        std::array<synth::drums::LayerTweak, synth::drums::numSlots * synth::drums::numLayers> layers {};   // 0.50.0
         synth::mixer::BleedMatrix bleed {};                                                 // 0.20.0
         synth::mixer::SendTable sends {};                                                   // 0.21.0
         synth::mixer::FxTable effects {};                                                   // 0.22.0

@@ -111,7 +111,7 @@ std::optional<Rig> Rig::fromXml (const juce::XmlElement& xml)
     const auto version = xml.getIntAttribute ("parameterVersion", 1);
     for (const auto* e : xml.getChildWithTagNameIterator ("DrumInstrument"))
         if (const auto slot = ParamIDs::instrumentIndexFrom (e->getIntAttribute ("slot") - 1, version);
-            slot >= 0 && slot < 2 * synth::drums::numSlots)   // 0.29.0: then layers
+            slot >= 0 && slot < ParamIDs::numInstruments)   // 0.29.0: then layers (three since 0.50.0)
             rig.drumInstruments[slot] = e->getStringAttribute ("ref");
 
     if (version < 2)

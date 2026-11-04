@@ -623,7 +623,7 @@ void DrumHitDisplay::filesDropped (const juce::StringArray& files, int, int)
 }
 
 //==============================================================================
-DrumPage::DrumPage (ParagonX1AudioProcessor& p) : processor (p), display (p), envelope (p), sequencer (p), kitView (p), articulations (p)
+DrumPage::DrumPage (ParagonX1AudioProcessor& p) : processor (p), display (p), envelope (p), sequencer (p), kitView (p), articulations (p), layerPanel (p)
 {
     auto& state = p.getParameters();
     const auto kitControl = [&] (const char* id, const juce::String& label, const juce::String& tip)
@@ -697,24 +697,24 @@ DrumPage::DrumPage (ParagonX1AudioProcessor& p) : processor (p), display (p), en
     slotControl (instrumentControls, "LayerLimit", "LAYER LIMIT", "How many of each layer's hits are used (ALL: every one). Fewer: more repeats.");
     slotControl (instrumentControls, "Voices", "VOICES", "How many of this drum's hits ring at once; past that the oldest fades.");
 
-    // ITS LAYER (0.29.0).
-    slotControl (layerControls, "LayerLevel", "LAYER", "The level of this drum's LAYER: your own sample played with every hit "
-                                                       "(LOAD... > A LAYER...). OFF: not played.");
-    slotControl (layerControls, "LayerOut", "LAYER OUT", "Where the layer plays: WITH THE DRUM (its VOLUME, PAN, INSERT and OUTPUT), or "
-                                                         "a mixer channel, with its own fader, effects and sends (a kit through the "
-                                                         "mixer gives it a USER channel of its own when it's loaded).");
-    for (auto* list : { &kitControls, &slotControls, &routingControls, &velocityControls, &instrumentControls, &acousticControls, &layerControls })
+    for (auto* list : { &kitControls, &slotControls, &routingControls, &velocityControls, &instrumentControls, &acousticControls })
         for (auto& c : *list)
             addAndMakeVisible (*c);
 
     // THE VELOCITY CURVE (0.18.0): ENVELOPE / VELOCITY over the strip.
-    for (auto* b : { &envelopeTab, &velocityTab })
+    for (auto* b : { &envelopeTab, &velocityTab, &layersTab })
     {
         DrumSeqPanel::style (*b);
         b->setClickingTogglesState (true);
         b->setRadioGroupId (964);
         addAndMakeVisible (*b);
     }
+    layersTab.setTooltip ("The drum's LAYERS: up to three of your own sounds played with each of its hits (renders of another kit's "
+                          "drum over this one's), each with its level, where it plays, pitch, offset, polarity, velocities and "
+                          "length, and AUTO-ALIGN.");
+    layersTab.onClick = [this] { showLayers (true); };
+    layerPanel.onLoad = [this] (int layer) { chooseLayer (layer); };
+    addChildComponent (layerPanel);
     envelopeTab.setToggleState (true, juce::dontSendNotification);
     envelopeTab.setTooltip ("The drum's ENVELOPE and its hit.");
     velocityTab.setTooltip ("The drum's VELOCITY CURVE (how hard each hit plays, whatever plays it: grooves, the song, the sequencer, "
@@ -838,7 +838,7 @@ void DrumPage::showView (View v)
         for (auto& c : *list)
             c->setVisible (drum);
     for (juce::Component* c : { (juce::Component*) &play, (juce::Component*) &load, (juce::Component*) &clear,
-                                (juce::Component*) &envelopeTab, (juce::Component*) &velocityTab })
+                                (juce::Component*) &envelopeTab, (juce::Component*) &velocityTab, (juce::Component*) &layersTab })
         c->setVisible (drum);
     updateDrumPanels();
     wholeFile.setVisible (drum && display.showsFile());
@@ -1034,7 +1034,7 @@ void DrumPage::select (int slot)
     if (! rows[(size_t) selected]->isChosen())
         for (auto& row : rows)
             row->setChosen (row->getSlot() == selected);   // chosen from elsewhere (the sequencer): alone
-    for (auto* list : { &slotControls, &routingControls, &velocityControls, &instrumentControls, &acousticControls, &layerControls })
+    for (auto* list : { &slotControls, &routingControls, &velocityControls, &instrumentControls, &acousticControls })
         for (auto& c : *list)
         {
             const auto what = c->getParameterId().fromFirstOccurrenceOf ("drum", false, false).trimCharactersAtStart ("0123456789");
@@ -1042,6 +1042,7 @@ void DrumPage::select (int slot)
         }
     for (auto& row : rows)
         row->setSelected (row->getSlot() == selected);
+    layerPanel.setSlot (selected);   // 0.50.0
     sequencer.getGrid().setHighlightedRow (selected);
     kitView.setSelected (selected);
     articulations.showSlot (selected, getChosen());
@@ -1084,12 +1085,9 @@ void DrumPage::showLoadMenu()
     });
     // 0.29.0: A LAYER of the user's own with this drum.
     menu.addSeparator();
-    menu.addItem ("A LAYER with this drum (your sample, or a folder of hits)...", [this] { chooseLayer(); });
-    menu.addItem ("Remove its layer", processor.getLayerRef (selected).isNotEmpty(), false, [this]
-    {
-        processor.clearLayer (selected);
-        updateDrumPanels();
-    });
+    menu.addItem ("A LAYER with this drum (your sample, a folder of hits, or of mic folders)...", processor.firstFreeLayer (selected) >= 0, false,
+                  [this] { chooseLayer(); });
+    menu.addItem ("Its LAYERS...", [this] { showLayers (true); });
     menu.addSeparator();
     menu.addItem ("A whole SFZ kit (onto every drum)...", [this] { importSfzKit(); });
     // 0.27.0: DRUMGIZMO KITS: free multi-mic kits recorded in real studios.
@@ -1140,20 +1138,25 @@ void DrumPage::importSfzKit()
     });
 }
 
-void DrumPage::chooseLayer()
+void DrumPage::chooseLayer (int layer)
 {
     const auto slot = selected;
-    chooser = std::make_unique<juce::FileChooser> ("A layer for " + synth::drums::articulationName (slot) + ": a sample, or a folder of hits",
+    if (layer < 0)
+        layer = processor.firstFreeLayer (slot);
+    if (layer < 0)
+        return;
+    chooser = std::make_unique<juce::FileChooser> ("Layer " + juce::String (layer + 1) + " for " + synth::drums::articulationName (slot)
+                                                   + ": a sample, a folder of hits, or a folder of mic folders",
                                                    juce::File(), "*.wav;*.aif;*.aiff;*.flac;*.ogg;*.mp3");
     chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles
                               | juce::FileBrowserComponent::canSelectDirectories,
-                          [this, slot] (const juce::FileChooser& fc)
+                          [this, slot, layer] (const juce::FileChooser& fc)
                           {
                               const auto f = fc.getResult();
                               if (! f.exists())
                                   return;
-                              processor.loadLayer (slot, f);
-                              updateDrumPanels();
+                              processor.loadLayer (slot, f, layer);
+                              showLayers (true);
                           });
 }
 
@@ -1231,7 +1234,23 @@ void DrumPage::importDrumGizmoKit()
 void DrumPage::showVelocity (bool on)
 {
     velocityMode = on;
+    layersMode = false;
     (on ? velocityTab : envelopeTab).setToggleState (true, juce::dontSendNotification);
+    updateDrumPanels();
+    repaint();
+}
+
+void DrumPage::showLayers (bool on)
+{
+    if (! on)
+    {
+        showVelocity (false);
+        return;
+    }
+    layersMode = true;
+    velocityMode = false;
+    layersTab.setToggleState (true, juce::dontSendNotification);
+    layerPanel.setSlot (selected);
     updateDrumPanels();
     repaint();
 }
@@ -1246,16 +1265,10 @@ void DrumPage::updateDrumPanels()
         showingInstrument = hasInstrument;
         resized();
     }
-    const auto hasLayer = processor.getLayerRef (selected).isNotEmpty();
-    if (hasLayer != showingLayer)
-    {
-        showingLayer = hasLayer;
-        resized();
-    }
+    const auto picture = drum && ! velocityMode && ! layersMode;   // the hit's picture and its strip
     for (auto& c : instrumentControls)
-        c->setVisible (drum && ! velocityMode && showingInstrument);
-    for (auto& c : layerControls)
-        c->setVisible (drum && ! velocityMode && showingLayer);
+        c->setVisible (picture && showingInstrument);
+    layerPanel.setVisible (drum && layersMode);
     // THE ACOUSTIC MODELS (0.24.0): their knobs while the drum is one of them, and TONE / SNAP named for what they are.
     {
         using synth::drums::Model;
@@ -1281,8 +1294,8 @@ void DrumPage::updateDrumPanels()
             acousticControls[1]->setLabelText (kick ? "FRONT HEAD" : hat ? "OPEN" : cymbal ? "WASH" : "SHELL");
         }
     }
-    display.setVisible (drum && ! velocityMode);
-    envelope.setVisible (drum && ! velocityMode);
+    display.setVisible (picture);
+    envelope.setVisible (picture);
     for (juce::Component* c : { (juce::Component*) &velocityEditor, (juce::Component*) &softButton, (juce::Component*) &gateButton,
                                 (juce::Component*) &resetCurve })
         c->setVisible (drum && velocityMode);
@@ -1494,6 +1507,7 @@ void DrumPage::resized()
     machineTab.setBounds (tabs.removeFromRight (94).withSizeKeepingCentre (90, 24));
     // The DRUM view's own pair (0.18.0): ENVELOPE / VELOCITY, left of the view tabs.
     tabs.removeFromRight (18);
+    layersTab.setBounds (tabs.removeFromRight (84).withSizeKeepingCentre (80, 24));
     velocityTab.setBounds (tabs.removeFromRight (94).withSizeKeepingCentre (90, 24));
     envelopeTab.setBounds (tabs.removeFromRight (94).withSizeKeepingCentre (90, 24));
     kitView.setBounds (getLocalBounds().reduced (14, 10).withTrimmedTop (36));   // the whole page (0.42.0)
@@ -1530,19 +1544,16 @@ void DrumPage::resized()
     envelopeStrip = d.removeFromTop (96);
     d.removeFromTop (6);
     // THE SAMPLE ENGINE: a row of its controls under the picture.
-    if (showingInstrument || showingLayer)
+    if (showingInstrument)
     {
         auto row = d.removeFromBottom (ParamControl::knobHeight);
         d.removeFromBottom (6);
-        if (showingInstrument)
-            for (auto& c : instrumentControls)
-                c->setBounds (row.removeFromLeft (110));
-        if (showingLayer)
-            for (auto& c : layerControls)
-                c->setBounds (row.removeFromRight (120));
+        for (auto& c : instrumentControls)
+            c->setBounds (row.removeFromLeft (110));
     }
     display.setBounds (d);
     placeEnvelope();
+    layerPanel.setBounds (velocityArea);   // THE LAYERS (0.50.0) likewise
     // VELOCITY (0.18.0) in the strip and picture's place: the curve, square-ish, then the gate and its switches.
     {
         auto v = velocityArea;

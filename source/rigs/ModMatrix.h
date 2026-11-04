@@ -6,6 +6,7 @@
 #include "dsp/synth/Mixer.h"
 #include "dsp/synth/MultiPoint.h"
 #include "dsp/synth/VelocityCurve.h"
+#include "dsp/synth/LayerTweak.h"
 
 #include <vector>
 
@@ -109,6 +110,11 @@ struct ModMatrix
     std::vector<ModShapeData> drumEnvelopes = std::vector<ModShapeData> ((size_t) numDrumSlots, ModShapeData::flatDrumEnvelope());
     // 0.18.0: each drum's VELOCITY CURVE (XML "VelocityCurve", only those that aren't straight).
     std::vector<synth::drums::VelocityCurve> drumVelocityCurves = std::vector<synth::drums::VelocityCurve> ((size_t) numDrumSlots);
+    // 0.50.0: each drum's LAYERS' settings beside their LEVEL and OUT (drum x numLayers + layer; XML "Layer" slot / layer /
+    // pitch / offset / length / invert / lo / hi, only those changed).
+    std::vector<synth::drums::LayerTweak> drumLayers = std::vector<synth::drums::LayerTweak> ((size_t) (numDrumSlots * synth::drums::numLayers));
+    synth::drums::LayerTweak& layer (int slot, int n) { return drumLayers[(size_t) (slot * synth::drums::numLayers + n)]; }
+    const synth::drums::LayerTweak& layer (int slot, int n) const { return drumLayers[(size_t) (slot * synth::drums::numLayers + n)]; }
     // 0.20.0, THE MIXER's BLEED FROM INSTRUMENTS: each channel's level, polarity and on for each piece (channel x
     // numPieces + piece; XML "Bleed" channel / piece, only those changed).
     std::vector<synth::mixer::BleedCell> mixerBleed = std::vector<synth::mixer::BleedCell> ((size_t) (synth::mixer::numChannels * synth::mixer::numPieces));
@@ -138,10 +144,47 @@ struct ModMatrix
     bool operator== (const ModMatrix& o) const noexcept
     {
         return drumPatterns == o.drumPatterns && drumEnvelopes == o.drumEnvelopes && drumVelocityCurves == o.drumVelocityCurves
+            && drumLayers == o.drumLayers
             && mixerBleed == o.mixerBleed && mixerSends == o.mixerSends && mixerEffects == o.mixerEffects
             && micRoutes == o.micRoutes && userChannelNames == o.userChannelNames && busNames == o.busNames;
     }
     bool isEmpty() const noexcept { return *this == ModMatrix {}; }
+
+    // 0.50.0: the layers' settings as "Layer" children (presets, projects and kit files), and back (missing: as new).
+    void writeLayers (juce::XmlElement& xml) const
+    {
+        for (int k = 0; k < numDrumSlots; ++k)
+            for (int n = 0; n < synth::drums::numLayers; ++n)
+                if (const auto& t = layer (k, n); ! t.isDefault())
+                {
+                    auto* e = xml.createNewChildElement ("Layer");
+                    e->setAttribute ("slot", k + 1);
+                    e->setAttribute ("layer", n + 1);
+                    e->setAttribute ("pitch", t.pitch);
+                    e->setAttribute ("offset", t.offsetMs);
+                    e->setAttribute ("length", t.lengthMs);
+                    e->setAttribute ("invert", t.invert);
+                    e->setAttribute ("lo", t.velLo);
+                    e->setAttribute ("hi", t.velHi);
+                }
+    }
+    void readLayers (const juce::XmlElement& xml)
+    {
+        std::fill (drumLayers.begin(), drumLayers.end(), synth::drums::LayerTweak {});
+        for (const auto* e : xml.getChildWithTagNameIterator ("Layer"))
+        {
+            const auto k = e->getIntAttribute ("slot") - 1, n = e->getIntAttribute ("layer") - 1;
+            if (k < 0 || k >= numDrumSlots || n < 0 || n >= synth::drums::numLayers)
+                continue;
+            auto& t = layer (k, n);
+            t.pitch = juce::jlimit (-24.0f, 24.0f, (float) e->getDoubleAttribute ("pitch"));
+            t.offsetMs = juce::jlimit (-50.0f, 50.0f, (float) e->getDoubleAttribute ("offset"));
+            t.lengthMs = juce::jlimit (0.0f, 5000.0f, (float) e->getDoubleAttribute ("length"));
+            t.invert = e->getBoolAttribute ("invert");
+            t.velLo = juce::jlimit (0, 127, e->getIntAttribute ("lo", 0));
+            t.velHi = juce::jlimit (t.velLo, 127, e->getIntAttribute ("hi", 127));
+        }
+    }
 
     // As XML (in presets and projects) and back: only what's changed from new.
     std::unique_ptr<juce::XmlElement> toXml() const
@@ -164,6 +207,7 @@ struct ModMatrix
                 e->setAttribute ("index", i + 1);
                 e->setAttribute ("curve", drumVelocityCurves[(size_t) i].encode());
             }
+        writeLayers (*xml);
         for (int c = 0; c < synth::mixer::numChannels; ++c)
             for (int p = 0; p < synth::mixer::numPieces; ++p)
                 if (const auto& cell = bleed (c, p); ! (cell == synth::mixer::BleedCell {}))
@@ -303,6 +347,7 @@ struct ModMatrix
         for (const auto* e : xml.getChildWithTagNameIterator ("VelocityCurve"))
             if (const auto index = e->getIntAttribute ("index") - 1; index >= 0 && index < numDrumSlots)
                 m.drumVelocityCurves[(size_t) index] = synth::drums::VelocityCurve::decode (e->getStringAttribute ("curve"));
+        m.readLayers (xml);
         for (const auto* e : xml.getChildWithTagNameIterator ("DrumPattern"))
             if (const auto p = synth::drumseq::patternNames.indexOf (e->getStringAttribute ("pattern")); p >= 0)
                 m.drumPatterns[(size_t) p] = synth::drumseq::Pattern::decode (e->getStringAttribute ("notes"));

@@ -223,6 +223,17 @@ namespace synth::drums
             return inst;
         }
 
+        bool hasMicFolders (const juce::File& folder)
+        {
+            if (! folder.isDirectory() || ! folder.findChildFiles (juce::File::findFiles, false, "*.wav;*.aif;*.aiff;*.flac;*.ogg").isEmpty())
+                return false;
+            auto mics = 0;
+            for (const auto& sub : folder.findChildFiles (juce::File::findDirectories, false))
+                if (mixer::channelForName (sub.getFileName()) >= 0)
+                    ++mics;
+            return mics >= 2;
+        }
+
         std::shared_ptr<const Instrument> fromFolder (const juce::File& folder)
         {
             const juce::String audio ("*.wav;*.aif;*.aiff;*.flac;*.ogg");
