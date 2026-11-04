@@ -8,6 +8,8 @@ Each version's notes appear on its GitHub Release page.
 
 This release also carries 0.45.0 (the count-in, moving notes sideways, the GROOVES window). 0.45.0 never published on its own because CI cancelled its macOS build.
 
+**Windows and Linux only from now on.** GitHub stopped giving the macOS build a machine (twice it waited 15 minutes and was cancelled), and that held back every release. So releases no longer include a macOS zip. It can come back later.
+
 **Opening it:**
 - double-click a song block;
 - click the small arrow at a block's top left (click it again to close);

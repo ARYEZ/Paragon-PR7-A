@@ -6,10 +6,8 @@ Download the zip for your computer below, unzip it, and copy the `Paragon PR7-D.
 | OS | VST3 folder |
 |---|---|
 | Windows | `C:\Program Files\Common Files\VST3` |
-| macOS | `~/Library/Audio/Plug-Ins/VST3` |
 | Linux | `~/.vst3` |
 
-**macOS:** the plugin isn't code-signed yet, so macOS blocks it until you run this once in Terminal:
-`xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/"Paragon PR7-D.vst3"`
+There's no macOS build for now (only Windows and Linux).
 
 Then rescan plugins in your DAW. Your presets are kept between versions.
