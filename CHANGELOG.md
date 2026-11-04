@@ -2,6 +2,36 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.49.0
+
+**A quicker plugin**, from a second round of measuring (as in 0.40.0): timings and instruction counts of each page's drawing, opening the window, and the factory presets playing. Nothing sounds different: every audio change gives the same samples, bit for bit.
+
+**The window:**
+- **Opening the plugin's window:** 357 ms -> 135 ms the first time, and about 250 ms -> 83 ms after that.
+  - It used to render every drum's sound to draw its picture in the drum list, all 36 of them.
+  - The window opens on the KIT VIEW, where that list isn't shown.
+  - The pictures are now made when the DRUM or SEQUENCER view is first shown.
+- **The MIXER page draws about five times faster** (a full redraw 60 ms -> 12 ms):
+  - The unused strips, and the effect and send buttons that aren't on, were faded by making them see-through.
+  - That draws each one into a picture of its own and blends it back in, and with most strips unused it was most of the page's drawing time.
+  - Now a sheet of the strip's own colour is drawn over them: the same look, no blending.
+- **EDIT PLAY STYLE's kit** (dimmed, with the played drums outlined) is drawn once and copied, instead of being worked out afresh on every repaint (every frame while drums glow): 20 ms -> under 9 ms the first time, and only the copy and the glows after that.
+
+**The sound engine:**
+- **The LIMITER's true-peak detector does about a third of the work.**
+  - It looks between samples for peaks, through a 64-sample filter at 8 points, for every sample.
+  - The samples it reads now sit side by side in memory, so it no longer works out where each one is in a ring.
+  - The same numbers in the same order: bit for bit the same result.
+- **Settings read every block are looked up by name in a hash table** instead of a sorted list (a few hundred lookups a block, about 3% of the work).
+- **Together:** the Djent Kit playing takes 15% less work (2,765 million -> 2,354 million instructions measured over the same seconds).
+
+**Measured and left alone:**
+- The modelled drums' and cymbals' sound-making itself: the biggest share, the instrument's own work.
+- The simulated mics: the room and mic delays are real work.
+- The mixer's SATURATION (MARS): copied unchanged from PR7-X, so better sped up there and ported back.
+
+**Tests:** all pass, pluginval at strictness 10. The limiter's tests compare its output as before, and the screenshots match the old drawing (MIXER, EDIT PLAY STYLE: differences of a few levels at the edges of the outlines).
+
 ## 0.48.0
 
 **THE GRID EDITOR, part 2**: the rest of the manual's section 7.3.2, except the CC / aftertouch lanes, as you chose.

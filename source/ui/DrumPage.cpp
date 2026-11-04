@@ -1343,6 +1343,11 @@ void DrumPage::refreshPictures()
         sequencesButton.setButtonText (seqName.isEmpty() ? juce::String ("SEQUENCES") : "SEQ: " + seqName);
     }
     placeEnvelope();
+    // 0.49.0: the pictures are only made while the drums' rows are shown (the DRUM and SEQUENCER views): on the KIT VIEW
+    // (where the window opens) and THE DRUM MACHINE they're hidden, and making all 36 (each its drum's sound rendered)
+    // was a third of the work of opening the window. Switching views makes them then.
+    if (view == View::kit || view == View::machine)
+        return;
     const auto kit = processor.getKitSettings();
     for (int k = 0; k < synth::drums::numSlots; ++k)
     {
