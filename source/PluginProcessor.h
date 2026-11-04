@@ -404,6 +404,7 @@ public:
     void stopSong();
     bool isSongPlaying() const noexcept { return songLocal.load(); }   // PLAY (with FOLLOW DAW off, also while the DAW plays)
     double getSongPosition() const noexcept { return songPosition.load(); }   // beats into the song (-1: not playing)
+    bool isCountingIn() const noexcept { return songCountingIn.load(); }       // 0.45.0: PLAY's count-in bar sounding
     // EXPORT MIDI: the whole song on the kit's notes (each drum's home note in the map), at the DAW's tempo.
     juce::MidiFile songToMidi() const;
     juce::File songDragFile() const;
@@ -722,8 +723,10 @@ private:
         bool loopOn = false;
         double loopStart = 0.0, loopEnd = 0.0;
         song::Song::Click click = song::Song::Click::recording;
+        bool countIn = true;
         std::vector<double> barLines;
         bool isBarLine (double beat) const noexcept;
+        double barLengthAt (double beat) const noexcept;
     };
     void installSong (std::shared_ptr<const song::Song>);
     int collectSongHits (int numSamples, double ppq, double bpm, synth::drums::SlotHit* into, int room) noexcept;
@@ -742,7 +745,14 @@ private:
         // 0.44.0: PLAY went round the LOOP AREA in this piece at sample `wrapAt`: from there on these.
         int wrapAt = 1 << 30;
         double from2 = 0.0, samplesFrom2 = 0.0;
+        // 0.45.0: THE COUNT-IN in this piece: its first `startAt` samples are counting in (no song, no recording; its
+        // clicks `countInSpb` samples apart, `countInFrom` samples into it at the piece's start, `countInBeats` of them).
+        int startAt = 0, countInBeats = 0;
+        double countInFrom = 0.0, countInSpb = 0.0;
     } songChunk;   // audio thread
+    juce::int64 songCountInLeft = 0, songCountInDone = 0;   // audio thread: samples of count-in still to come, and done
+    double songCountInSpb = 0.0;
+    int songCountInBeats = 0;
     // THE CLICK (0.44.0): this block's clicks (their samples from the block's start, accented on a bar line), and the one
     // sounding (it carries on into the next block). Added to MAIN after everything, as TAP TO FIND's.
     struct SongClick { int sample = 0; bool accent = false; };
@@ -765,7 +775,7 @@ private:
     std::shared_ptr<const SongPlayback> songPlayback;
     std::atomic<const SongPlayback*> songForAudio { nullptr };
     std::vector<std::pair<std::shared_ptr<const SongPlayback>, double>> retiredSongs;
-    std::atomic<bool> songLocal { false };
+    std::atomic<bool> songLocal { false }, songCountingIn { false };
     std::atomic<double> songLocalFrom { 0.0 }, songPosition { -1.0 };
     std::atomic<int> songLocalStarts { 0 };   // PLAY pressed again: the clock starts over
     int songLocalSeen = 0;

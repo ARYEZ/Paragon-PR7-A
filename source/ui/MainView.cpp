@@ -197,6 +197,15 @@ MainView::MainView (ParagonX1AudioProcessor& processorToShow)
 
     addAndMakeVisible (drumPage);
     addChildComponent (groovesPage);
+    groovesPage.onToggleWindow = [this] { setGroovesInOwnWindow (groovesWindow == nullptr); };
+    groovesAwayNote.setText ("GROOVES is in a window of its own.", juce::dontSendNotification);
+    groovesAwayNote.setJustificationType (juce::Justification::centred);
+    groovesAwayNote.setFont (juce::FontOptions (18.0f, juce::Font::bold));
+    groovesAwayNote.setColour (juce::Label::textColourId, ParagonColours::textDim);
+    groovesShowWindow.onClick = [this] { if (groovesWindow != nullptr) groovesWindow->toFront (true); };
+    groovesBringBack.onClick = [this] { setGroovesInOwnWindow (false); };
+    for (juce::Component* c : { (juce::Component*) &groovesAwayNote, (juce::Component*) &groovesShowWindow, (juce::Component*) &groovesBringBack })
+        addChildComponent (c);
     addChildComponent (mixerPage);
     addChildComponent (fxPage);
     addChildComponent (rigBrowser);
@@ -211,6 +220,74 @@ MainView::MainView (ParagonX1AudioProcessor& processorToShow)
 MainView::~MainView()
 {
     audioProcessor.rigBroadcaster.removeChangeListener (this);
+    groovesWindow.reset();   // (lets go of the page before the page goes)
+}
+
+//==============================================================================
+// THE GROOVES WINDOW (0.45.0)
+struct MainView::GroovesWindow final : public juce::DocumentWindow
+{
+    explicit GroovesWindow (MainView& v)
+        : juce::DocumentWindow ("Paragon PR7-D: GROOVES", ParagonColours::background, juce::DocumentWindow::allButtons), view (v)
+    {
+        // The system's own title bar (no JUCE colours), resizable; over the DAW, so clicking the DAW doesn't hide it.
+        setUsingNativeTitleBar (true);
+        setLookAndFeel (&view.getLookAndFeel());
+        setContentNonOwned (&view.groovesPage, false);
+        setResizable (true, false);
+        setResizeLimits (1100, 560, 6000, 4000);
+        centreWithSize (pageArea.getWidth(), pageArea.getHeight());
+        setAlwaysOnTop (true);
+    }
+    ~GroovesWindow() override
+    {
+        clearContentComponent();   // the page isn't ours: MainView takes it back
+        setLookAndFeel (nullptr);
+    }
+    void closeButtonPressed() override
+    {
+        // Closing it brings GROOVES back into the plugin (after this call: it deletes this window).
+        juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<MainView> (&view)]
+        {
+            if (safe != nullptr)
+                safe->setGroovesInOwnWindow (false);
+        });
+    }
+    MainView& view;
+};
+
+juce::Component* MainView::getGroovesWindow() const noexcept { return groovesWindow.get(); }
+
+void MainView::setGroovesInOwnWindow (bool own)
+{
+    if (own == (groovesWindow != nullptr))
+    {
+        if (own)
+            groovesWindow->toFront (true);
+        return;
+    }
+    if (own)
+    {
+        groovesPage.setVisible (true);
+        groovesWindow = std::make_unique<GroovesWindow> (*this);
+        groovesWindow->setVisible (true);
+    }
+    else
+    {
+        groovesWindow.reset();
+        addChildComponent (groovesPage);
+        groovesPage.setBounds (pageArea);
+        groovesPage.toBehind (&blockEditor);
+    }
+    groovesPage.setInOwnWindow (own);
+    showPage (page);
+}
+
+void MainView::showGroovesAway()
+{
+    const auto away = groovesWindow != nullptr && page == Page::grooves;
+    for (juce::Component* c : { (juce::Component*) &groovesAwayNote, (juce::Component*) &groovesShowWindow, (juce::Component*) &groovesBringBack })
+        c->setVisible (away);
 }
 
 void MainView::showPage (Page newPage)
@@ -221,7 +298,9 @@ void MainView::showPage (Page newPage)
     tab.setToggleState (true, juce::dontSendNotification);
     fxPage.setVisible (newPage == Page::fx);
     drumPage.setVisible (newPage == Page::drums);
-    groovesPage.setVisible (newPage == Page::grooves);
+    if (groovesWindow == nullptr)
+        groovesPage.setVisible (newPage == Page::grooves);
+    showGroovesAway();   // 0.45.0: in its own window: the tab says so
     mixerPage.setVisible (newPage == Page::mixer);
     rigBrowser.setVisible (newPage == Page::presets);
     settingsPage.setVisible (newPage == Page::settings);
@@ -426,7 +505,11 @@ void MainView::resized()
 
     fxPage.setBounds (pageArea);
     drumPage.setBounds (pageArea);
-    groovesPage.setBounds (pageArea);
+    if (groovesWindow == nullptr)
+        groovesPage.setBounds (pageArea);
+    groovesAwayNote.setBounds (pageArea.withSizeKeepingCentre (pageArea.getWidth(), 40).translated (0, -40));
+    groovesShowWindow.setBounds (pageArea.withSizeKeepingCentre (180, 32).translated (-100, 20));
+    groovesBringBack.setBounds (pageArea.withSizeKeepingCentre (180, 32).translated (100, 20));
     mixerPage.setBounds (pageArea);
     rigBrowser.setBounds (pageArea);
     settingsPage.setBounds (pageArea);

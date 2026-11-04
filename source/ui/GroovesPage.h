@@ -31,6 +31,10 @@ class GroovesPage final : public juce::Component,
                           private juce::Timer
 {
 public:
+    // 0.45.0: THE GROOVES WINDOW: OWN WINDOW asks MainView to put the page in a window of its own (BACK IN PLUGIN: back).
+    std::function<void()> onToggleWindow;
+    void setInOwnWindow (bool);
+    juce::TextButton& getWindowButton() noexcept { return windowButton; }
     explicit GroovesPage (ParagonX1AudioProcessor&);
     ~GroovesPage() override;
 
@@ -167,7 +171,7 @@ private:
 
     // The header.
     juce::TextButton menuButton { "MENU" }, backButton { "<" }, forwardButton { ">" }, originalTempo { "ORIGINAL TEMPO" },
-                     stop { "STOP" }, partsToggle { "GROOVE PARTS" };
+                     stop { "STOP" }, partsToggle { "GROOVE PARTS" }, windowButton { "OWN WINDOW" };
     juce::ComboBox factor;
     juce::Label tempoLabel { {}, "TEMPO" }, velocityLabel { {}, "VELOCITY" }, status, playing;
     juce::Slider velocity { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };

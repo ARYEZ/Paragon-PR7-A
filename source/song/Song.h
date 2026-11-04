@@ -86,6 +86,8 @@ namespace song
         double loopStart = 0.0, loopEnd = 0.0;
         enum class Click { off, recording, always };
         Click click = Click::recording;
+        // 0.45.0: THE COUNT-IN: PLAY pressed with REC armed waits a bar (the click counting it in) before the song starts.
+        bool countIn = true;
         bool hasLoop() const noexcept { return loopOn && loopEnd > loopStart + 1.0e-9; }
 
         double beatsPerBar() const noexcept { return numerator * 4.0 / juce::jmax (1, denominator); }   // the first bars'
@@ -95,7 +97,7 @@ namespace song
         {
             return numerator == o.numerator && denominator == o.denominator && blocks == o.blocks && meters == o.meters
                 && tempos == o.tempos && followDaw == o.followDaw && loopOn == o.loopOn && loopStart == o.loopStart
-                && loopEnd == o.loopEnd && click == o.click;
+                && loopEnd == o.loopEnd && click == o.click && countIn == o.countIn;
         }
 
         // BARS (0.11.0), with the time signature changes: the time signature at a beat; every bar line from the start
@@ -183,6 +185,8 @@ namespace song
     // Every note on drum `from` played by drum `to` instead, with `to`'s own (on the same beat: one, the louder).
     void moveDrum (Block&, int from, int to);
     void addHit (Block&, Hit);                                   // one more (replacing one on that drum and beat)
+    // 0.45.0: a note moved along its row to `toBeat` (wrapped into the loop); one already there is replaced. False: none at `fromBeat`.
+    bool moveHit (Block&, int slot, double fromBeat, double toBeat);
     bool removeHitNear (Block&, int slot, double beat, double within);   // the nearest within that many beats
 
     // SONG PART colours (our own palette, a colour each kind).

@@ -67,6 +67,11 @@ public:
     FxPage& getFxPage() noexcept { return fxPage; }
     DrumPage& getDrumPage() noexcept { return drumPage; }
     GroovesPage& getGroovesPage() noexcept { return groovesPage; }
+    // 0.45.0: THE GROOVES WINDOW: the GROOVES page in a window of its own (its OWN WINDOW button) and back (BACK IN PLUGIN,
+    // or closing the window); while it's out, the GROOVES tab shows where it went.
+    void setGroovesInOwnWindow (bool);
+    bool areGroovesInOwnWindow() const noexcept { return groovesWindow != nullptr; }
+    juce::Component* getGroovesWindow() const noexcept;
     MixerPage& getMixerPage() noexcept { return mixerPage; }
     SettingsPage& getSettingsPage() noexcept { return settingsPage; }
     SongTrack& getSongTrack() noexcept { return songTrack; }
@@ -145,6 +150,13 @@ private:
     BlockEditor blockEditor;   // EDIT BLOCK (0.9.0): over the pages, opened from the song track
     SongCreator songCreator;   // THE SONG CREATOR (0.10.0): over the pages too (one of the two at a time)
     MachineView machine;       // THE DRUM MACHINE (0.38.0): over everything under the header
+    // 0.45.0: the GROOVES page's own window (after the page: it goes first, letting go of the page), and what the GROOVES
+    // tab shows meanwhile.
+    struct GroovesWindow;
+    std::unique_ptr<GroovesWindow> groovesWindow;
+    juce::Label groovesAwayNote;
+    juce::TextButton groovesShowWindow { "SHOW ITS WINDOW" }, groovesBringBack { "BACK IN PLUGIN" };
+    void showGroovesAway();
     ProgressBox progressBox;   // over everything while a long job runs (0.40.0)
     double loadingSince = -1.0;
     double hoverSince = -1.0;  // a drag over the DRUMS tab since then (-1: none)

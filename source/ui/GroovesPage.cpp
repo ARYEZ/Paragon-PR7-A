@@ -647,6 +647,10 @@ GroovesPage::GroovesPage (ParagonX1AudioProcessor& p) : processor (p), library (
     partsToggle.setClickingTogglesState (true);
     partsToggle.setToggleState (true, juce::dontSendNotification);
     partsToggle.onClick = [this] { partsShown = partsToggle.getToggleState(); resized(); };
+    windowButton.setTooltip ("OWN WINDOW: GROOVES in a window of its own (on a second screen, say), the plugin's window free for "
+                             "the kit, the mixer, the song. Drag grooves from it onto the song, the sequencer or your DAW as ever.");
+    windowButton.onClick = [this] { if (onToggleWindow != nullptr) onToggleWindow(); };
+    addAndMakeVisible (windowButton);
     for (juce::Component* c : { (juce::Component*) &search, (juce::Component*) &clearAll, (juce::Component*) &partsToggle })
         addAndMakeVisible (c);
 
@@ -2284,6 +2288,8 @@ void GroovesPage::resized()
     bar.removeFromLeft (8);
     clearAll.setBounds (bar.removeFromLeft (140).reduced (0, 1));
     bar.removeFromLeft (10);
+    windowButton.setBounds (bar.removeFromRight (130).reduced (0, 1));   // 0.45.0
+    bar.removeFromRight (8);
     partsToggle.setBounds (bar.removeFromRight (130).reduced (0, 1));
     bar.removeFromRight (10);
     chipArea = bar;
@@ -2326,4 +2332,12 @@ void GroovesPage::resized()
     tapPanel->setBounds (table.getBounds().getUnion (tapButton.getBounds()).expanded (4));
     riffPanel->setBounds (tapPanel->getBounds());
     rebuildChips();
+}
+
+void GroovesPage::setInOwnWindow (bool own)
+{
+    windowButton.setButtonText (own ? "BACK IN PLUGIN" : "OWN WINDOW");
+    windowButton.setTooltip (own ? "BACK IN PLUGIN: GROOVES back in the plugin's window (closing this window does the same)."
+                                 : "OWN WINDOW: GROOVES in a window of its own (on a second screen, say), the plugin's window free for "
+                                   "the kit, the mixer, the song. Drag grooves from it onto the song, the sequencer or your DAW as ever.");
 }

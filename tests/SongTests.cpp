@@ -1966,3 +1966,194 @@ TEST_CASE ("SONG LOOP 0.44.0: a note played after the loop goes round is recorde
     CHECK_THAT (snares[0], WithinAbs (0.5, 1.0e-3));
     CHECK_THAT (snares[1], WithinAbs (2.5, 1.0e-3));
 }
+
+//==============================================================================
+// 0.45.0: A NOTE MOVED SIDEWAYS, THE COUNT-IN, THE GROOVES WINDOW.
+TEST_CASE ("SONG 0.45.0 EDIT BLOCK: a note dragged sideways moves along the beat (on GRID, ALT free); up / down still sets velocity", "[song][song-edit][ui]")
+{
+    Plugin t;
+    song::Song s;
+    s.place (block ("A", 1, { { 0.0, BD }, { 1.0, SD } }), 0.0);
+    t.p.setSong (s);
+    BlockEditor editor (t.p);
+    editor.setBounds (0, 0, 1476, 672);
+    editor.open (0);
+    const auto mouse = [&editor] (juce::Point<float> at, juce::Point<float> from, juce::ModifierKeys mods)
+    {
+        return juce::MouseEvent (juce::Desktop::getInstance().getMainMouseSource(), at, mods, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                                 &editor, &editor, juce::Time::getCurrentTime(), from, juce::Time::getCurrentTime(), 1, false);
+    };
+    const auto left = juce::ModifierKeys::leftButtonModifier;
+    const auto blockNow = [&t] { return t.p.getSong().blocks[0]; };
+    const auto pxPerBeat = (editor.cellOf (SD, 2.0).getX() - editor.cellOf (SD, 1.0).getX());
+    REQUIRE (pxPerBeat > 10.0f);
+    t.p.flushUndoStep();
+
+    // The snare dragged right by 1.3 beats (and a little down): on the 1/16 GRID, beat 2.25 (1 + 1.3 = 2.3 -> 2.25).
+    const auto on = editor.cellOf (SD, 1.0).getCentre();
+    const auto to = on.translated (1.3f * pxPerBeat, 3.0f);
+    editor.mouseDown (mouse (on, on, left));
+    editor.mouseDrag (mouse (on.translated (8.0f, 0.0f), on, left));   // sideways first: it's a move
+    editor.mouseDrag (mouse (to, on, left));
+    editor.mouseUp (mouse (to, on, left));
+    const auto snareAt = [&blockNow]
+    {
+        std::vector<double> at;
+        for (const auto& h : blockNow().hits)
+            if (h.slot == SD)
+                at.push_back (h.beat);
+        return at;
+    };
+    REQUIRE (snareAt().size() == 1);
+    CHECK_THAT (snareAt()[0], WithinAbs (2.25, 1.0e-9));
+    CHECK_THAT (blockNow().hits.back().velocity, WithinAbs (1.0, 1.0e-6));   // its velocity kept
+    // One undo step: back on 1.
+    t.p.flushUndoStep();
+    t.p.undo();
+    CHECK_THAT (snareAt()[0], WithinAbs (1.0, 1.0e-9));
+
+    // With ALT: free, not on the grid.
+    const auto on2 = editor.cellOf (SD, 1.0).getCentre();
+    const auto to2 = on2.translated (0.4f * pxPerBeat, 0.0f);
+    const auto alt = juce::ModifierKeys (juce::ModifierKeys::leftButtonModifier | juce::ModifierKeys::altModifier);
+    editor.mouseDown (mouse (on2, on2, alt));
+    editor.mouseDrag (mouse (to2, on2, alt));
+    editor.mouseUp (mouse (to2, on2, alt));
+    CHECK (std::abs (snareAt()[0] - 1.4) < 0.5 / pxPerBeat + 1.0e-6);
+    CHECK (std::abs (snareAt()[0] - 1.5) > 0.05);   // not snapped to the 1/16 at 1.5
+
+    // Up / down first: velocity, the note stays where it is.
+    const auto kick = editor.cellOf (BD, 0.0).getCentre();
+    editor.mouseDown (mouse (kick, kick, left));
+    editor.mouseDrag (mouse (kick.translated (0.0f, 60.0f), kick, left));
+    editor.mouseUp (mouse (kick.translated (2.0f, 60.0f), kick, left));
+    for (const auto& h : blockNow().hits)
+        if (h.slot == BD)
+        {
+            CHECK (h.beat == 0.0);
+            CHECK_THAT (h.velocity, WithinAbs (0.5, 1.0e-4));
+        }
+
+    // The model: wrapped into the loop; a note already there is replaced.
+    auto b = block ("B", 1, { { 0.0, BD }, { 3.0, BD } });
+    CHECK (song::moveHit (b, BD, 3.0, 4.5));   // past the end: round to 0.5
+    CHECK (notesOf (b) == std::vector<std::pair<double, int>> { { 0.0, BD }, { 0.5, BD } });
+    CHECK (song::moveHit (b, BD, 0.5, 0.0));   // onto the other: one kick
+    CHECK (b.hits.size() == 1);
+    CHECK_FALSE (song::moveHit (b, SD, 0.0, 1.0));
+}
+
+TEST_CASE ("SONG 0.45.0 COUNT-IN: PLAY with REC armed clicks a bar first, then the song starts on the sample; nothing recorded meanwhile", "[song][song-player][loop]")
+{
+    Plugin t;
+    t.host.playing = false;
+    song::Song s;
+    s.place (block ("A", 2, { { 0.0, BD } }), 0.0);
+    REQUIRE (s.countIn);   // on by default
+    s.click = song::Song::Click::off;   // the count-in clicks whatever CLICK says
+    t.p.setSong (s);
+    t.p.flushUndoStep();
+    t.p.setSongRecording (true);
+    t.p.playSong (0.0);
+    // A note during the count-in (sample 30000) and one half a beat into the song (96000 + 12000).
+    juce::AudioBuffer<float> buffer (2, blockSize);
+    std::vector<float> out;
+    auto countingSeen = false;
+    for (int done = 0; done < (int) (2.6 * sampleRate); done += blockSize)
+    {
+        juce::MidiBuffer midi;
+        for (const auto at : { 30000, 108000 })
+            if (at >= done && at < done + blockSize)
+                midi.addEvent (juce::MidiMessage::noteOn (1, 38, (juce::uint8) 100), at - done);
+        buffer.clear();
+        t.p.processBlock (buffer, midi);
+        countingSeen = countingSeen || t.p.isCountingIn();
+        out.insert (out.end(), buffer.getReadPointer (0), buffer.getReadPointer (0) + blockSize);
+    }
+    CHECK (countingSeen);
+    CHECK_FALSE (t.p.isCountingIn());
+    const auto o = onsets (out);
+    // The count-in's four clicks a beat apart (each a sine from 0: heard from its beat's next sample), the snare played
+    // at 30000 (the kit plays it), then the song's kick on its first beat, a bar after PLAY, on the very sample.
+    REQUIRE (o.size() >= 6);
+    CHECK (o[0] == 1);
+    CHECK (o[1] == 24001);
+    CHECK (o[2] == 30000);
+    CHECK (o[3] == 48001);
+    CHECK (o[4] == 72001);
+    CHECK (o[5] == 96000);
+    t.p.setSongRecording (false);
+    // Only the note played in the song recorded, at beat 0.5.
+    std::vector<double> snares;
+    for (const auto& b : t.p.getSong().blocks)
+        for (const auto& h : b.hits)
+            if (h.slot == SD)
+                snares.push_back (b.start + h.beat);
+    REQUIRE (snares.size() == 1);
+    CHECK_THAT (snares[0], WithinAbs (0.5, 1.0e-3));
+
+    // Off (or not recording): no wait.
+    auto noWait = t.p.getSong();
+    noWait.countIn = false;
+    t.p.setSong (noWait);
+    t.p.setSongRecording (true);
+    t.p.playSong (0.0);
+    const auto straight = onsets (t.play (0.3));
+    REQUIRE_FALSE (straight.empty());
+    CHECK (straight[0] == 0);
+    t.p.setSongRecording (false);
+    t.p.stopSong();
+    t.p.playSong (0.0);   // not recording: no count-in either
+    noWait.countIn = true;
+    t.p.setSong (noWait);
+    t.p.playSong (0.0);
+    CHECK (onsets (t.play (0.3))[0] == 0);
+    CHECK_FALSE (song::Song::fromXml (*noWait.toXml()).countIn == false);
+    noWait.countIn = false;
+    CHECK_FALSE (song::Song::fromXml (*noWait.toXml()).countIn);
+}
+
+TEST_CASE ("GROOVES 0.45.0: OWN WINDOW puts the page in a window of its own; BACK IN PLUGIN (or closing it) brings it back", "[song][ui]")
+{
+    Plugin t;
+    std::unique_ptr<juce::AudioProcessorEditor> editor (t.p.createEditor());
+    editor->setSize (1600, 900);
+    auto* view = dynamic_cast<MainView*> (editor->getChildComponent (0));
+    REQUIRE (view != nullptr);
+    auto& page = view->getGroovesPage();
+    view->showPage (MainView::Page::grooves);
+    CHECK (page.getParentComponent() == view);
+    CHECK (page.getWindowButton().getButtonText() == "OWN WINDOW");
+
+    page.getWindowButton().triggerClick();
+    juce::MessageManager::getInstance()->runDispatchLoopUntil (50);
+    REQUIRE (view->areGroovesInOwnWindow());
+    auto* window = view->getGroovesWindow();
+    REQUIRE (window != nullptr);
+    CHECK (window->isOnDesktop());
+    CHECK (page.getTopLevelComponent() == window);
+    CHECK (page.isVisible());
+    CHECK (page.getWidth() >= 1100);
+    CHECK (page.getWindowButton().getButtonText() == "BACK IN PLUGIN");
+    // The GROOVES tab says where it went; other pages leave the page alone (it stays up in its window).
+    bool noteShown = false;
+    for (auto* c : view->getChildren())
+        if (auto* l = dynamic_cast<juce::Label*> (c); l != nullptr && l->isVisible() && l->getText().contains ("window of its own"))
+            noteShown = true;
+    CHECK (noteShown);
+    view->showPage (MainView::Page::drums);
+    CHECK (page.isVisible());
+
+    // Back.
+    view->setGroovesInOwnWindow (false);
+    CHECK_FALSE (view->areGroovesInOwnWindow());
+    CHECK (page.getParentComponent() == view);
+    CHECK_FALSE (page.isVisible());   // on DRUMS now
+    view->showPage (MainView::Page::grooves);
+    CHECK (page.isVisible());
+    CHECK (page.getBounds() == juce::Rectangle<int> (12, 68, 1476, 672));
+    CHECK (page.getWindowButton().getButtonText() == "OWN WINDOW");
+    // Out again, then the plugin's window closed with it out: no crash, the page let go of first.
+    view->setGroovesInOwnWindow (true);
+    editor.reset();
+}

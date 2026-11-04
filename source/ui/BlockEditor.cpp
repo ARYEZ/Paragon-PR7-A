@@ -369,10 +369,10 @@ void BlockEditor::paint (juce::Graphics& g)
     // The notes: as tall as they're loud, in the drum group's colour (the one being dragged, as dragged).
     for (const auto& h : b->hits)
     {
-        const auto cell = cellOf (h.slot, h.beat);
+        const auto dragged = h.slot == dragSlot && std::abs (h.beat - dragBeat) < 1.0e-6;
+        const auto cell = cellOf (h.slot, dragged && dragWay == DragWay::move ? dragTo : h.beat);   // (0.45.0: where it's going)
         if (cell.isEmpty())
             continue;
-        const auto dragged = h.slot == dragSlot && std::abs (h.beat - dragBeat) < 1.0e-6;
         const auto v = dragged ? dragVelocity : h.velocity;
         g.setColour (ParagonColours::accent.withAlpha (0.25f));
         g.fillRect (cell);
@@ -428,8 +428,9 @@ void BlockEditor::mouseDown (const juce::MouseEvent& e)
     if (under != b->hits.end())
     {
         dragSlot = slot;
-        dragBeat = under->beat;
+        dragBeat = dragTo = under->beat;
         dragFrom = dragVelocity = under->velocity;
+        dragWay = DragWay::undecided;
         return;
     }
     auto at = std::round (beat / gridBeats()) * gridBeats();
@@ -438,11 +439,38 @@ void BlockEditor::mouseDown (const juce::MouseEvent& e)
     edit ([slot, at] (song::Block& block) { song::addHit (block, { at, slot, 0.8f }); });
 }
 
+void BlockEditor::moveNote (int slot, double fromBeat, double toBeat)
+{
+    edit ([slot, fromBeat, toBeat] (song::Block& block) { song::moveHit (block, slot, fromBeat, toBeat); });
+}
+
 void BlockEditor::mouseDrag (const juce::MouseEvent& e)
 {
     if (dragSlot < 0)
         return;
-    dragVelocity = juce::jlimit (1.0f / 127.0f, 1.0f, dragFrom - (float) e.getDistanceFromDragStartY() / 120.0f);
+    // 0.45.0: the first few pixels decide: up / down sets its velocity, sideways moves it along the beat.
+    if (dragWay == DragWay::undecided)
+    {
+        const auto dx = std::abs (e.getDistanceFromDragStartX()), dy = std::abs (e.getDistanceFromDragStartY());
+        if (juce::jmax (dx, dy) < 4)
+            return;
+        dragWay = dx > dy ? DragWay::move : DragWay::velocity;
+    }
+    if (dragWay == DragWay::move)
+    {
+        const auto* b = block();
+        if (b == nullptr)
+            return;
+        const auto pxPerBeat = (double) grid.getWidth() / juce::jmax (1.0e-6, b->loopLength);
+        auto to = dragBeat + (double) e.getDistanceFromDragStartX() / pxPerBeat;
+        if (! e.mods.isAltDown())
+            to = std::round (to / gridBeats()) * gridBeats();   // on GRID (ALT: free)
+        dragTo = juce::jlimit (0.0, b->loopLength - 1.0e-6, to);
+        if (dragTo > b->loopLength - 1.0e-6 - 1.0e-9 && ! e.mods.isAltDown())
+            dragTo = std::floor ((b->loopLength - 1.0e-6) / gridBeats()) * gridBeats();
+    }
+    else
+        dragVelocity = juce::jlimit (1.0f / 127.0f, 1.0f, dragFrom - (float) e.getDistanceFromDragStartY() / 120.0f);
     repaint();
 }
 
@@ -453,7 +481,16 @@ void BlockEditor::mouseUp (const juce::MouseEvent&)
     const auto slot = dragSlot;
     const auto at = dragBeat;
     const auto v = dragVelocity;
+    const auto way = dragWay;
     dragSlot = -1;
+    dragWay = DragWay::undecided;
+    if (way == DragWay::move)
+    {
+        if (std::abs (dragTo - at) > 1.0e-9)
+            moveNote (slot, at, dragTo);
+        repaint();
+        return;
+    }
     if (std::abs (v - dragFrom) > 1.0e-4f)
         edit ([slot, at, v] (song::Block& block)
         {

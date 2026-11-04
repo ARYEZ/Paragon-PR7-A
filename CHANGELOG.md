@@ -2,6 +2,33 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.45.0
+
+Three from the GROOVES list, as you asked.
+
+**A COUNT-IN before recording.** Press PLAY with REC armed and the song waits one bar while the click counts you in (four clicks in 4/4, the first higher), then starts on the very sample the bar ends.
+- Nothing plays and nothing records during the count-in. A note you hit early isn't written into the song.
+- It counts at the tempo where PLAY starts, and in that bar's time signature.
+- It's on by default. Turn it off in CLICK... > Count In One Bar Before Recording.
+- It clicks whatever CLICK is set to (even OFF), since the count-in is how you hear it.
+- Only for PLAY: while your DAW drives the song, use your DAW's own count-in.
+
+**Move notes sideways in EDIT BLOCK.** Grab a note and drag it left or right: it moves along the beat, snapping to GRID.
+- Hold ALT for a free move, off the grid.
+- Dragging up or down still sets its velocity; the first few pixels of the drag decide which.
+- Its velocity stays as it was. Dropped onto another note of the same drum, it replaces it.
+- Each move is one undo step.
+
+**GROOVES in a window of its own.** OWN WINDOW (on the filter bar, beside GROOVE PARTS) puts the whole GROOVES page in a separate, resizable window, on a second screen say, leaving the plugin's window free for the kit, the mixer and the song.
+- Drag grooves from it onto the song strip, the sequencer or a DAW track as before.
+- The GROOVES tab in the plugin says it's away (SHOW ITS WINDOW / BACK IN PLUGIN).
+- BACK IN PLUGIN, or closing the window, brings it back.
+- The window stays above your DAW so clicking the DAW doesn't hide it, and it closes with the plugin's window.
+
+**Tests:** the count-in's four clicks and the song's first kick on their samples, a note during the count-in not recorded and one after it at its beat, off = no wait; a note dragged 1.3 beats landing on 2.25 (1/16 GRID), ALT free, up / down still velocity, one undo step, the move's wrapping and replacing; the GROOVES page into its window and back, and the plugin's window closed with it out. pluginval passes at strictness 10.
+
+**Not checked here:** the window in a real DAW on Windows (only the desktop of this test machine), and dragging from it into PR7-S.
+
 ## 0.44.0
 
 **THE SONG TRACK's LOOP AREA.** PLAY can now go round a part of the song while you work on it, or record over it take after take.

@@ -371,6 +371,8 @@ namespace song
         }
         if (click != Click::recording)
             xml->setAttribute ("click", (int) click);
+        if (! countIn)
+            xml->setAttribute ("countIn", false);   // (0.45.0; on when it's not there)
         for (const auto& b : blocks)
         {
             auto* e = xml->createNewChildElement ("Block");
@@ -406,6 +408,7 @@ namespace song
         s.loopStart = juce::jmax (0.0, xml.getDoubleAttribute ("loopStart", 0.0));
         s.loopEnd = juce::jmax (s.loopStart, xml.getDoubleAttribute ("loopEnd", 0.0));
         s.click = (Click) juce::jlimit (0, 2, xml.getIntAttribute ("click", (int) Click::recording));
+        s.countIn = xml.getBoolAttribute ("countIn", true);
         for (const auto* e : xml.getChildWithTagNameIterator ("Block"))
         {
             Block b;
@@ -574,6 +577,24 @@ namespace song
         std::erase_if (b.hits, [&hit] (const Hit& h) { return h.slot == hit.slot && std::abs (h.beat - hit.beat) < 1.0e-6; });
         b.hits.push_back (hit);
         tidy (b.hits);
+    }
+
+    bool moveHit (Block& b, int slot, double fromBeat, double toBeat)
+    {
+        const auto it = std::find_if (b.hits.begin(), b.hits.end(),
+                                      [slot, fromBeat] (const Hit& h) { return h.slot == slot && std::abs (h.beat - fromBeat) < 1.0e-6; });
+        if (it == b.hits.end() || b.loopLength <= 0.0)
+            return false;
+        auto moved = *it;
+        b.hits.erase (it);
+        auto to = std::fmod (toBeat, b.loopLength);
+        if (to < 0.0)
+            to += b.loopLength;
+        if (to >= b.loopLength - 1.0e-9)
+            to = 0.0;
+        moved.beat = to;
+        addHit (b, moved);
+        return true;
     }
 
     bool removeHitNear (Block& b, int slot, double beat, double within)

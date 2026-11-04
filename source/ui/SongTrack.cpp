@@ -52,7 +52,11 @@ SongTrack::SongTrack (ParagonX1AudioProcessor& p) : processor (p)
         if (processor.isSongPlaying())
             processor.stopSong();
         else
+        {
             processor.playSong (startBeat);
+            if (processor.isSongRecording() && processor.getSong().countIn)
+                showNote ("COUNT-IN: one bar of clicks, then the song plays and records.", 3.0);
+        }
     };
     addAndMakeVisible (play);
     exportButton.setTooltip ("The whole song as one MIDI file on the kit's notes: click to save it, drag it onto a DAW track.");
@@ -559,6 +563,12 @@ juce::PopupMenu SongTrack::clickMenu()
     menu.addItem ("Off", true, now == song::Song::Click::off, [set] { set (song::Song::Click::off); });
     menu.addItem ("While Recording", true, now == song::Song::Click::recording, [set] { set (song::Song::Click::recording); });
     menu.addItem ("Always (while the song plays)", true, now == song::Song::Click::always, [set] { set (song::Song::Click::always); });
+    menu.addSeparator();
+    const auto countIn = processor.getSong().countIn;
+    menu.addItem ("Count In One Bar Before Recording", true, countIn, [this, countIn]
+    {
+        edit ([countIn] (song::Song& s) { s.countIn = ! countIn; });
+    });
     return menu;
 }
 

@@ -3497,6 +3497,7 @@ void ParagonX1AudioProcessor::installSong (std::shared_ptr<const song::Song> new
     playback->loopStart = newSong->loopStart;
     playback->loopEnd = newSong->loopEnd;
     playback->click = newSong->click;
+    playback->countIn = newSong->countIn;
     playback->barLines = newSong->barLines (juce::jmax (newSong->endBeat(), newSong->loopEnd) + 64.0);
     songData = std::move (newSong);
     if (songPlayback != nullptr)
@@ -3602,6 +3603,7 @@ int ParagonX1AudioProcessor::collectSongHits (int numSamples, double ppq, double
     {
         const auto from = ppq, to = from + numSamples * perSample;
         songLocal = false;   // the DAW started: it leads (PLAY doesn't carry on from its own place when the DAW stops)
+        songCountingIn = false;
         songChunk = { true, false, from, perSample, 0.0, bpm, s };
         collect (from, to, 0.0, false, 0, numSamples);
         songPosition = to;
@@ -3611,6 +3613,7 @@ int ParagonX1AudioProcessor::collectSongHits (int numSamples, double ppq, double
     {
         songPosition = -1.0;
         songChunk.active = false;
+        songCountingIn = false;
         return 0;
     }
 
@@ -3626,9 +3629,36 @@ int ParagonX1AudioProcessor::collectSongHits (int numSamples, double ppq, double
     {
         songLocalSeen = starts;
         restartAt (songLocalFrom.load());
+        // THE COUNT-IN (0.45.0): PLAY with REC armed waits a bar of the song's time at the start's tempo, clicking it in.
+        songCountInLeft = songCountInDone = 0;
+        if (s != nullptr && s->countIn && songRecording.load())
+        {
+            const auto from = songLocalFrom.load();
+            const auto bpmHere = timed ? s->timing.bpmAt (from, bpm) : bpm;
+            songCountInSpb = 60.0 / juce::jmax (1.0, bpmHere) * sampleRate;
+            songCountInBeats = juce::jmax (1, (int) std::round (s->barLengthAt (from)));
+            songCountInLeft = (juce::int64) std::llround (songCountInBeats * songCountInSpb);
+        }
     }
     if (timed != songTimed)
         restartAt (juce::jmax (0.0, songPosition.load()));   // tempo changes added or all gone: carry on from here
+    // The count-in's part of this piece first (the song waits); the song from where it ends.
+    const auto pre = (int) juce::jmin ((juce::int64) numSamples, songCountInLeft);
+    const auto countInFrom = (double) songCountInDone;
+    songCountInLeft -= pre;
+    songCountInDone += pre;
+    songCountingIn = songCountInLeft > 0;
+    if (pre >= numSamples)
+    {
+        songChunk = { true, false, songBase, perSample, 0.0, bpm, s };
+        songChunk.startAt = numSamples;
+        songChunk.countInBeats = songCountInBeats;
+        songChunk.countInFrom = countInFrom;
+        songChunk.countInSpb = songCountInSpb;
+        songPosition = songBase;
+        return count;
+    }
+    const auto length = numSamples - pre;
     // Where PLAY's clock is for the next `n` samples.
     struct Where { double from = 0.0, to = 0.0, secondsFrom = 0.0, samplesFrom = 0.0; };
     const auto where = [&] (int n)
@@ -3650,29 +3680,34 @@ int ParagonX1AudioProcessor::collectSongHits (int numSamples, double ppq, double
         }
         return w;
     };
-    auto w = where (numSamples);
+    auto w = where (length);
     // THE LOOP AREA (0.44.0): reaching its end, PLAY goes back to its start on the very sample (the rest of the piece
     // from there). Only when PLAY is before its end: started after it, the song plays on to its end as before.
     const auto looping = s != nullptr && s->loopOn && s->loopEnd > s->loopStart + 1.0e-9;
-    auto first = numSamples;
+    auto first = length;
     if (looping && w.from < s->loopEnd - 1.0e-9 && w.to >= s->loopEnd - 1.0e-9)
     {
         const auto atEnd = timed ? (s->timing.secondsAt (s->loopEnd, bpm) - w.secondsFrom) * sampleRate : (s->loopEnd - w.from) / perSample;
-        first = juce::jlimit (0, numSamples, (int) std::ceil (atEnd - 1.0e-4));
+        first = juce::jlimit (0, length, (int) std::ceil (atEnd - 1.0e-4));
     }
-    songChunk = { true, timed, w.from, perSample, w.samplesFrom, bpm, s };
-    collect (w.from, first < numSamples ? s->loopEnd : w.to, w.samplesFrom, true, 0, first);
+    // The piece's mapping (sample -> beat) from its own first sample: the song's part starts `pre` samples in.
+    songChunk = { true, timed, w.from - pre * perSample, perSample, w.samplesFrom - pre, bpm, s };
+    songChunk.startAt = pre;
+    songChunk.countInBeats = pre > 0 ? songCountInBeats : 0;
+    songChunk.countInFrom = countInFrom;
+    songChunk.countInSpb = songCountInSpb;
+    collect (w.from, first < length ? s->loopEnd : w.to, w.samplesFrom, true, pre, first);
     songSamples += first;
     auto to = w.to;
-    if (first < numSamples)
+    if (first < length)
     {
         restartAt (s->loopStart);
-        const auto rest = numSamples - first;
+        const auto rest = length - first;
         const auto w2 = where (rest);
-        songChunk.wrapAt = first;
+        songChunk.wrapAt = pre + first;
         songChunk.from2 = w2.from;
         songChunk.samplesFrom2 = w2.samplesFrom;
-        collect (w2.from, w2.to, w2.samplesFrom, true, first, rest);
+        collect (w2.from, w2.to, w2.samplesFrom, true, pre + first, rest);
         songSamples += rest;
         to = w2.to;
     }
@@ -3697,12 +3732,33 @@ int ParagonX1AudioProcessor::collectSongHits (int numSamples, double ppq, double
     return count;
 }
 
+double ParagonX1AudioProcessor::SongPlayback::barLengthAt (double beat) const noexcept
+{
+    // The bar a beat is in: from the bar line at or before it to the next (past the lines worked out: the last bar's).
+    const auto it = std::upper_bound (barLines.begin(), barLines.end(), beat + 1.0e-6);
+    if (it != barLines.end() && it != barLines.begin())
+        return *it - *(it - 1);
+    if (barLines.size() >= 2)
+        return barLines.back() - barLines[barLines.size() - 2];
+    return 4.0;
+}
+
+
 void ParagonX1AudioProcessor::noteSongClicks (int blockOffset, int numSamples, double bpm) noexcept
 {
     // THE CLICK (0.44.0): a click on every beat this piece crosses (where the song is: songChunk), accented on a bar line.
     const auto* s = songChunk.playback;
-    if (! songChunk.active || s == nullptr || s->click == song::Song::Click::off
-        || (s->click == song::Song::Click::recording && ! songRecording.load()))
+    if (! songChunk.active || s == nullptr)
+        return;
+    // THE COUNT-IN's clicks (0.45.0: whatever CLICK is set to: it's how the count-in is heard), the first accented.
+    for (int k = 0; k < songChunk.countInBeats && numSongClicks < (int) songClicks.size(); ++k)
+    {
+        const auto at = k * songChunk.countInSpb - songChunk.countInFrom;
+        const auto sample = (int) std::ceil (at - 1.0e-4);
+        if (sample >= 0 && sample < songChunk.startAt && sample < numSamples)
+            songClicks[(size_t) numSongClicks++] = { blockOffset + sample, k == 0 };
+    }
+    if (s->click == song::Song::Click::off || (s->click == song::Song::Click::recording && ! songRecording.load()))
         return;
     const auto sampleRate = getSampleRate();
     const auto stretch = [&] (double from, double samplesFrom, bool timed, int offset, int n)
@@ -3711,8 +3767,10 @@ void ParagonX1AudioProcessor::noteSongClicks (int blockOffset, int numSamples, d
         {
             return timed ? s->timing.beatAtSeconds ((samplesFrom + i) / sampleRate, bpm) : from + i * songChunk.perSample;
         };
+        // (0.45.0: from the song's own first sample in the piece, after any count-in)
+        const auto skip = offset == 0 ? juce::jmin (n, songChunk.startAt) : 0;
         const auto to = beatAt (n);
-        for (auto beat = std::ceil (from - 1.0e-9); beat < to - 1.0e-9 && numSongClicks < (int) songClicks.size(); beat += 1.0)
+        for (auto beat = std::ceil (beatAt (skip) - 1.0e-9); beat < to - 1.0e-9 && numSongClicks < (int) songClicks.size(); beat += 1.0)
         {
             if (beat < 0.0)
                 continue;
@@ -3933,8 +3991,8 @@ void ParagonX1AudioProcessor::recordSongNotes (const juce::MidiBuffer& midi, int
     for (const auto metadata : midi)
     {
         const auto pos = metadata.samplePosition - offset;
-        if (pos < 0 || pos >= numSamples)
-            continue;
+        if (pos < songChunk.startAt || pos >= numSamples)
+            continue;   // (0.45.0: notes during the count-in aren't the song's)
         const auto& m = metadata.getMessage();
         if (! m.isNoteOn())
             continue;
