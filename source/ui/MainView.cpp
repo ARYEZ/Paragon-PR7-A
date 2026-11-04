@@ -81,6 +81,7 @@ MainView::MainView (ParagonX1AudioProcessor& processorToShow)
       rigBrowser (processorToShow),
       settingsPage (processorToShow),
       blockEditor (processorToShow),
+      playStyle (processorToShow),
       songCreator (processorToShow),
       machine (processorToShow)
 {
@@ -127,13 +128,46 @@ MainView::MainView (ParagonX1AudioProcessor& processorToShow)
     // ask); a groove dropped on it from the list is a block.
     addAndMakeVisible (songTrack);
     songTrack.onGrooveDropped = [this] (int row, double beat) { groovesPage.addRowToSong (row, beat); };
-    songTrack.onEditBlock = [this] (int block)
-    {
-        showSong (true);
-        songCreator.setVisible (false);
-        blockEditor.open (block);
-    };
+    songTrack.onEditBlock = [this] (int block) { openGridEditor (block); };
     addChildComponent (blockEditor);
+    // EDIT PLAY STYLE (0.46.0): from the block's menu (EDIT MIDI), the P key, a double-click (or the block's arrow) when
+    // it was the one used last; its GRID EDITOR tab, and the grid editor's EDIT PLAY STYLE, switch between the two.
+    addChildComponent (playStyle);
+    songTrack.onPlayStyle = [this] (int block) { openPlayStyle (block); };
+    songTrack.onEditMidi = [this] (int block)
+    {
+        if (playStyleLast)
+            openPlayStyle (block);
+        else
+            openGridEditor (block);
+    };
+    songTrack.onArrow = [this] (int block)
+    {
+        // Again on the block it's open on: closed.
+        if (playStyle.isVisible() && ! playStyle.getBlocks().empty() && playStyle.getBlocks().front() == block)
+            playStyle.close();
+        else if (blockEditor.isVisible() && blockEditor.getBlock() == block)
+            blockEditor.setVisible (false);
+        else
+            songTrack.onEditMidi (block);
+    };
+    songTrack.onSelectionChanged = [this]
+    {
+        if (playStyle.isVisible())
+        {
+            if (const auto chosen = songTrack.getSelection(); ! chosen.empty())
+                playStyle.setBlocks (chosen);
+        }
+    };
+    playStyle.onHighlightChanged = [this] (song::SlotMask slots) { songTrack.setHighlight (slots); };
+    playStyle.onClose = [this]
+    {
+        songTrack.setMultiChoose (false);
+        songTrack.setHighlight (0);
+        songTrack.setRecordingAllowed (true);
+    };
+    playStyle.onGridEditor = [this] (int block) { openGridEditor (block); };
+    blockEditor.onPlayStyle = [this] (int block) { openPlayStyle (block); };
     // THE SONG CREATOR: CREATOR... on the strip (again: closes it), USE WITH SONG CREATOR on a groove or a block, a groove
     // from the GROOVES list dropped on it; its grooves dragged onto the strip.
     addChildComponent (songCreator);
@@ -282,7 +316,7 @@ void MainView::setGroovesInOwnWindow (bool own)
         groovesWindow.reset();
         addChildComponent (groovesPage);
         groovesPage.setBounds (pageArea);
-        groovesPage.toBehind (&blockEditor);
+        groovesPage.toBehind (&blockEditor);   // (behind EDIT PLAY STYLE too: it comes after the editor)
     }
     groovesPage.setInOwnWindow (own);
     showPage (page);
@@ -519,6 +553,7 @@ void MainView::resized()
     rigBrowser.setBounds (pageArea);
     settingsPage.setBounds (pageArea);
     blockEditor.setBounds (pageArea);
+    playStyle.setBounds (pageArea);
     songCreator.setBounds (pageArea);
     machine.setBounds (machineArea);
     progressBox.setCentrePosition (getLocalBounds().getCentre());
@@ -530,10 +565,39 @@ void MainView::showSong (bool)
     songTrack.setVisible (! machine.isVisible());
 }
 
+void MainView::openPlayStyle (int block)
+{
+    showSong (true);
+    songCreator.setVisible (false);
+    blockEditor.setVisible (false);
+    playStyleLast = true;
+    auto chosen = songTrack.getSelection();
+    if (std::find (chosen.begin(), chosen.end(), block) == chosen.end())
+    {
+        chosen = { block };
+        songTrack.setSelection (chosen);
+    }
+    songTrack.setMultiChoose (true);
+    songTrack.setRecordingAllowed (false);   // as the manual has it: no recording into the song while it's open
+    playStyle.open (chosen);
+}
+
+void MainView::openGridEditor (int block)
+{
+    showSong (true);
+    songCreator.setVisible (false);
+    if (playStyle.isVisible())
+        playStyle.close();
+    playStyleLast = false;
+    blockEditor.open (block);
+}
+
 void MainView::openSongCreator (const juce::File& source)
 {
     showSong (true);
     blockEditor.setVisible (false);
+    if (playStyle.isVisible())
+        playStyle.close();
     if (source != juce::File())
         songCreator.setSource (source);
     songCreator.open();
@@ -587,6 +651,8 @@ void MainView::updateDragHover (double nowMs, bool dragStillOn)
         dragPeek = false;
         songCreator.setVisible (false);
         blockEditor.setVisible (false);
+        if (playStyle.isVisible())
+            playStyle.close();
         showPage (Page::drums);
     }
     if (! dragStillOn)

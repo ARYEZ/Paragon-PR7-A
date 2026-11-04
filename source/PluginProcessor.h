@@ -395,6 +395,11 @@ public:
     // plays, from PLAY's place while it's stopped. Kept in the project (not in presets); edits are undo steps.
     const song::Song& getSong() const noexcept { return *songData; }
     void setSong (song::Song);   // an edit: played from the next block, an undo step
+    // EDIT PLAY STYLE (0.46.0): the song as it would be while a knob turns, heard at once but not yet an undo step (the
+    // setSong when the knob is let go makes it one); and SOLO SELECTED: only these drums of the song heard (0: all).
+    void previewSong (song::Song);
+    void setSongSolo (song::SlotMask);
+    song::SlotMask getSongSolo() const noexcept { return songSolo; }
     // A block from a groove in linked folder `folder` (its notes through that folder's map, at the preview's TEMPO
     // factor and VELOCITY), and that block put in the song at `beat` (-1: after the last block). Returns its index.
     song::Block songBlockFrom (const grooves::Groove&, int folder) const;
@@ -729,6 +734,7 @@ private:
         double barLengthAt (double beat) const noexcept;
     };
     void installSong (std::shared_ptr<const song::Song>);
+    song::SlotMask songSolo = 0;
     int collectSongHits (int numSamples, double ppq, double bpm, synth::drums::SlotHit* into, int room) noexcept;
     std::shared_ptr<const song::Song> songData = std::make_shared<const song::Song>();
     std::optional<song::Block> songClipboard;

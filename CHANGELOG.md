@@ -2,6 +2,75 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.46.0
+
+**EDIT PLAY STYLE**, after section 7.3.1 of the manual you sent. You change how a song block's drums play, one instrument at a time, on the drawn kit. It works the way the manual describes. The look, the words and the way AMOUNT decides where notes go are ours.
+
+This release also carries 0.45.0 (the count-in, moving notes sideways, the GROOVES window). 0.45.0 never published on its own because CI cancelled its macOS build.
+
+**Opening it:**
+- double-click a song block;
+- click the small arrow at a block's top left (click it again to close);
+- right-click a block > Edit MIDI > Edit Play Style;
+- choose a block and press P (E opens the GRID EDITOR, the old EDIT BLOCK).
+
+The window has two tabs, EDIT PLAY STYLE and GRID EDITOR, to switch between the two views of the same block. A double-click opens whichever you used last. X closes it, and the song plays on.
+
+**The kit:**
+- The instruments the block plays stay lit and outlined; the rest are dimmed.
+- Click an instrument to choose it (SHIFT: more than one).
+- SELECT INSTRUMENT lists every instrument, with the ones the block plays marked. It also has All Playing Drums, All Toms and All Crashes.
+- Instruments that aren't in the picture (clap, tambourine, shaker, crashes 3-6, the FX crash, china 2, tom 5) have buttons under it.
+- The chosen instruments' notes light up in the song strip.
+
+**AMOUNT** turns left for fewer hits and right for more, with TOTAL HITS showing the count. Its arrow, or CTRL / CMD-click on the knob, resets it.
+- Taking away removes the least leaned-on, softest notes first: off-beat eighths before beats, beats before the bar's first.
+- Adding fills the strongest empty places first, on the groove's own straight or triplet grid, at the instrument's own loudness (softer off the beat). Each kind of drum adds what it would play:
+  - the kick on the downbeats and eighths;
+  - the snare its backbeats, then soft ghost notes;
+  - hats, ride and percussion on the eighths;
+  - toms at the bar's end;
+  - crashes on bar lines.
+- It always works from the instrument's notes as they were, so turning it back to 0 gives the groove back exactly.
+- It works on instruments the block doesn't play too, to add percussion.
+
+The manual's version learns from thousands of real performances; ours is our own set of rules about where drummers put their notes.
+
+**The other controls:**
+- **VELOCITY**: softer (down to half) or louder (up to twice), with the balance between hits kept.
+- **SOLO SELECTED**: only the chosen instruments heard.
+
+**Right-click an instrument:**
+- Cut MIDI, Copy MIDI;
+- Paste MIDI (the copied instrument's notes onto it, replacing its own);
+- Remove MIDI (AMOUNT turned back up brings them back);
+- Quantize;
+- Articulation (for one instrument, e.g. every snare note a rimshot).
+
+**The POWER HAND flag** sits on the groove's leading instrument.
+- Drag it onto another one (the ride, its bell, a crash, even a tom) and every note moves there, merged with what that instrument played.
+- The hi-hat's pedal stays: that's the foot.
+- Its arrow chooses the articulation.
+
+**The OPENING HIT flag** adds one hit at the block's start (only the first time round), switched with OPENING HIT ON / OFF. Drag it onto any instrument; its arrow chooses the articulation.
+
+**Several blocks at once:** SHIFT-click more blocks in the strip while the window is open, and every change applies to all of them.
+
+Each change is one undo step; while you turn a knob, you hear it straight away. Recording into the song is off while the window is open, as in the manual.
+
+**Tests:**
+- AMOUNT keeps the beats and drops the off-beats first, all the way down removes everything, and 0 gives the groove back;
+- the kick fills eighths and beats, the snare gets ghost notes under 0.36, the tambourine lands on bar starts, and a triplet groove is filled on triplets;
+- the power hand moves to the ride (merged, louder kept, pedal left), to its bell and to a tom;
+- the opening hit lands on its exact sample, once per block, and survives saving and splitting;
+- SOLO SELECTED silences the kick;
+- the window: the menu and keys, the chosen instruments, each knob per instrument, undo, REMOVE MIDI then AMOUNT, two blocks with SHIFT, REC off and back;
+- quantize, articulation, copy / paste onto a tom, cut.
+
+pluginval passes at strictness 10.
+
+**Not checked here:** how the added notes sound (your ears), and dragging the flags with a real mouse in a DAW.
+
 ## 0.45.0
 
 Three from the GROOVES list, as you asked.

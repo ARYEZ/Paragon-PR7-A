@@ -813,6 +813,28 @@ TEST_CASE ("Render the editor to a PNG", "[.][snapshot]")
                 view->getBlockEditor().open (2);
                 view->getBlockEditor().chooseDrum (2, false);
             }
+            // 0.46.0: EDIT PLAY STYLE on the chorus (=1: as it opens), =2: the POWER HAND moved to the ride, =3: and more
+            // kick (AMOUNT +50%), =4: and the snare busier (AMOUNT +40%: ghost notes).
+            if (const auto step = env ("PARAGON_SNAPSHOT_PLAYSTYLE").getIntValue(); step > 0)
+            {
+                view->openPlayStyle (2);
+                auto& ps = view->getPlayStyle();
+                if (step >= 2)
+                {
+                    ps.movePowerHand (8, synth::drums::notemap::RD);
+                    ps.choose (8);
+                }
+                if (step >= 3)
+                {
+                    ps.choose (0);
+                    ps.setAmount (0.5);
+                }
+                if (step >= 4)
+                {
+                    ps.choose (1);
+                    ps.setAmount (0.4);
+                }
+            }
         }
     }
     // A GROOVE HELD OVER THE SEQUENCER's GRID (0.13.0): the DRUMS page's SEQUENCER, the frame and what dropping would do.

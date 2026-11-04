@@ -377,6 +377,7 @@ void SongTrack::paint (juce::Graphics& g)
         const auto r = juce::Rectangle<float> (xOf (b.start), (float) lane.getY() + 3.0f, xOf (b.end()) - xOf (b.start), (float) lane.getHeight() - 6.0f)
                            .reduced (1.0f, 0.0f);
         const auto colour = b.muted ? juce::Colour (0xff5a5559) : song::colourOf (b.part);
+        const auto picked = i == chosen || std::find (also.begin(), also.end(), i) != also.end();
         g.setColour (colour.withAlpha (0.28f));
         g.fillRoundedRectangle (r, 4.0f);
         g.setColour (colour.withAlpha (0.8f));
@@ -394,14 +395,36 @@ void SongTrack::paint (juce::Graphics& g)
                     break;
                 const auto part = juce::jmax (0, grooves::drumPartOf (h.slot));
                 const auto y = r.getBottom() - 4.0f - (r.getHeight() - 22.0f) * (float) part / (float) (grooves::numDrumParts - 1);
+                if (picked && highlight != 0)
+                {
+                    // 0.46.0: EDIT PLAY STYLE's chosen instruments lit, the rest faint.
+                    const auto lit = (highlight & song::slotBit (h.slot)) != 0;
+                    g.setColour (lit ? ParagonColours::text : colour.withAlpha (0.3f));
+                    g.fillRect (xOf (b.start + repeat + h.beat), y - (lit ? 3.0f : 2.0f), lit ? 3.0f : 2.0f, lit ? 6.0f : 4.0f);
+                    continue;
+                }
                 g.fillRect (xOf (b.start + repeat + h.beat), y - 2.0f, 2.0f, 4.0f);
             }
         }
-        g.setColour (i == chosen ? ParagonColours::text : colour);
-        g.drawRoundedRectangle (r, 4.0f, i == chosen ? 2.0f : 1.0f);
+        g.setColour (picked ? ParagonColours::text : colour);
+        g.drawRoundedRectangle (r, 4.0f, picked ? 2.0f : 1.0f);
+        // 0.46.0: the small arrow (EDIT MIDI), pointing down while it's open on this block.
+        const auto arrow = arrowOf (i);
+        if (r.getWidth() > 30.0f)
+        {
+            juce::Path a;
+            const auto c = arrow.getCentre();
+            if (picked && highlight != 0)
+                a.addTriangle (c.x - 4.0f, c.y - 2.5f, c.x + 4.0f, c.y - 2.5f, c.x, c.y + 3.0f);
+            else
+                a.addTriangle (c.x - 2.5f, c.y - 4.0f, c.x - 2.5f, c.y + 4.0f, c.x + 3.0f, c.y);
+            g.setColour (picked ? ParagonColours::text : colour.withAlpha (0.9f));
+            g.fillPath (a);
+        }
         g.setColour (b.muted ? ParagonColours::textDim : ParagonColours::text);
         g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
-        g.drawText ((b.muted ? "MUTED  " : "") + b.name, r.reduced (5.0f, 2.0f).removeFromTop (14.0f), juce::Justification::centredLeft, true);
+        g.drawText ((b.muted ? "MUTED  " : "") + b.name, r.reduced (5.0f, 2.0f).removeFromTop (14.0f).withTrimmedLeft (r.getWidth() > 30.0f ? 12.0f : 0.0f),
+                    juce::Justification::centredLeft, true);
     }
 
     // A block being moved or lengthened: where it would go.
@@ -668,8 +691,35 @@ void SongTrack::mouseDown (const juce::MouseEvent& e)
     auto block = s.blockAt (beatAt (e.position.x));
     if (block < 0 && nearRightEdge (s.blockAt (beatAt (e.position.x - 6.0f)), e.position))
         block = s.blockAt (beatAt (e.position.x - 6.0f));
+    if (block >= 0 && ! e.mods.isPopupMenu() && arrowOf (block).expanded (3.0f).contains (e.position) && onArrow != nullptr)
+    {
+        // 0.46.0: the block's small arrow: EDIT MIDI opened on it (or closed).
+        chosen = block;
+        also.clear();
+        repaint();
+        if (onSelectionChanged != nullptr)
+            onSelectionChanged();
+        onArrow (block);
+        return;
+    }
+    if (block >= 0 && multiChoose && e.mods.isShiftDown() && chosen >= 0 && block != chosen)
+    {
+        // 0.46.0: SHIFT-click while EDIT PLAY STYLE is open: this block added (or taken away again).
+        if (const auto it = std::find (also.begin(), also.end(), block); it != also.end())
+            also.erase (it);
+        else
+            also.push_back (block);
+        repaint();
+        if (onSelectionChanged != nullptr)
+            onSelectionChanged();
+        return;
+    }
+    const auto selectionChanged = block != chosen || ! also.empty();
     chosen = block;
+    also.clear();
     repaint();
+    if (selectionChanged && onSelectionChanged != nullptr)
+        onSelectionChanged();
     if (block < 0)
         return;
     if (e.mods.isPopupMenu())
@@ -768,7 +818,60 @@ bool SongTrack::keyPressed (const juce::KeyPress& key)
         edit ([index] (song::Song& s) { s.remove (index); });
         return true;
     }
+    // 0.46.0: P: EDIT PLAY STYLE on the chosen block; E: the GRID EDITOR.
+    if (chosen >= 0 && chosen < (int) processor.getSong().blocks.size() && ! key.getModifiers().isAnyModifierKeyDown())
+    {
+        const auto c = juce::CharacterFunctions::toLowerCase (key.getTextCharacter());
+        if (c == 'p' && onPlayStyle != nullptr)
+        {
+            onPlayStyle (chosen);
+            return true;
+        }
+        if (c == 'e' && onEditBlock != nullptr)
+        {
+            onEditBlock (chosen);
+            return true;
+        }
+    }
     return false;
+}
+
+std::vector<int> SongTrack::getSelection() const
+{
+    std::vector<int> out;
+    const auto n = (int) processor.getSong().blocks.size();
+    if (chosen >= 0 && chosen < n)
+        out.push_back (chosen);
+    for (const auto b : also)
+        if (b >= 0 && b < n && std::find (out.begin(), out.end(), b) == out.end())
+            out.push_back (b);
+    return out;
+}
+
+void SongTrack::setSelection (std::vector<int> blocks)
+{
+    chosen = blocks.empty() ? -1 : blocks.front();
+    also.assign (blocks.size() > 1 ? blocks.begin() + 1 : blocks.end(), blocks.end());
+    repaint();
+}
+
+void SongTrack::setRecordingAllowed (bool allowed)
+{
+    if (! allowed && processor.isSongRecording())
+        processor.setSongRecording (false);
+    if (recordTip.isEmpty())
+        recordTip = record.getTooltip();
+    record.setEnabled (allowed);
+    record.setTooltip (allowed ? recordTip : "Recording into the song waits while EDIT PLAY STYLE is open.");
+}
+
+juce::Rectangle<float> SongTrack::arrowOf (int block) const
+{
+    const auto& s = processor.getSong();
+    if (block < 0 || block >= (int) s.blocks.size())
+        return {};
+    const auto& b = s.blocks[(size_t) block];
+    return { xOf (b.start) + 4.0f, (float) lane.getY() + 6.0f, 10.0f, 10.0f };
 }
 
 juce::PopupMenu SongTrack::menuFor (int block, double atBeat)
@@ -831,7 +934,11 @@ juce::PopupMenu SongTrack::menuFor (int block, double atBeat)
         if (block < (int) song.blocks.size())
             setLoop (song.blocks[(size_t) block].start, song.blocks[(size_t) block].end());
     });
-    menu.addItem ("Edit Block...", onEditBlock != nullptr, false, [this, block] { if (onEditBlock != nullptr) onEditBlock (block); });
+    // EDIT MIDI (0.46.0): EDIT PLAY STYLE or the GRID EDITOR (EDIT BLOCK until 0.46.0).
+    juce::PopupMenu editMidi;
+    editMidi.addItem ("Edit Play Style...", onPlayStyle != nullptr, false, [this, block] { if (onPlayStyle != nullptr) onPlayStyle (block); });
+    editMidi.addItem ("Grid Editor...", onEditBlock != nullptr, false, [this, block] { if (onEditBlock != nullptr) onEditBlock (block); });
+    menu.addSubMenu ("Edit MIDI", editMidi);
     menu.addItem ("Use with Song Creator", onUseWithCreator != nullptr && b.source.existsAsFile(), false,
                   [this, file = b.source] { onUseWithCreator (file); });
     menu.addItem ("Copy", [this, b] { processor.setSongClipboard (b); });
@@ -902,10 +1009,15 @@ void SongTrack::mouseDoubleClick (const juce::MouseEvent& e)
         meterMenu (beatAt (e.position.x)).showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this).withMousePosition());
         return;
     }
-    if (const auto block = processor.getSong().blockAt (beatAt (e.position.x)); block >= 0 && onEditBlock != nullptr)
+    if (const auto block = processor.getSong().blockAt (beatAt (e.position.x)); block >= 0)
     {
         chosen = block;
-        onEditBlock (block);
+        also.clear();
+        // 0.46.0: whichever of EDIT PLAY STYLE and the GRID EDITOR was used last.
+        if (onEditMidi != nullptr)
+            onEditMidi (block);
+        else if (onEditBlock != nullptr)
+            onEditBlock (block);
     }
 }
 

@@ -36,6 +36,7 @@ add_executable(ParagonX1Tests
     GroovePlayerTests.cpp
     RhythmTests.cpp
     SongTests.cpp
+    PlayStyleTests.cpp
     UndoTests.cpp
     EffectTests.cpp
     EqTests.cpp

@@ -670,7 +670,7 @@ TEST_CASE ("SONG 0.9: the clipboard: a groove's ticked parts copied; the strip's
 
     // Nothing copied yet: PASTE greyed out.
     CHECK (! run (0, "Paste After"));
-    CHECK (run (0, "Edit Block..."));
+    CHECK (run (0, "Edit MIDI|Grid Editor..."));
     CHECK (opened == 0);
 
     // A groove from GROOVES with only HI-HAT ticked: the clipboard has only its hats.

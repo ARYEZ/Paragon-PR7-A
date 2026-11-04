@@ -294,6 +294,8 @@ namespace song
         {
             if (b.muted || b.loopLength <= 0.0)
                 continue;
+            if (b.openingOn)
+                out.push_back ({ b.start, b.openingSlot, b.openingVelocity });
             for (auto repeat = 0.0; repeat < b.length - 1.0e-9; repeat += b.loopLength)
                 for (const auto& h : b.hits)
                     if (repeat + h.beat < b.length - 1.0e-9)
@@ -383,6 +385,14 @@ namespace song
             e->setAttribute ("length", b.length);
             e->setAttribute ("loop", b.loopLength);
             e->setAttribute ("muted", b.muted);
+            if (b.openingOn || b.openingSlot != Block().openingSlot)
+            {
+                e->setAttribute ("opening", b.openingOn);
+                e->setAttribute ("openingSlot", b.openingSlot);
+                e->setAttribute ("openingVelocity", b.openingVelocity);
+            }
+            if (b.powerHand >= 0)
+                e->setAttribute ("powerHand", b.powerHand);
             juce::StringArray hits;   // "beat:slot:velocity"
             for (const auto& h : b.hits)
                 hits.add (juce::String (h.beat, 6) + ":" + juce::String (h.slot) + ":" + juce::String (h.velocity, 4));
@@ -420,6 +430,10 @@ namespace song
             b.length = juce::jmax (0.25, e->getDoubleAttribute ("length", 4.0));
             b.loopLength = juce::jmax (0.25, e->getDoubleAttribute ("loop", 4.0));
             b.muted = e->getBoolAttribute ("muted");
+            b.openingOn = e->getBoolAttribute ("opening", false);
+            b.openingSlot = juce::jlimit (0, synth::drums::numSlots - 1, e->getIntAttribute ("openingSlot", Block().openingSlot));
+            b.openingVelocity = juce::jlimit (0.0f, 1.0f, (float) e->getDoubleAttribute ("openingVelocity", 0.9));
+            b.powerHand = juce::jlimit (-1, synth::drums::numSlots - 1, e->getIntAttribute ("powerHand", -1));
             for (const auto& token : juce::StringArray::fromTokens (e->getStringAttribute ("hits"), " ", {}))
             {
                 const auto f = juce::StringArray::fromTokens (token, ":", {});
@@ -627,6 +641,7 @@ namespace song
         first.length = first.loopLength = at;
         std::erase_if (first.hits, [at] (const Hit& h) { return h.beat >= at - 1.0e-9; });
         second.start = cut;
+        second.openingOn = false;   // the opening hit stays with the first half
         second.length = second.loopLength = second.length - at;
         std::erase_if (second.hits, [at] (const Hit& h) { return h.beat < at - 1.0e-9; });
         for (auto& h : second.hits)
@@ -642,6 +657,8 @@ namespace song
         auto& first = blocks[(size_t) index];
         const auto& next = blocks[(size_t) index + 1];
         auto hits = unrolled (first);
+        if (next.openingOn)   // the next block's opening hit kept as a note where it played
+            hits.push_back ({ next.start - first.start, next.openingSlot, next.openingVelocity });
         for (auto h : unrolled (next))
         {
             h.beat += next.start - first.start;

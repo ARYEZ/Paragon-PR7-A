@@ -53,8 +53,20 @@ public:
     juce::Rectangle<int> getLane() const noexcept { return lane; }
     void showMenuFor (int block, double atBeat = -1.0);   // as right-clicking it (at that beat: SPLIT HERE's place)
     juce::PopupMenu menuFor (int block, double atBeat = -1.0);
-    // EDIT BLOCK... (0.9.0), or a double-click on a block: MainView opens the block editor on it.
+    // EDIT BLOCK... (0.9.0): MainView opens the block editor (since 0.46.0 the GRID EDITOR) on it.
     std::function<void (int block)> onEditBlock;
+    // EDIT MIDI (0.46.0, the manual's 7.3): EDIT PLAY STYLE on a block (right-click > EDIT MIDI, the P key); a
+    // double-click or the block's small arrow (top left) opens whichever of the two was used last (onEditMidi), the
+    // arrow again closes it. While EDIT PLAY STYLE is open: SHIFT-click adds blocks to (or takes them from) what it
+    // works on (`setMultiChoose`), the chosen instruments' notes are lit (`setHighlight`) and REC is off.
+    std::function<void (int block)> onPlayStyle, onEditMidi, onArrow;
+    std::function<void()> onSelectionChanged;
+    std::vector<int> getSelection() const;   // the chosen block, then any SHIFT-clicked ones
+    void setSelection (std::vector<int>);
+    void setMultiChoose (bool on) { multiChoose = on; if (! on) also.clear(); repaint(); }
+    void setHighlight (song::SlotMask slots) { if (slots != highlight) { highlight = slots; repaint (lane); } }
+    void setRecordingAllowed (bool);
+    juce::Rectangle<float> arrowOf (int block) const;   // where its small arrow is
     // THE SONG CREATOR (0.10.0): CREATOR opens it; a groove dragged from its columns ("creator:<part>:<index>") dropped at
     // a beat; USE WITH SONG CREATOR on a block (its groove's file).
     std::function<void()> onOpenCreator;
@@ -143,6 +155,10 @@ private:
     juce::Label status;
     juce::Rectangle<int> lane, ruler;
     int chosen = -1;
+    std::vector<int> also;           // 0.46.0: more blocks chosen (SHIFT-click while EDIT PLAY STYLE is open)
+    bool multiChoose = false;
+    juce::String recordTip;
+    song::SlotMask highlight = 0;    // ... and the drums whose notes are lit
     double startBeat = 0.0;   // where PLAY starts (the bar numbers clicked)
     // A block being moved or made longer, and where it would go.
     enum class Drag { none, move, resize } drag = Drag::none;

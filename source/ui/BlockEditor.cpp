@@ -36,6 +36,16 @@ BlockEditor::BlockEditor (ParagonX1AudioProcessor& p) : processor (p)
         if (onClose != nullptr)
             onClose();
     };
+    playStyleTab.setTooltip ("The same block in EDIT PLAY STYLE: instrument by instrument on the kit.");
+    playStyleTab.onClick = [this]
+    {
+        if (onPlayStyle != nullptr && block() != nullptr)
+        {
+            const auto b = blockIndex;
+            setVisible (false);
+            onPlayStyle (b);
+        }
+    };
     gridChoice.addItemList (grooves::quantizeNames, 1);
     gridChoice.setSelectedItemIndex (2, juce::dontSendNotification);   // 1/16
     gridChoice.setTooltip ("Where a click puts a note, and where QUANTIZE moves them to.");
@@ -86,7 +96,7 @@ BlockEditor::BlockEditor (ParagonX1AudioProcessor& p) : processor (p)
     hint.setText ("Click: a note.  Drag a note up / down: louder / softer; sideways: moves it (on GRID, ALT: free).  Right-click: remove it.  Click a drum's name to "
                   "choose it (CTRL: more); the buttons below work on the chosen drums, or all.",
                   juce::dontSendNotification);
-    for (auto* c : std::initializer_list<juce::Component*> { &close, &quantizeButton, &removeButton, &copyButton, &pasteButton, &gridChoice,
+    for (auto* c : std::initializer_list<juce::Component*> { &playStyleTab, &close, &quantizeButton, &removeButton, &copyButton, &pasteButton, &gridChoice,
                                                              &moveTo, &addDrum, &velocity, &gridLabel, &velocityLabel, &moveLabel, &hint })
         addAndMakeVisible (c);
     processor.songBroadcaster.addChangeListener (this);
@@ -246,6 +256,8 @@ void BlockEditor::resized()
     close.setBounds (top.removeFromRight (90).reduced (0, 6));
     top.removeFromRight (12);
     addDrum.setBounds (top.removeFromRight (160).reduced (0, 7));
+    top.removeFromRight (12);
+    playStyleTab.setBounds (top.removeFromRight (150).reduced (0, 7));
     auto bottom = area.removeFromBottom (footerHeight).reduced (0, 8);
     gridLabel.setBounds (bottom.removeFromLeft (40));
     gridChoice.setBounds (bottom.removeFromLeft (110).reduced (4, 0));
@@ -308,7 +320,7 @@ void BlockEditor::paint (juce::Graphics& g)
     const auto bar = processor.getSong().beatsPerBarAt (b->start);
     const auto bars = b->loopLength / bar;
     const auto times = b->length / b->loopLength;
-    auto title = "EDIT BLOCK   " + b->name + "   " + juce::String (bars, std::abs (bars - std::round (bars)) < 1.0e-6 ? 0 : 2)
+    auto title = "GRID EDITOR   " + b->name + "   " + juce::String (bars, std::abs (bars - std::round (bars)) < 1.0e-6 ? 0 : 2)
                + (std::abs (bars - 1.0) < 1.0e-6 ? " bar" : " bars");
     if (times > 1.0 + 1.0e-6)
         title << ", played " << juce::String (times, std::abs (times - std::round (times)) < 1.0e-6 ? 0 : 2) << " times in the song";

@@ -39,13 +39,22 @@ namespace song
         double loopLength = 4.0;                 // the groove's own length: played round and round to fill `length`
         std::vector<Hit> hits;                   // within [0, loopLength), in time order
         bool muted = false;
+        // EDIT PLAY STYLE's OPENING HIT (0.46.0): one hit at the block's start (only the first time round), on this slot,
+        // while it's on. Off by default; its handle starts on the crash.
+        bool openingOn = false;
+        int openingSlot = 11;   // synth::drums::notemap::CY
+        float openingVelocity = 0.9f;
+        // EDIT PLAY STYLE's POWER HAND (0.46.0) once moved: the slot it was moved to (-1: the groove's own, worked out
+        // from its notes: the hi-hat, ride or crash it plays most).
+        int powerHand = -1;
 
         double end() const noexcept { return start + length; }
         bool operator== (const Block& o) const noexcept
         {
             return name == o.name && source == o.source && part == o.part && juce::exactlyEqual (start, o.start)
                 && juce::exactlyEqual (length, o.length) && juce::exactlyEqual (loopLength, o.loopLength) && hits == o.hits
-                && muted == o.muted;
+                && muted == o.muted && openingOn == o.openingOn && openingSlot == o.openingSlot
+                && juce::exactlyEqual (openingVelocity, o.openingVelocity) && powerHand == o.powerHand;
         }
     };
 

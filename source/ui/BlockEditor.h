@@ -21,6 +21,7 @@ public:
     void open (int block);   // shows it, on that block
     int getBlock() const noexcept { return blockIndex; }
     std::function<void()> onClose;
+    std::function<void (int block)> onPlayStyle;   // 0.46.0: its EDIT PLAY STYLE tab
 
     void paint (juce::Graphics&) override;
     void resized() override;
@@ -60,6 +61,7 @@ private:
     std::vector<int> rows;
     juce::Rectangle<int> names, grid, ruler;
 
+    juce::TextButton playStyleTab { "EDIT PLAY STYLE" };
     juce::TextButton close { "CLOSE" }, quantizeButton { "QUANTIZE" }, removeButton { "REMOVE" }, copyButton { "COPY" },
                      pasteButton { "PASTE" };
     juce::ComboBox gridChoice, moveTo, addDrum;

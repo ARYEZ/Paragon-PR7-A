@@ -43,6 +43,19 @@ public:
     void click (juce::Point<float>, juce::ModifierKeys);   // what a mouse click does
 
     void setSelected (int slot);
+
+    // EDIT PLAY STYLE (0.46.0): the kit as that window shows it: the pieces a block plays lit and outlined, the rest
+    // dimmed, the chosen ones outlined brighter and glowing. Off: the kit as on DRUMS. With it on, a click chooses
+    // (onChoose) without playing the drum, a right-click asks for the menu (onMenu), and the caption line isn't drawn.
+    struct Highlight
+    {
+        bool on = false;
+        std::array<bool, numPieces> used {}, chosen {};
+        bool operator== (const Highlight&) const = default;
+    };
+    void setHighlight (const Highlight&);
+    std::function<void (int slot, juce::Point<float>)> onMenu;
+    std::optional<juce::Point<float>> pieceCentre (int piece) const;   // the middle of a piece's drawn area (its tags)
     void updateLights();                     // each piece's glow from the kit's hits (DrumPage's timer)
     float getGlow (int piece) const noexcept { return glow[(size_t) piece]; }
 
@@ -67,6 +80,7 @@ private:
     Shown shownAt;
 
     ParagonX1AudioProcessor& processor;
+    Highlight highlight;
     std::array<float, numPieces> glow {};
     int selected = 0, hovered = -1;
 };

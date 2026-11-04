@@ -17,6 +17,7 @@
 #include "ui/MixerPage.h"
 #include "ui/SongTrack.h"
 #include "ui/BlockEditor.h"
+#include "ui/PlayStylePanel.h"
 #include "ui/SongCreator.h"
 #include "ui/FxPage.h"
 
@@ -79,6 +80,10 @@ public:
     SettingsPage& getSettingsPage() noexcept { return settingsPage; }
     SongTrack& getSongTrack() noexcept { return songTrack; }
     BlockEditor& getBlockEditor() noexcept { return blockEditor; }
+    PlayStylePanel& getPlayStyle() noexcept { return playStyle; }
+    // EDIT PLAY STYLE (0.46.0) on the song track's chosen blocks (one of it, the GRID EDITOR and the SONG CREATOR at a time).
+    void openPlayStyle (int block);
+    void openGridEditor (int block);
     SongCreator& getSongCreator() noexcept { return songCreator; }
     void openSongCreator (const juce::File& source = {});   // over the page (EDIT BLOCK closed), with that source if given
 
@@ -150,7 +155,9 @@ private:
     FxPage fxPage;
     RigBrowser rigBrowser;
     SettingsPage settingsPage;
-    BlockEditor blockEditor;   // EDIT BLOCK (0.9.0): over the pages, opened from the song track
+    BlockEditor blockEditor;   // EDIT BLOCK (0.9.0): over the pages, opened from the song track (0.46.0: the GRID EDITOR)
+    PlayStylePanel playStyle;  // EDIT PLAY STYLE (0.46.0): over the pages too
+    bool playStyleLast = true; // which of the two a double-click on a block opens (the one used last)
     SongCreator songCreator;   // THE SONG CREATOR (0.10.0): over the pages too (one of the two at a time)
     MachineView machine;       // THE DRUM MACHINE (0.38.0): over everything under the header
     // 0.45.0: the GROOVES page's own window (after the page: it goes first, letting go of the page), and what the GROOVES

@@ -93,6 +93,78 @@ namespace
     }
 }
 
+namespace
+{
+    // 0.46.0: each piece cut from the kit by the click map (its pixels, the rest clear) and its outline (the edge of
+    // those pixels, 3 of the kit's pixels wide), in the kit's pixels, for EDIT PLAY STYLE's highlight. Made once.
+    struct PieceCut
+    {
+        juce::Rectangle<int> box;
+        juce::Image cut, outline;
+    };
+    const std::array<PieceCut, KitView::numPieces>& pieceCuts()
+    {
+        static const auto made = []
+        {
+            std::array<PieceCut, KitView::numPieces> cuts;
+            const auto& pics = KitView::pictures();
+            if (! pics.kit.isValid() || ! pics.zones.isValid() || pics.zones.getBounds() != pics.kit.getBounds())
+                return cuts;
+            const auto w = pics.zones.getWidth(), h = pics.zones.getHeight();
+            std::vector<std::int8_t> owner ((size_t) (w * h), -1);
+            {
+                const juce::Image::BitmapData zones (pics.zones, juce::Image::BitmapData::readOnly);
+                for (int y = 0; y < h; ++y)
+                    for (int x = 0; x < w; ++x)
+                        owner[(size_t) (y * w + x)] = (std::int8_t) KitView::pieceOf ((int) zones.getPixelColour (x, y).getRed() - 1);
+            }
+            const auto at = [&] (int x, int y) { return x < 0 || y < 0 || x >= w || y >= h ? -1 : (int) owner[(size_t) (y * w + x)]; };
+            for (int k = 0; k < KitView::numPieces; ++k)
+            {
+                int left = w, right = -1, top = h, bottom = -1;
+                for (int y = 0; y < h; ++y)
+                    for (int x = 0; x < w; ++x)
+                        if (at (x, y) == k)
+                        {
+                            left = juce::jmin (left, x); right = juce::jmax (right, x);
+                            top = juce::jmin (top, y); bottom = juce::jmax (bottom, y);
+                        }
+                if (right < left)
+                    continue;
+                constexpr int pad = 4;
+                auto& c = cuts[(size_t) k];
+                c.box = juce::Rectangle<int>::leftTopRightBottom (left - pad, top - pad, right + pad + 1, bottom + pad + 1)
+                            .getIntersection ({ 0, 0, w, h });
+                c.cut = juce::Image (juce::Image::ARGB, c.box.getWidth(), c.box.getHeight(), true);
+                c.outline = juce::Image (juce::Image::ARGB, c.box.getWidth(), c.box.getHeight(), true);
+                const juce::Image::BitmapData kit (pics.kit, juce::Image::BitmapData::readOnly);
+                juce::Image::BitmapData cut (c.cut, juce::Image::BitmapData::writeOnly), line (c.outline, juce::Image::BitmapData::writeOnly);
+                for (int y = c.box.getY(); y < c.box.getBottom(); ++y)
+                    for (int x = c.box.getX(); x < c.box.getRight(); ++x)
+                    {
+                        const auto inside = at (x, y) == k;
+                        if (inside)
+                            cut.setPixelColour (x - c.box.getX(), y - c.box.getY(), kit.getPixelColour (x, y));
+                        // The outline: outside the piece, within 3 pixels of it (so it rings the piece, never covers it).
+                        if (! inside)
+                        {
+                            auto nearest = 99;
+                            for (int dy = -3; dy <= 3; ++dy)
+                                for (int dx = -3; dx <= 3; ++dx)
+                                    if (at (x + dx, y + dy) == k)
+                                        nearest = juce::jmin (nearest, dx * dx + dy * dy);
+                            if (nearest <= 9)
+                                line.setPixelColour (x - c.box.getX(), y - c.box.getY(),
+                                                     juce::Colours::white.withAlpha (nearest <= 4 ? 1.0f : 0.5f));
+                        }
+                    }
+            }
+            return cuts;
+        }();
+        return made;
+    }
+}
+
 const char* KitView::pieceName (int piece) noexcept
 {
     return piece >= 0 && piece < numPieces ? pieceNames[piece] : "";
@@ -269,6 +341,27 @@ void KitView::setSelected (int slot)
     }
 }
 
+void KitView::setHighlight (const Highlight& h)
+{
+    if (h == highlight)
+        return;
+    highlight = h;
+    repaint();
+}
+
+std::optional<juce::Point<float>> KitView::pieceCentre (int piece) const
+{
+    if (piece < 0 || piece >= numPieces)
+        return {};
+    const auto& c = pieceCuts()[(size_t) piece];
+    const auto area = pictureArea();
+    const auto& kit = pictures().kit;
+    if (c.box.isEmpty() || area.isEmpty() || ! kit.isValid())
+        return {};
+    const auto scale = area.getWidth() / (float) kit.getWidth();
+    return area.getTopLeft() + c.box.toFloat().getCentre() * scale;
+}
+
 void KitView::updateLights()
 {
     const auto& kit = processor.getDrumKit();
@@ -319,8 +412,13 @@ void KitView::paint (juce::Graphics& g)
     g.drawImageTransformed (shownAt.kit, place ({}));
     for (int k = 0; k < numPieces; ++k)
     {
-        auto level = glow[(size_t) k];
-        if (pieceOf (selected) == k)
+        auto level = highlight.on ? 0.0f : glow[(size_t) k];   // (in EDIT PLAY STYLE drawn after the dimming)
+        if (highlight.on)
+        {
+            if (pieceOf (hovered) == k)
+                level = hoverGlow;
+        }
+        else if (pieceOf (selected) == k)
             level = juce::jmax (level, chosenGlow);
         if (pieceOf (hovered) == k)
             level = juce::jmax (level, hoverGlow);
@@ -331,6 +429,51 @@ void KitView::paint (juce::Graphics& g)
         g.drawImageTransformed (lit, place (shownAt.litAt[(size_t) k]));
     }
     g.setOpacity (1.0f);
+
+    if (highlight.on)
+    {
+        // EDIT PLAY STYLE: the kit dimmed, the pieces the block plays drawn again over it, each outlined (the chosen ones
+        // brighter, glowing), then the glows of hits again on top.
+        const auto& cuts = pieceCuts();
+        const auto toView = area.getWidth() / (float) pictures().kit.getWidth();
+        const auto boxOf = [&] (int k) { return (cuts[(size_t) k].box.toFloat() * toView) + area.getTopLeft(); };
+        g.setColour (juce::Colours::black.withAlpha (0.72f));
+        g.fillRect (area);
+        g.setImageResamplingQuality (juce::Graphics::mediumResamplingQuality);
+        for (int k = 0; k < numPieces; ++k)
+        {
+            const auto& c = cuts[(size_t) k];
+            if (c.cut.isNull() || ! (highlight.used[(size_t) k] || highlight.chosen[(size_t) k]))
+                continue;
+            g.setOpacity (highlight.used[(size_t) k] ? 1.0f : 0.55f);
+            g.drawImage (c.cut, boxOf (k), juce::RectanglePlacement::stretchToFit);
+            g.setOpacity (1.0f);
+        }
+        for (int k = 0; k < numPieces; ++k)
+        {
+            const auto& c = cuts[(size_t) k];
+            if (c.outline.isNull())
+                continue;
+            const auto chosen = highlight.chosen[(size_t) k];
+            if (! chosen && ! highlight.used[(size_t) k])
+                continue;
+            if (chosen && shownAt.lit[(size_t) k].isValid())
+            {
+                g.setOpacity (0.85f);
+                g.drawImageTransformed (shownAt.lit[(size_t) k], place (shownAt.litAt[(size_t) k]));
+                g.setOpacity (1.0f);
+            }
+            g.setColour (chosen ? ParagonColours::accent.brighter (0.3f) : ParagonColours::accent.withAlpha (0.45f));
+            g.drawImage (c.outline, boxOf (k), juce::RectanglePlacement::stretchToFit, true);
+        }
+        for (int k = 0; k < numPieces; ++k)
+            if (glow[(size_t) k] > 0.0f && shownAt.lit[(size_t) k].isValid())
+            {
+                g.setOpacity (juce::jmin (1.0f, glow[(size_t) k]));
+                g.drawImageTransformed (shownAt.lit[(size_t) k], place (shownAt.litAt[(size_t) k]));
+            }
+        g.setOpacity (1.0f);
+    }
 
     // The picture's edges fade into the panel, so it sits in it without a frame.
     const auto fade = juce::jmin (40.0f, area.getHeight() * 0.08f);
@@ -346,7 +489,7 @@ void KitView::paint (juce::Graphics& g)
     edge (area.withTrimmedLeft (area.getWidth() - fade), area.getTopRight(), area.getTopRight().translated (-fade, 0.0f));
 
     // What's under the mouse (or chosen), at the bottom left (only when that line is being drawn).
-    if (! g.clipRegionIntersects (getLocalBounds().reduced (14, 10).removeFromBottom (18)))
+    if (highlight.on || ! g.clipRegionIntersects (getLocalBounds().reduced (14, 10).removeFromBottom (18)))
         return;
     const auto shown = hovered >= 0 ? hovered : selected;
     g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
@@ -372,6 +515,18 @@ juce::String KitView::describe (int slot) const
 
 void KitView::mouseDown (const juce::MouseEvent& e)
 {
+    if (highlight.on)
+    {
+        const auto slot = slotAt (e.position);
+        if (e.mods.isPopupMenu())
+        {
+            if (onMenu)
+                onMenu (slot, e.position);
+        }
+        else if (slot >= 0 && onChoose)
+            onChoose (slot, e.mods);
+        return;
+    }
     click (e.position, e.mods);
 }
 
