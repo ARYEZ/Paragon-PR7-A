@@ -722,6 +722,10 @@ std::optional<juce::Point<int>> PlayStylePanel::tagPointFor (int slot) const
 {
     if (const auto c = kit.slotCentre (slot))
         return (*c).roundToInt() + kit.getPosition();
+    // An articulation with no part of its own in the picture (the hat's openings): on its instrument's main one.
+    if (const auto piece = synth::drums::pieceOfSlot (slot); piece >= 0)
+        if (const auto c = kit.slotCentre (pieces[(size_t) piece].articulations[0].slot))
+            return (*c).roundToInt() + kit.getPosition();
     if (const auto kitPiece = KitView::pieceOf (slot); kitPiece >= 0)
         if (const auto c = kit.pieceCentre (kitPiece))
             return (*c).roundToInt() + kit.getPosition();
