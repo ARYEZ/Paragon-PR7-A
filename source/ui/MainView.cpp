@@ -237,7 +237,11 @@ struct MainView::GroovesWindow final : public juce::DocumentWindow
         setContentNonOwned (&view.groovesPage, false);
         setResizable (true, false);
         setResizeLimits (1100, 560, 6000, 4000);
-        centreWithSize (pageArea.getWidth(), pageArea.getHeight());
+        // Centred on the screen; with no screen at all (CI's tests) just its size (centring asks for one).
+        if (juce::Desktop::getInstance().getDisplays().getPrimaryDisplay() != nullptr)
+            centreWithSize (pageArea.getWidth(), pageArea.getHeight());
+        else
+            setSize (pageArea.getWidth(), pageArea.getHeight());
         setAlwaysOnTop (true);
     }
     ~GroovesWindow() override
