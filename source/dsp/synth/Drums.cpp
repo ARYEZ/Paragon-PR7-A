@@ -1835,6 +1835,13 @@ namespace synth::drums
                 if (h.slot < 0 || h.slot >= numSlots || h.offset < 0)
                     continue;
                 renderTo (h.offset);
+                if (h.velocity < 0.0f)
+                {
+                    // A song note's end (0.48.0): let go, as a MIDI note-off would.
+                    if (const auto played = settings.playsAs (h.slot); played >= 0 && settings.slots[(size_t) played].muteTail == MuteTail::noteOff)
+                        grab (played);
+                    continue;
+                }
                 startHit (h.slot, juce::jlimit (0.0f, 1.0f, h.velocity), settings);
             }
         };

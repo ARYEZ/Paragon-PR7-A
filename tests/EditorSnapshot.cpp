@@ -826,6 +826,20 @@ TEST_CASE ("Render the editor to a PNG", "[.][snapshot]")
                 ed.setSliderValue (BlockEditor::Slider::swing, 60.0);
                 ed.setRowMute (0, true);
             }
+            // 0.48.0: the snare's NOTE LENGTHS shown, each held half a beat (the first a beat).
+            if (env ("PARAGON_SNAPSHOT_GRID") == "2")
+            {
+                auto& ed = view->getBlockEditor();
+                ed.open (2);
+                ed.setShowLength (1, true);
+                ed.selectRow (ed.rowOf (2), false);
+                if (const auto notes = ed.getSelection(); ! notes.empty())
+                {
+                    ed.setNoteLength (notes.front().slot, notes.front().beat, 0.5);
+                    ed.selectNone();
+                    ed.setNoteLength (notes.front().slot, notes.front().beat, 1.0);
+                }
+            }
             // 0.46.0: EDIT PLAY STYLE on the chorus (=1: as it opens), =2: the POWER HAND moved to the ride, =3: and more
             // kick (AMOUNT +50%), =4: and the snare busier (AMOUNT +40%: ghost notes).
             if (const auto step = env ("PARAGON_SNAPSHOT_PLAYSTYLE").getIntValue(); step > 0)

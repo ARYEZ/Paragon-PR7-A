@@ -104,6 +104,26 @@ public:
     void recallSoloMute();
     bool hasSoloMute() const noexcept;
     void setPreviewSounds (bool on) { previewSounds = on; }
+    // 0.48.0: OPTIONS > SNAP TO (GRID: moved notes land on it; RELATIVE GRID: moved by whole steps, keeping how far off
+    // the grid they were) and NUDGE UNIT.
+    enum class SnapMode { grid, relative };
+    enum class NudgeUnit { resolution, n128, ms1, ms5, ms10 };
+    static const juce::StringArray nudgeUnitNames;
+    void setSnapMode (SnapMode);
+    void setNudgeUnit (NudgeUnit);
+    double nudgeBeats() const;
+    // 0.48.0: NOTE LENGTHS. A row's menu (right-click its name) SHOW NOTE LENGTH: its notes drawn with their lengths, the
+    // end of each dragged to set it (the chosen ones with it); the pencil draws a step long there. A note's end lets go
+    // of the drum (a cymbal set to MUTE TAIL > NOTE OFF is grabbed there).
+    void setShowLength (int piece, bool);
+    bool isShowingLength (int piece) const noexcept { return piece >= 0 && piece < synth::drums::numPieces && showLength[(size_t) piece]; }
+    void setNoteLength (int slot, double beat, double length);   // as dragging its end (the chosen ones too)
+    juce::Rectangle<float> lengthHandleOf (int slot, double beat) const;
+    juce::PopupMenu rowMenu (int row);
+    // 0.48.0: OWN WINDOW / BACK IN PLUGIN (MainView puts it in a window of its own).
+    std::function<void()> onToggleWindow;
+    void setInOwnWindow (bool);
+    juce::TextButton& getWindowButton() noexcept { return windowButton; }
     juce::PopupMenu selectMenu();
     juce::PopupMenu optionsMenu();
     juce::PopupMenu rowsMenu();
@@ -142,6 +162,9 @@ private:
     std::vector<int> order;                              // the instruments, top to bottom
     std::array<bool, synth::drums::numPieces> expanded {};
     std::array<bool, synth::drums::numPieces> muted {}, soloed {}, recallMuted {}, recallSoloed {};
+    std::array<bool, synth::drums::numPieces> showLength {};
+    SnapMode snapMode = SnapMode::grid;
+    NudgeUnit nudgeUnit = NudgeUnit::resolution;
     bool showAll = false, snapOn = true, triplets = false, autoScroll = true, previewSounds = true;
     Tool tool = Tool::pointer;
     bool pencilHeld = false;                              // CTRL + ALT
@@ -156,7 +179,8 @@ private:
     std::array<double, 7> sliderValues {};
     bool sliderDragging = false;
 
-    enum class Drag { none, lasso, move, pencil, velocity, rowOrder, scroll } drag = Drag::none;
+    enum class Drag { none, lasso, move, pencil, velocity, rowOrder, scroll, length } drag = Drag::none;
+    double lengthTo = 0.0;   // a note's end being dragged: where
     juce::Point<float> dragStart, dragNow;
     bool dragCopy = false;
     double moveBeats = 0.0;
@@ -167,6 +191,7 @@ private:
     std::optional<song::Block> clipboard;
     juce::Rectangle<int> names, grid, ruler, lane, laneControls, toolbar;
 
+    juce::TextButton windowButton { "OWN WINDOW" };
     juce::TextButton playStyleTab { "EDIT PLAY STYLE" }, gridTab { "GRID EDITOR" }, closeButton { "X" },
                      pointerButton { "POINTER" }, pencilButton { "PENCIL" }, snapButton { "SNAP" }, maxButton { "MAX" },
                      nudgeLeft { "<" }, nudgeRight { ">" }, selectButton { "SELECT" }, optionsButton { "OPTIONS" },

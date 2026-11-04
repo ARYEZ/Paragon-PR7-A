@@ -2,6 +2,39 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.48.0
+
+**THE GRID EDITOR, part 2**: the rest of the manual's section 7.3.2, except the CC / aftertouch lanes, as you chose.
+
+**OWN WINDOW.** A button in the editor's top bar puts the whole GRID EDITOR in a window of its own, resizable and staying above your DAW (on a second screen, say). Meanwhile the plugin's window is free for the kit, the mixer and the song.
+- BACK IN PLUGIN, the window's close button, or the editor's X brings it back.
+- The editor stays up in its window while EDIT PLAY STYLE, the SONG CREATOR or the other pages open in the plugin.
+
+**NOTE LENGTHS.** Right-click a row's name for its menu, then Show Note Length.
+- That row's notes are drawn with a bar to where they end.
+- Drag a note's end to set how long it's held, on the grid while SNAP is on. If the note is chosen, the other chosen notes get the same length.
+- The pencil on a row showing lengths draws notes one resolution step long.
+- A note's end lets go of its drum. So a cymbal set to MUTE TAIL > NOTE OFF on the DRUMS page is grabbed right there, as when you let go of a key or pad: a crash held half a beat stops after half a beat.
+- Lengths are saved with the song, and EXPORT MIDI writes each note that long.
+- Notes with no length set play exactly as before.
+
+**OPTIONS:**
+- **Snap To:**
+  - **Grid:** a dragged note lands on the grid, as before;
+  - **Relative Grid:** notes move by whole steps and keep how far off the grid they were, so a late snare you played stays as late when you move it.
+- **Nudge Unit:** Follow Resolution (as before), 1/128 note, or 1, 5 or 10 milliseconds at the song's tempo.
+
+**Tests:**
+- a late snare moved by grid and by relative grid;
+- the nudge units;
+- a note length dragged by its end, set on all the chosen notes together, drawn by the pencil, saved and exported to MIDI;
+- a crash held half a beat with MUTE TAIL > NOTE OFF: ringing before its end, silent from 0.15 s after it (and ringing on with MUTE TAIL off);
+- the window: out, staying up, back, its X, and the plugin closed with it out.
+
+pluginval passes at strictness 10.
+
+**Not checked here:** the window in a real DAW on Windows, and how a grabbed cymbal sounds (your ears).
+
 ## 0.47.0
 
 **THE GRID EDITOR, rebuilt** after section 7.3.2 of the manual you sent: a real note-by-note editor for a song block. It works the way the manual describes; the look, the words and the swing / randomize / dynamics maths are ours. Open it as before: E, right-click a block > Edit MIDI > Grid Editor, its tab beside EDIT PLAY STYLE, or a double-click when it was the one used last.

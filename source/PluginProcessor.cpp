@@ -3490,6 +3490,18 @@ void ParagonX1AudioProcessor::installSong (std::shared_ptr<const song::Song> new
     // Its hits worked out here (each block's groove repeated to fill it), for the audio thread to step through.
     auto playback = std::make_shared<SongPlayback>();
     playback->events = newSong->events();
+    // 0.48.0: the ends of notes with a length, as lettings-go (negative velocity) on their beats.
+    {
+        std::vector<song::Hit> releases;
+        for (const auto& h : playback->events)
+            if (h.length > 0.0)
+                releases.push_back ({ h.beat + h.length, h.slot, -1.0f });
+        if (! releases.empty())
+        {
+            playback->events.insert (playback->events.end(), releases.begin(), releases.end());
+            std::stable_sort (playback->events.begin(), playback->events.end(), [] (const song::Hit& a, const song::Hit& b) { return a.beat < b.beat; });
+        }
+    }
     if (songSolo != 0)
         std::erase_if (playback->events, [this] (const song::Hit& h) { return (songSolo & song::slotBit (h.slot)) == 0; });
     if (songHeard.has_value())

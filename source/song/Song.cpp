@@ -299,7 +299,7 @@ namespace song
             for (auto repeat = 0.0; repeat < b.length - 1.0e-9; repeat += b.loopLength)
                 for (const auto& h : b.hits)
                     if (repeat + h.beat < b.length - 1.0e-9)
-                        out.push_back ({ b.start + repeat + h.beat, h.slot, h.velocity });
+                        out.push_back ({ b.start + repeat + h.beat, h.slot, h.velocity, h.length });
         }
         std::stable_sort (out.begin(), out.end(), [] (const Hit& a, const Hit& c) { return a.beat < c.beat; });
         return out;
@@ -336,7 +336,8 @@ namespace song
                 continue;
             const auto velocity = (juce::uint8) juce::jlimit (1, 127, juce::roundToInt (h.velocity * 127.0f));
             track.addEvent (juce::MidiMessage::noteOn (10, note, velocity).withTimeStamp (h.beat * ticks));
-            track.addEvent (juce::MidiMessage::noteOff (10, note).withTimeStamp (h.beat * ticks + ticks / 16.0));
+            // (0.48.0: a note with a length set lets go there, so a DAW's drum plays it as held.)
+            track.addEvent (juce::MidiMessage::noteOff (10, note).withTimeStamp (h.beat * ticks + (h.length > 0.0 ? h.length * ticks : ticks / 16.0)));
         }
         auto end = juce::MidiMessage::endOfTrack();
         end.setTimeStamp (juce::jmax (endBeat() * ticks, track.getEndTime()));
@@ -395,7 +396,8 @@ namespace song
                 e->setAttribute ("powerHand", b.powerHand);
             juce::StringArray hits;   // "beat:slot:velocity"
             for (const auto& h : b.hits)
-                hits.add (juce::String (h.beat, 6) + ":" + juce::String (h.slot) + ":" + juce::String (h.velocity, 4));
+                hits.add (juce::String (h.beat, 6) + ":" + juce::String (h.slot) + ":" + juce::String (h.velocity, 4)
+                          + (h.length > 0.0 ? ":" + juce::String (h.length, 6) : juce::String()));   // (0.48.0: its length, when set)
             e->setAttribute ("hits", hits.joinIntoString (" "));
         }
         return xml;
@@ -437,9 +439,9 @@ namespace song
             for (const auto& token : juce::StringArray::fromTokens (e->getStringAttribute ("hits"), " ", {}))
             {
                 const auto f = juce::StringArray::fromTokens (token, ":", {});
-                if (f.size() == 3)
+                if (f.size() == 3 || f.size() == 4)
                     b.hits.push_back ({ juce::jmax (0.0, f[0].getDoubleValue()), juce::jlimit (0, synth::drums::numSlots - 1, f[1].getIntValue()),
-                                        juce::jlimit (0.0f, 1.0f, f[2].getFloatValue()) });
+                                        juce::jlimit (0.0f, 1.0f, f[2].getFloatValue()), f.size() == 4 ? juce::jmax (0.0, f[3].getDoubleValue()) : 0.0 });
             }
             s.blocks.push_back (std::move (b));
         }
@@ -529,7 +531,7 @@ namespace song
         for (auto repeat = 0.0; repeat < b.length - 1.0e-9; repeat += b.loopLength)
             for (const auto& h : b.hits)
                 if (repeat + h.beat < b.length - 1.0e-9)
-                    out.push_back ({ repeat + h.beat, h.slot, h.velocity });
+                    out.push_back ({ repeat + h.beat, h.slot, h.velocity, h.length });
         return out;
     }
 
@@ -551,7 +553,7 @@ namespace song
             for (auto repeat = 0.0; repeat < b.loopLength - 1.0e-9; repeat += clip.loopLength)
                 for (const auto& h : clip.hits)
                     if (has (slots, h.slot) && repeat + h.beat < b.loopLength - 1.0e-9)
-                        b.hits.push_back ({ repeat + h.beat, h.slot, h.velocity });
+                        b.hits.push_back ({ repeat + h.beat, h.slot, h.velocity, h.length });
         tidy (b.hits);
     }
 

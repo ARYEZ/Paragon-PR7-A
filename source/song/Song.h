@@ -23,9 +23,13 @@ namespace song
         double beat = 0.0;   // quarter notes (in a block: from its start; in a song's events: from the song's)
         int slot = 0;        // the kit's drum
         float velocity = 1.0f;
+        // 0.48.0, the GRID EDITOR's note lengths: how long the note is held (beats; 0: not set, the old short note).
+        // Its end lets go of the drum: a cymbal set to MUTE TAIL > NOTE OFF is grabbed there.
+        double length = 0.0;
         bool operator== (const Hit& o) const noexcept
         {
-            return juce::exactlyEqual (beat, o.beat) && slot == o.slot && juce::exactlyEqual (velocity, o.velocity);
+            return juce::exactlyEqual (beat, o.beat) && slot == o.slot && juce::exactlyEqual (velocity, o.velocity)
+                && juce::exactlyEqual (length, o.length);
         }
     };
 

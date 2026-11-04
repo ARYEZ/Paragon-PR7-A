@@ -484,7 +484,7 @@ namespace synth::drums
     {
         int offset = 0;          // from the first sample of the piece being played
         int slot = 0;
-        float velocity = 1.0f;   // 0 to 1, as a note's
+        float velocity = 1.0f;   // 0 to 1, as a note's; below 0 (0.48.0): the note let go (MUTE TAIL > NOTE OFF grabs it)
     };
 
     // A zero-delay-feedback state-variable filter (Zavalishin's), set once per hit.

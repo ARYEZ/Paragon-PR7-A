@@ -9,6 +9,7 @@
 #include "Parameters.h"
 #include "song/PlayStyle.h"
 #include "ui/BlockEditor.h"
+#include "ui/MainView.h"
 
 using Catch::Matchers::WithinAbs;
 
@@ -420,4 +421,156 @@ TEST_CASE ("GRID EDITOR 0.47.0: a row's MUTE and SOLO while the song plays; CLEA
     ed.recallSoloMute();
     CHECK (kickHeard() == std::make_pair (true, false));
     ed.clearSoloMute();
+}
+
+//==============================================================================
+// 0.48.0
+TEST_CASE ("GRID EDITOR 0.48.0: SNAP TO RELATIVE GRID keeps a note's feel; the NUDGE UNIT", "[grideditor][ui]")
+{
+    Editor e;
+    auto& ed = e.ed;
+    auto s = e.t.p.getSong();
+    s.blocks[0].hits = { { 1.03, SD, 0.9f } };
+    e.t.p.setSong (s);
+    e.t.p.flushUndoStep();
+    const auto px = e.pxPerBeat();
+    const auto at = ed.cellOf (SD, 1.03).getCentre();
+    // On the grid: the late snare dragged 0.3 beats lands on 1.25 (the 1/16 nearest).
+    e.click (at);
+    e.dragFrom (at, at.translated (0.3f * px, 0.0f));
+    CHECK_THAT (beatsOf (e.block(), SD)[0], WithinAbs (1.25, 1.0e-9));
+    e.t.p.undo();
+    // RELATIVE GRID: moved by one whole 1/16 step, still 0.03 late (1.28).
+    ed.setSnapMode (BlockEditor::SnapMode::relative);
+    e.click (at);
+    e.dragFrom (at, at.translated (0.3f * px, 0.0f));
+    CHECK_THAT (beatsOf (e.block(), SD)[0], WithinAbs (1.28, 1.0e-9));
+
+    // NUDGE UNIT: a 1/128 note (1/32 beat); 10 ms at the DAW's tempo (120 BPM here: 0.02 beats); the resolution again.
+    ed.select (SD, beatsOf (e.block(), SD)[0], false);
+    ed.setNudgeUnit (BlockEditor::NudgeUnit::n128);
+    ed.nudge (1);
+    CHECK_THAT (beatsOf (e.block(), SD)[0], WithinAbs (1.28 + 1.0 / 32.0, 1.0e-9));
+    ed.setNudgeUnit (BlockEditor::NudgeUnit::ms10);
+    CHECK_THAT (ed.nudgeBeats(), WithinAbs (0.01 * juce::jmax (1.0, e.t.p.getHostBpm()) / 60.0, 1.0e-9));
+    ed.setNudgeUnit (BlockEditor::NudgeUnit::resolution);
+    CHECK (ed.nudgeBeats() == 0.25);
+}
+
+TEST_CASE ("GRID EDITOR 0.48.0: NOTE LENGTHS drawn and dragged, saved, exported, and a cymbal let go at a note's end", "[grideditor][ui]")
+{
+    Editor e;
+    auto& ed = e.ed;
+    // SHOW NOTE LENGTH on the snare: its notes get a handle; dragging the first's to beat 2 makes it a beat long.
+    CHECK (ed.lengthHandleOf (SD, 1.0).isEmpty());
+    ed.setShowLength (snarePiece, true);
+    const auto handle = ed.lengthHandleOf (SD, 1.0);
+    REQUIRE_FALSE (handle.isEmpty());
+    const auto to = juce::Point<float> (ed.cellOf (SD, 2.0).getCentreX(), handle.getCentreY());
+    e.dragFrom (handle.getCentre(), to);
+    auto lengthOf = [&e] (int slot, double beat)
+    {
+        for (const auto& h : e.block().hits)
+            if (h.slot == slot && std::abs (h.beat - beat) < 1.0e-6)
+                return h.length;
+        return -1.0;
+    };
+    CHECK_THAT (lengthOf (SD, 1.0), WithinAbs (1.0, 1.0e-9));
+    CHECK (lengthOf (SD, 3.0) == 0.0);
+    // Several chosen: all set together.
+    ed.selectRow (ed.rowOf (SD), false);
+    ed.setNoteLength (SD, 3.0, 0.5);
+    CHECK (lengthOf (SD, 1.0) == 0.5);
+    CHECK (lengthOf (SD2, 3.5) == 0.5);
+    // The pencil on a row showing lengths draws a step long.
+    ed.selectNone();
+    ed.setTool (BlockEditor::Tool::pencil);
+    ed.setResolution (2);
+    const auto y = ed.cellOf (SD, 0.0).getCentreY() + 6.0f;
+    e.click ({ ed.cellOf (SD, 2.1).getCentreX(), y });
+    CHECK (lengthOf (SD, 2.0) == 0.5);
+    // Saved with the song, and the MIDI file holds the note that long.
+    const auto back = song::Song::fromXml (*e.t.p.getSong().toXml());
+    CHECK (back == e.t.p.getSong());
+    const auto midi = e.t.p.getSong().toMidi (120.0, [] (int slot) { return slot == SD ? 38 : -1; });
+    auto noteOn = -1.0, noteOff = -1.0;
+    for (const auto* ev : *midi.getTrack (0))
+    {
+        if (ev->message.isNoteOn() && std::abs (ev->message.getTimeStamp() - 960.0) < 1.0)
+            noteOn = ev->message.getTimeStamp();
+        if (ev->message.isNoteOff() && noteOn >= 0.0 && noteOff < 0.0)
+            noteOff = ev->message.getTimeStamp();
+    }
+    CHECK (noteOn == 960.0);
+    CHECK (noteOff == 960.0 + 480.0);
+}
+
+TEST_CASE ("GRID EDITOR 0.48.0: a note's end grabs a cymbal set to MUTE TAIL > NOTE OFF, at its beat", "[grideditor]")
+{
+    Plugin t;
+    testkit::useSample (t.p, CY, testkit::sine (440.0, 3.0, 0.5f, 1, sampleRate));
+    song::Song s;
+    song::Block b;
+    b.name = "Crash";
+    b.length = b.loopLength = 4.0;
+    b.hits = { { 0.0, CY, 1.0f, 0.5 } };   // held half a beat: 0.25 s at 120 BPM
+    s.place (b, 0.0);
+    const auto levelBetween = [] (const std::vector<float>& out, double from, double to)
+    {
+        auto peak = 0.0f;
+        for (auto i = (size_t) (from * sampleRate); i < (size_t) (to * sampleRate) && i < out.size(); ++i)
+            peak = juce::jmax (peak, std::abs (out[i]));
+        return peak;
+    };
+    // MUTE TAIL off: the length makes no difference; it rings on.
+    t.p.setSong (s);
+    t.p.playSong (0.0);
+    auto out = t.play (0.6);
+    CHECK (levelBetween (out, 0.1, 0.2) > 0.1f);
+    CHECK (levelBetween (out, 0.45, 0.55) > 0.1f);
+    // NOTE OFF: grabbed at 0.25 s (faded over 80 ms): ringing before, silent after.
+    t.p.stopSong();
+    t.play (0.1);
+    auto* tail = t.p.getParameters().getParameter (ParamIDs::drum (CY, "MuteTail"));
+    REQUIRE (tail != nullptr);
+    tail->setValueNotifyingHost (tail->convertTo0to1 (1.0f));
+    t.p.playSong (0.0);
+    out = t.play (0.6);
+    CHECK (levelBetween (out, 0.1, 0.2) > 0.1f);
+    CHECK (levelBetween (out, 0.4, 0.55) < 0.01f);
+}
+
+TEST_CASE ("GRID EDITOR 0.48.0: OWN WINDOW puts the editor in a window of its own; BACK IN PLUGIN or its X brings it back", "[grideditor][ui]")
+{
+    Plugin t;
+    t.p.setSong (oneBar());
+    MainView::groovesWindowOnDesktop = false;   // (this test machine's display has no window manager)
+    std::unique_ptr<juce::AudioProcessorEditor> editor (t.p.createEditor());
+    editor->setSize (1600, 900);
+    auto* view = dynamic_cast<MainView*> (editor->getChildComponent (0));
+    REQUIRE (view != nullptr);
+    auto& ed = view->getBlockEditor();
+    view->openGridEditor (0);
+    CHECK (ed.getParentComponent() == view);
+    CHECK (ed.getWindowButton().getButtonText() == "OWN WINDOW");
+    ed.getWindowButton().onClick();
+    REQUIRE (view->isGridEditorInOwnWindow());
+    CHECK (ed.getTopLevelComponent() == view->getGridEditorWindow());
+    CHECK (ed.isVisible());
+    CHECK (ed.getWindowButton().getButtonText() == "BACK IN PLUGIN");
+    // Other panels opening in the plugin leave it up in its window.
+    view->openSongCreator();
+    CHECK (ed.isVisible());
+    // Back.
+    ed.getWindowButton().onClick();
+    CHECK_FALSE (view->isGridEditorInOwnWindow());
+    CHECK (ed.getParentComponent() == view);
+    CHECK (ed.getBounds() == juce::Rectangle<int> (12, 68, 1476, 672));
+    // Out again, and its X: closed, back in the plugin (after the message loop runs).
+    view->setGridEditorInOwnWindow (true);
+    view->hideGridEditor();
+    CHECK_FALSE (view->isGridEditorInOwnWindow());
+    CHECK_FALSE (ed.isVisible());
+    view->setGridEditorInOwnWindow (true);
+    editor.reset();   // the plugin's window closed with it out: no crash
 }

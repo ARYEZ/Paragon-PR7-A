@@ -57,6 +57,8 @@ BlockEditor::BlockEditor (ParagonX1AudioProcessor& p) : processor (p)
         }
     };
     gridTab.setToggleState (true, juce::dontSendNotification);
+    windowButton.setTooltip ("The GRID EDITOR in a window of its own (on a second screen, say), or back in the plugin.");
+    windowButton.onClick = [this] { if (onToggleWindow != nullptr) onToggleWindow(); };
     closeButton.setTooltip ("Close the GRID EDITOR (the song plays on).");
     closeButton.onClick = [this]
     {
@@ -156,8 +158,9 @@ BlockEditor::BlockEditor (ParagonX1AudioProcessor& p) : processor (p)
     }
     hint.setFont (juce::FontOptions (11.0f));
     hint.setColour (juce::Label::textColourId, ParagonColours::textDim);
-    hint.setText ("Click a note to choose it (SHIFT: more), drag for a lasso, drag notes to move (ALT: copy); right-click a note: gone. "
-                  "PENCIL (or CTRL + ALT): draw. DELETE, ALT + arrows: nudge, arrows: next / previous, SHIFT + I: invert, CTRL + A / C / V.",
+    hint.setText ("Click a note to choose it (SHIFT: more), drag for a lasso, drag notes to move (ALT: copy); right-click a note: gone, "
+                  "a row's name: SHOW NOTE LENGTH. PENCIL (or CTRL + ALT): draw. DELETE, ALT + arrows: nudge, arrows: next / previous, "
+                  "SHIFT + I: invert, CTRL + A / C / V.",
                   juce::dontSendNotification);
     for (auto* bar : { &hScroll, &vScroll })
     {
@@ -168,7 +171,7 @@ BlockEditor::BlockEditor (ParagonX1AudioProcessor& p) : processor (p)
     hScroll.addListener (this);
     vScroll.addListener (this);
 
-    for (auto* c : std::initializer_list<juce::Component*> { &playStyleTab, &gridTab, &closeButton, &pointerButton, &pencilButton, &snapButton,
+    for (auto* c : std::initializer_list<juce::Component*> { &windowButton, &playStyleTab, &gridTab, &closeButton, &pointerButton, &pencilButton, &snapButton,
                                                              &resolutionChoice, &maxButton, &nudgeLeft, &nudgeRight, &selectButton,
                                                              &optionsButton, &rowsButton, &autoScrollButton, &zoom, &zoomLabel,
                                                              &nudgeLabel, &hint, &hScroll, &vScroll })
@@ -358,6 +361,88 @@ double BlockEditor::resolutionBeats() const noexcept
             best = d;
     return best;
 }
+
+void BlockEditor::setInOwnWindow (bool own)
+{
+    windowButton.setButtonText (own ? "BACK IN PLUGIN" : "OWN WINDOW");
+}
+
+void BlockEditor::setShowLength (int piece, bool on)
+{
+    if (piece >= 0 && piece < synth::drums::numPieces)
+        showLength[(size_t) piece] = on;
+    repaint();
+}
+
+juce::Rectangle<float> BlockEditor::lengthHandleOf (int slot, double beat) const
+{
+    const auto* b = block();
+    const auto row = rowOf (slot);
+    if (b == nullptr || row < 0 || ! isShowingLength (rows[(size_t) row].piece))
+        return {};
+    for (const auto& h : b->hits)
+        if (h.slot == slot && sameBeat (h.beat, beat))
+        {
+            // At the note's end; a note with no length yet: just right of its diamond.
+            const auto x = h.length > 0.0 ? xOf (h.beat + h.length) : xOf (h.beat) + 9.0f;
+            return { x - 3.0f, rowTop (row) + 4.0f, 6.0f, rowHeight() - 8.0f };
+        }
+    return {};
+}
+
+void BlockEditor::setNoteLength (int slot, double beat, double length)
+{
+    const auto* b = block();
+    if (b == nullptr)
+        return;
+    const auto grabbed = std::find_if (b->hits.begin(), b->hits.end(), [&] (const song::Hit& h) { return h.slot == slot && sameBeat (h.beat, beat); });
+    if (grabbed == b->hits.end())
+        return;
+    const auto all = isSelected (*grabbed);
+    edit ([&] (song::Block& blk)
+    {
+        for (auto& h : blk.hits)
+            if ((h.slot == slot && sameBeat (h.beat, beat)) || (all && isSelected (h)))
+                h.length = juce::jlimit (0.0, blk.loopLength - h.beat, length);
+    });
+}
+
+juce::PopupMenu BlockEditor::rowMenu (int row)
+{
+    juce::PopupMenu m;
+    if (row < 0 || row >= (int) rows.size())
+        return m;
+    const auto piece = rows[(size_t) row].piece;
+    m.addSectionHeader (pieceTitle (piece));
+    m.addItem ("Show Note Length", true, isShowingLength (piece), [this, piece] { setShowLength (piece, ! isShowingLength (piece)); });
+    m.addItem ("Select Its Notes", [this, row] { selectRow (row, false); });
+    if (pieces[(size_t) piece].count > 1)
+        m.addItem (expanded[(size_t) piece] ? "Fold Its Articulations" : "Unfold Its Articulations", [this, piece] { setExpanded (piece, ! expanded[(size_t) piece]); });
+    return m;
+}
+
+const juce::StringArray BlockEditor::nudgeUnitNames { "Follow Resolution", "1/128 Note", "1 Millisecond", "5 Milliseconds", "10 Milliseconds" };
+
+double BlockEditor::nudgeBeats() const
+{
+    switch (nudgeUnit)
+    {
+        case NudgeUnit::resolution: return resolutionBeats();
+        case NudgeUnit::n128: return 1.0 / 32.0;
+        case NudgeUnit::ms1: case NudgeUnit::ms5: case NudgeUnit::ms10:
+        {
+            // Milliseconds at the song's tempo where the block is (the DAW's when the song has no tempo changes).
+            const auto ms = nudgeUnit == NudgeUnit::ms1 ? 1.0 : nudgeUnit == NudgeUnit::ms5 ? 5.0 : 10.0;
+            const auto* b = block();
+            const auto bpm = processor.getSong().bpmAt (b != nullptr ? b->start : 0.0, juce::jmax (1.0, processor.getHostBpm()));
+            return ms / 1000.0 * bpm / 60.0;
+        }
+    }
+    return resolutionBeats();
+}
+
+void BlockEditor::setSnapMode (SnapMode m) { snapMode = m; }
+void BlockEditor::setNudgeUnit (NudgeUnit u) { nudgeUnit = u; }
 
 double BlockEditor::snap (double beat) const
 {
@@ -641,7 +726,7 @@ void BlockEditor::nudge (int direction)
     const auto* b = block();
     if (b == nullptr || selection.empty())
         return;
-    const auto by = resolutionBeats() * direction;
+    const auto by = nudgeBeats() * direction;
     const auto loop = b->loopLength;
     std::vector<Key> moved;
     edit ([&] (song::Block& blk)
@@ -655,7 +740,7 @@ void BlockEditor::nudge (int direction)
                     beat += loop;
                 if (beat > loop - 1.0e-6)
                     beat = 0.0;
-                shifted.push_back ({ beat, h.slot, h.velocity });
+                shifted.push_back ({ beat, h.slot, h.velocity, h.length });
             }
             else
                 kept.push_back (h);
@@ -739,7 +824,7 @@ void BlockEditor::stretch (grooves::TempoFactor factor)
             {
                 const auto beat = from + (h.beat - from) * scale;
                 if (beat < blk.loopLength - 1.0e-9)
-                    shifted.push_back ({ beat, h.slot, h.velocity });
+                    shifted.push_back ({ beat, h.slot, h.velocity, h.length });
             }
             else
                 kept.push_back (h);
@@ -812,7 +897,7 @@ void BlockEditor::applySliders (bool asUndoStep)
         v += scatter (h, 2) * rv * 0.25;
         if (last > first)
             v *= 1.0 + sl * ((h.beat - first) / (last - first) - 0.5) * 1.2;
-        changed.push_back ({ beat, h.slot, (float) juce::jlimit (1.0 / 127.0, 1.0, v) });
+        changed.push_back ({ beat, h.slot, (float) juce::jlimit (1.0 / 127.0, 1.0, v), h.length });
     }
     std::vector<song::Hit> kept;
     for (size_t i = 0; i < blk.hits.size(); ++i)
@@ -1056,6 +1141,14 @@ juce::PopupMenu BlockEditor::optionsMenu()
         stretchMenu.addItem (grooves::tempoFactorNames[(int) f], [this, f] { stretch (f); });
     m.addSubMenu (selection.empty() ? "Stretch Notes (the whole block)" : "Stretch Notes (the chosen)", stretchMenu);
     m.addItem ("Preview Sounds", true, previewSounds, [this] { previewSounds = ! previewSounds; });
+    juce::PopupMenu snapTo;
+    snapTo.addItem ("Grid", true, snapMode == SnapMode::grid, [this] { setSnapMode (SnapMode::grid); });
+    snapTo.addItem ("Relative Grid (keeps the notes' feel)", true, snapMode == SnapMode::relative, [this] { setSnapMode (SnapMode::relative); });
+    m.addSubMenu ("Snap To", snapTo);
+    juce::PopupMenu unit;
+    for (int k = 0; k < nudgeUnitNames.size(); ++k)
+        unit.addItem (nudgeUnitNames[k], true, (int) nudgeUnit == k, [this, k] { setNudgeUnit ((NudgeUnit) k); });
+    m.addSubMenu ("Nudge Unit", unit);
     return m;
 }
 
@@ -1181,6 +1274,11 @@ void BlockEditor::mouseDown (const juce::MouseEvent& e)
             return;
         const auto area = rowNameArea (row);
         const auto& r = rows[(size_t) row];
+        if (e.mods.isPopupMenu())
+        {
+            rowMenu (row).showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this).withMousePosition());
+            return;
+        }
         if (r.slot < 0 && pieces[(size_t) r.piece].count > 1 && e.position.x < (float) area.getX() + 18.0f)
         {
             setExpanded (r.piece, ! expanded[(size_t) r.piece]);
@@ -1211,6 +1309,16 @@ void BlockEditor::mouseDown (const juce::MouseEvent& e)
     }
     if (! grid.contains (e.getPosition()))
         return;
+    // 0.48.0: a shown note length's end: drag it.
+    if (! e.mods.isPopupMenu())
+        for (size_t i = 0; i < b->hits.size(); ++i)
+            if (const auto handle = lengthHandleOf (b->hits[i].slot, b->hits[i].beat); ! handle.isEmpty() && handle.expanded (2.0f, 0.0f).contains (e.position))
+            {
+                drag = Drag::length;
+                grabHit = (int) i;
+                lengthTo = b->hits[i].length;
+                return;
+            }
     const auto hit = hitAt (e.position);
     if (e.mods.isPopupMenu())
     {
@@ -1290,7 +1398,10 @@ void BlockEditor::mouseDrag (const juce::MouseEvent& e)
                 break;
             const auto& anchor = b->hits[(size_t) grabHit];
             const auto dx = (double) (e.position.x - dragStart.x) / pxPerBeat;
-            moveBeats = snap (anchor.beat + dx) - anchor.beat;
+            // SNAP TO GRID: the grabbed note onto the grid (the rest by as much); RELATIVE GRID (0.48.0): moved by whole
+            // steps, so notes off the grid keep their feel.
+            moveBeats = snapMode == SnapMode::relative ? std::round (dx / resolutionBeats()) * resolutionBeats()
+                                                       : snap (anchor.beat + dx) - anchor.beat;
             if (! snapOn)
                 moveBeats = dx;
             moveRows = juce::roundToInt ((e.position.y - dragStart.y) / rowHeight());
@@ -1309,7 +1420,7 @@ void BlockEditor::mouseDrag (const juce::MouseEvent& e)
                 if (beat < 0.0 || beat >= b->loopLength - 1.0e-9)
                     return;
                 if (std::none_of (drawn.begin(), drawn.end(), [&] (const song::Hit& h) { return sameBeat (h.beat, beat); }))
-                    drawn.push_back ({ beat, slot, 0.8f });
+                    drawn.push_back ({ beat, slot, 0.8f, isShowingLength (r.piece) ? juce::jmin (step, b->loopLength - beat) : 0.0 });
             };
             place (from);
             if (snapOn)
@@ -1346,6 +1457,18 @@ void BlockEditor::mouseDrag (const juce::MouseEvent& e)
                         velocityEdits.push_back ({ i, level });
                     }
             }
+            repaint();
+            break;
+        }
+        case Drag::length:
+        {
+            if (grabHit < 0 || grabHit >= (int) b->hits.size())
+                break;
+            const auto& h = b->hits[(size_t) grabHit];
+            auto end = beatAt (e.position.x);
+            if (snapOn)
+                end = snap (end);
+            lengthTo = juce::jlimit (0.0, b->loopLength - h.beat, end - h.beat);
             repaint();
             break;
         }
@@ -1410,7 +1533,7 @@ void BlockEditor::mouseUp (const juce::MouseEvent& e)
                         if (const auto s = slotForRow (to, h.slot); s >= 0)
                             slot = s;
                     }
-                    shifted.push_back ({ beat, slot, h.velocity });
+                    shifted.push_back ({ beat, slot, h.velocity, h.length });
                 }
                 for (const auto& s : shifted)
                     std::erase_if (kept, [&s] (const song::Hit& h) { return h.slot == s.slot && sameBeat (h.beat, s.beat); });
@@ -1451,6 +1574,15 @@ void BlockEditor::mouseUp (const juce::MouseEvent& e)
                     if (i < blk.hits.size())
                         blk.hits[i].velocity = v;
             });
+            break;
+        }
+        case Drag::length:
+        {
+            if (grabHit >= 0 && grabHit < (int) b->hits.size())
+            {
+                const auto h = b->hits[(size_t) grabHit];
+                setNoteLength (h.slot, h.beat, lengthTo);
+            }
             break;
         }
         case Drag::rowOrder:
@@ -1525,7 +1657,9 @@ void BlockEditor::resized()
     auto area = getLocalBounds().reduced (12, 8);
     auto top = area.removeFromTop (headerHeight);
     closeButton.setBounds (top.removeFromRight (36).reduced (0, 4));
-    top.removeFromRight (10);
+    top.removeFromRight (6);
+    windowButton.setBounds (top.removeFromRight (124).reduced (2, 4));
+    top.removeFromRight (6);
     autoScrollButton.setBounds (top.removeFromRight (104).reduced (2, 4));
     zoom.setBounds (top.removeFromRight (120).reduced (2, 6));
     zoomLabel.setBounds (top.removeFromRight (42));
@@ -1751,6 +1885,21 @@ void BlockEditor::paint (juce::Graphics& g)
     {
         juce::Graphics::ScopedSaveState clip (g);
         g.reduceClipRegion (grid);
+        // 0.48.0: the rows showing NOTE LENGTH: a bar from each note to its end, the end's handle.
+        for (size_t i = 0; i < b->hits.size(); ++i)
+        {
+            const auto& h = b->hits[i];
+            const auto handle = lengthHandleOf (h.slot, h.beat);
+            if (handle.isEmpty())
+                continue;
+            const auto length = drag == Drag::length && (int) i == grabHit ? lengthTo : h.length;
+            const auto cell = cellOf (h.slot, h.beat);
+            const auto end = length > 0.0 ? xOf (h.beat + length) : cell.getRight() + 3.0f;
+            g.setColour (noteColour (h.velocity).withMultipliedAlpha (0.45f));
+            g.fillRect (juce::Rectangle<float>::leftTopRightBottom (cell.getCentreX(), cell.getCentreY() - 3.0f, end, cell.getCentreY() + 3.0f));
+            g.setColour (length > 0.0 ? ParagonColours::text.withAlpha (0.8f) : ParagonColours::textDim.withAlpha (0.6f));
+            g.fillRect (juce::Rectangle<float> (end - 1.5f, handle.getY(), 3.0f, handle.getHeight()));
+        }
         for (size_t i = 0; i < b->hits.size(); ++i)
         {
             const auto& h = b->hits[i];
