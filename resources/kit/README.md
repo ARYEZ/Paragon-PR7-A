@@ -7,7 +7,7 @@ Our own 3D drum kit, modelled and rendered for PR7-D in the PR7 family's colours
 |---|---|
 | `kit.jpg` | The kit from the drummer's seat, 1896 x 744 (0.42.0: the reference picture's shape) |
 | `kitzones.png` | The click map: each pixel's value (all channels) is the slot a click there plays + 1 (0: nothing) |
-| `lit<piece>.png` | Each piece glowing brighter, cut to the area it changes; its alpha fades where the glow fades (19 pieces since 0.37.0) |
+| `lit<piece>.png` | Each piece glowing brighter, cut to the area it changes; its alpha fades where the glow fades (19 pieces in 0.37.0, 12 since 0.43.0) |
 | `kitlayout.txt` | `<piece> <x> <y> <width> <height>`: where each glow goes on `kit.jpg` |
 
 ## Making them again
@@ -54,3 +54,18 @@ splash and a ride. Its pieces were placed from that picture:
 The click map's step went from 12 to 7 a slot (36 slots fit 252). The rack toms are HT, MT, LT left to right, the floor
 toms T4 and T5; the tambourine isn't in this kit. The cymbals stand on boom stands (`boom_cymbal`, each with its stand's
 place), the back ones behind the toms; the FX crash's holes are boolean cuts with a glowing ring each.
+
+## 0.43.0: the owner's 12-piece kit
+
+The owner sent a picture of another drum app's kit (its layout only matched, never traced, shipped or committed) and
+asked for "exactly this layout ... how tight they are packed ... how straight and level". The kit is now the 12 pieces
+their sample pack records: three rack toms on the kick, one floor tom, the hi-hat, snare, kick, crashes 1 and 2, a splash,
+the ride and a china.
+
+- A camera was chosen to match the picture: far back (about 15 m) with a long lens, about 38 degrees down (the drum heads'
+  roundness), the pieces' sizes then agreeing with the picture within a few percent;
+- each piece's centre in the picture, through that camera, at a height we chose, gives its place;
+- then moved with the owner: toms 2 and 3 back so the kick's top shows, all toms straight, ~6 cm between the rack toms,
+  crash 2 and the splash further back, the second floor tom gone and the floor tom back and right, every stand on clear
+  floor (checked against each drum and stand leg);
+- `panel` is that camera (`KIT_LENS` 134, `KIT_TARGET_DZ` 0.08, for 1896 x 744).

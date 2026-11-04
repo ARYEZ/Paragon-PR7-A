@@ -20,7 +20,8 @@
 //   PARAGON_SNAPSHOT_PAGE=drums      THE DRUMS, the page it opens on (also with no PAGE) (PARAGON_SNAPSHOT_DRUM=n: slot n chosen;
 //                                    PARAGON_SNAPSHOT_DRUMS=1: a beat just played, its rows lit; =2 a file of nine kicks, the 4th chosen;
 //                                    PARAGON_SNAPSHOT_DRUMSEQ=1: the SEQUENCER view, a beat playing with the song;
-//                                    PARAGON_SNAPSHOT_MACHINE=1: THE DRUM MACHINE playing Room Beat (=2: drums 19-36, REC);
+//                                    PARAGON_SNAPSHOT_MACHINE=1: THE DRUM MACHINE playing Room Beat (=2: drums 19-36, REC;
+//                                    PARAGON_SNAPSHOT_MACHINEFINISH=0|1|2: in that finish);
 //                                    PARAGON_SNAPSHOT_DRUMEDIT=1: the clap with an envelope, an anchor, GAIN and LP, =2 with DRUMS=2 a fade;
 //                                    PARAGON_SNAPSHOT_DRUMCHOSEN=1: the hats and cymbal chosen together, the tom's playhead;
 //                                    any of these shows the DRUM view; with none, the KIT VIEW (0.14.0), the page's first:
@@ -567,6 +568,9 @@ TEST_CASE ("Render the editor to a PNG", "[.][snapshot]")
             drums.select (2);
             drums.showView (DrumPage::View::machine);
             auto& machine = view->getMachine();
+            // 0.43.0: PARAGON_SNAPSHOT_MACHINEFINISH=0|1|2: in that finish (pearl white, pearl black, pearl white + neon).
+            if (const auto f = env ("PARAGON_SNAPSHOT_MACHINEFINISH"); f.isNotEmpty())
+                machine.setFinish ((Finish::Type) juce::jlimit (0, 2, f.getIntValue()), false);
             machine.play();
             if (env ("PARAGON_SNAPSHOT_MACHINE") == "2")
             {
@@ -749,6 +753,17 @@ TEST_CASE ("Render the editor to a PNG", "[.][snapshot]")
                 processor.songBroadcaster.dispatchPendingMessages();
             }
 
+            // =6 (0.43.0): the song twice over (longer than the lane shows), scrolled on to bar 17: the scroll bar.
+            if (env ("PARAGON_SNAPSHOT_SONG") == "6")
+            {
+                auto longer = processor.getSong();
+                const auto count = longer.blocks.size();
+                for (size_t i = 0; i < count; ++i)
+                    longer.place (longer.blocks[i], longer.endBeat());
+                processor.setSong (longer);
+                processor.songBroadcaster.dispatchPendingMessages();
+                view->getSongTrack().setViewStart (64.0);
+            }
             // =2: EDIT BLOCK on the chorus, its snare chosen.
             if (env ("PARAGON_SNAPSHOT_SONG") == "2")
             {

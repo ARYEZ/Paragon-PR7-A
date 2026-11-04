@@ -1760,3 +1760,53 @@ TEST_CASE ("SEQUENCER DROP: a groove held over the DRUMS tab brings the sequence
     CHECK (! view.isPeekingAtSequencer());
     CHECK (view.getPage() == MainView::Page::grooves);
 }
+
+//==============================================================================
+// 0.43.0: A LONG SONG SCROLLS.
+TEST_CASE ("SONG STRIP 0.43.0: a song longer than 32 bars scrolls; the wheel and the bar move along, Ctrl + wheel zooms, the view follows PLAY", "[song][ui]")
+{
+    Plugin t;
+    song::Song s;
+    s.place (block ("A", 20, { { 0.0, BD } }), 0.0);
+    t.p.setSong (s);
+    SongTrack track (t.p);
+    track.setBounds (0, 0, 1400, 136);
+    const auto lane = track.getLane();
+    // 20 bars: all of it shown (22 with the two after it), no scroll bar, as before.
+    CHECK (track.totalBeats() == 88.0);
+    CHECK (track.beatAt ((float) lane.getRight()) == 88.0);
+    CHECK_FALSE (track.getScrollBar().isVisible());
+
+    // 40 bars: 32 shown, the bar shows; a bar's x and beat agree after scrolling.
+    s.place (block ("B", 20, { { 0.0, BD } }), 80.0);
+    t.p.setSong (s);
+    track.resized();
+    CHECK (track.totalBeats() == 168.0);
+    CHECK (track.beatAt ((float) lane.getRight()) == 128.0);
+    CHECK (track.getScrollBar().isVisible());
+    track.setViewStart (40.0);
+    CHECK (track.getViewStart() == 40.0);
+    CHECK (std::abs (track.beatAt ((float) lane.getX()) - 40.0) < 1.0e-6);
+    CHECK (std::abs (track.xOf (100.0) - track.xOf (40.0) - (float) lane.getWidth() * 60.0f / 128.0f) < 1.0e-3f);
+    CHECK (track.getScrollBar().getCurrentRangeStart() == 40.0);
+    // No further than the end.
+    track.setViewStart (1000.0);
+    CHECK (track.getViewStart() == 40.0);
+    // The wheel: back towards the start.
+    juce::MouseWheelDetails wheel {};
+    wheel.deltaY = 0.5f;
+    const auto mouse = juce::MouseEvent (juce::Desktop::getInstance().getMainMouseSource(), lane.getCentre().toFloat(), juce::ModifierKeys(),
+                                         1.0f, 0.0f, 0.0f, 0.0f, 0.0f, &track, &track, juce::Time::getCurrentTime(),
+                                         lane.getCentre().toFloat(), juce::Time::getCurrentTime(), 1, false);
+    track.mouseWheelMove (mouse, wheel);
+    CHECK (track.getViewStart() < 40.0);
+    // Zoomed in (as Ctrl + the wheel does): fewer bars shown.
+    const auto before = track.getBarsShown();
+    track.setBarsShown (8.0);
+    CHECK (track.getBarsShown() == 8.0);
+    CHECK (track.getBarsShown() < before);
+    CHECK (std::abs ((track.beatAt ((float) lane.getRight()) - track.getViewStart()) - 32.0) < 1.0e-6);
+    // Shorter again: the view kept inside the song.
+    t.p.setSong (song::Song());
+    CHECK (track.getViewStart() <= track.totalBeats());
+}

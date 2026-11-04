@@ -12,8 +12,8 @@ HEIGHT = int(argv[3]) if len(argv) > 3 else 720
 VIEW = argv[4] if len(argv) > 4 else "kit"
 STYLE = argv[5] if len(argv) > 5 else "tron"   # "tron", "ink", "mask" (the click map), "lit:<piece>" (one piece glowing)
 import os
-LENS = float(os.environ.get("KIT_LENS", "46"))          # 0.37.0: the panel's lens (mm) and how far up it aims, for framing
-TARGET_DZ = float(os.environ.get("KIT_TARGET_DZ", "-0.11"))
+LENS = float(os.environ.get("KIT_LENS", "134"))          # 0.37.0: the panel's lens (mm) and how far up it aims, for framing
+TARGET_DZ = float(os.environ.get("KIT_TARGET_DZ", "0.08"))
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
 scene = bpy.context.scene
@@ -363,10 +363,10 @@ bpy.ops.mesh.primitive_plane_add(size=30, location=(0, 0, 0))
 assign(bpy.context.object, FLOOR)
 
 # Kick, on its side, the batter head (pearl) towards the drummer, the front head onyx with a glowing PR7 ring.
-drum("KICK", 0.56, 0.45, (0, 0.05, 0.29), tilt=(math.pi / 2, 0, 0), lugs=10, top=ONYX_HEAD, bottom=PEARL_HEAD, claws=True)
+drum("KICK", 0.56, 0.45, (0, -0.142, 0.29), tilt=(math.pi / 2, 0, 0), lugs=10, top=ONYX_HEAD, bottom=PEARL_HEAD, claws=True)
 for x in (-0.24, 0.24):
-    rod("KICK spur", (x, -0.06, 0.2), (x * 1.45, -0.2, 0.012), r=0.009)
-    cylinder("KICK spur foot", 0.012, 0.018, (x * 1.45, -0.2, 0.012), mat=RUBBER, verts=12)
+    rod("KICK spur", (x, -0.25, 0.2), (x * 1.45, -0.39, 0.012), r=0.009)
+    cylinder("KICK spur foot", 0.012, 0.018, (x * 1.45, -0.39, 0.012), mat=RUBBER, verts=12)
 
 def pedal(name, x, y, beater_to=None, pull_to=None):
     # A footboard and heel plate on a base, two posts, an axle across their tops, a cam, a chain to the board's toe;
@@ -399,15 +399,16 @@ def pedal(name, x, y, beater_to=None, pull_to=None):
     if pull_to is not None:
         rod(name + " pull rod", (x, y - 0.09, 0.17), pull_to, r=0.003)
 
-pedal("KICK pedal", 0.0, 0.42, beater_to=(0.0, 0.31, 0.36))
+pedal("KICK pedal", 0.0, 0.19, beater_to=(0.0, 0.12, 0.36))
 
-# 0.37.0: THE OWNER'S BIGGER KIT, laid out after their reference picture (its pieces' places worked out through a
-# camera fitted to it: resources/kit/README.md): three rack toms and two floor toms, the hi-hat, six crashes, an FX crash
-# with holes, two chinas, a splash and the ride; no tambourine. Sizes in metres (inches x 0.0254).
+# 0.43.0: THE OWNER'S 12-PIECE KIT, laid out after their second reference picture (each piece's place worked out from
+# where it shows in the picture, through a camera fitted to it), then spaced out with the owner: three rack toms on the
+# kick with room between them, one floor tom, the hi-hat, crashes 1 and 2, a splash, the ride and a china (the pieces
+# their sample pack records). Every stand on clear floor. Sizes in metres (inches x 0.0254).
 
 # Snare on its stand (a basket on a braced tripod), tilted towards the drummer, a strainer on its side.
-sn = (-0.26, 0.61, 0.61)
-drum("SNARE", 0.356, 0.14, sn, tilt=(-0.2, 0.1, 0), lugs=10)
+sn = (-0.293, 0.502, 0.62)
+drum("SNARE", 0.356, 0.14, sn, tilt=(-0.2, 0.05, 0), lugs=10)
 box("SNARE strainer", (0.03, 0.022, 0.06), (sn[0] - 0.19, sn[1] + 0.02, sn[2]), mat=CHROME)
 for k in range(3):
     a = 2 * math.pi * k / 3
@@ -415,15 +416,13 @@ for k in range(3):
 tripod("SNARE stand", sn[0], sn[1], sn[2] - 0.11, spread=0.26)
 
 # Three rack toms (10", 12", 13") on posts from a rack bar behind the kick, the high one on the drummer's left.
-for nm, d, dep, c, t in (("TOM 1", 0.254, 0.20, (-0.51, -0.06, 0.76), (-0.5, 0.25, 0)),
-                         ("TOM 2", 0.305, 0.22, (-0.12, -0.13, 0.79), (-0.5, 0.0, 0)),
-                         ("TOM 3", 0.330, 0.24, (0.33, -0.12, 0.76), (-0.5, -0.25, 0))):
+for nm, d, dep, c, t in (("TOM 1", 0.24, 0.19, (-0.475, 0.0, 0.79), (-0.12, 0.0, 0)),
+                         ("TOM 2", 0.27, 0.21, (-0.15, -0.08, 0.80), (-0.15, 0.0, 0)),
+                         ("TOM 3", 0.30, 0.23, (0.205, -0.08, 0.79), (-0.15, 0.0, 0))):
     drum(nm, d, dep, c, tilt=t, lugs=6)
-    sphere(nm + " clamp", 0.022, (c[0] * 0.85, c[1] - 0.12, 0.62), mat=SATIN)
-    rod(nm + " arm", (c[0] * 0.85, c[1] - 0.12, 0.62), (c[0], c[1] - 0.05, c[2] - 0.08), r=0.009)
-    rod(nm + " post", (c[0] * 0.85, c[1] - 0.12, 0.02), (c[0] * 0.85, c[1] - 0.12, 0.62), r=0.014)
-    cylinder(nm + " post foot", 0.03, 0.02, (c[0] * 0.85, c[1] - 0.12, 0.012), mat=RUBBER, verts=16)
-rod("TOM rack bar", (-0.51 * 0.85, -0.18, 0.5), (0.33 * 0.85, -0.24, 0.5), r=0.014)
+    mount = (c[0] * 0.45, -0.16, 0.585)
+    sphere(nm + " clamp", 0.022, mount, mat=SATIN)
+    rod(nm + " arm", mount, (c[0], c[1] - 0.04, c[2] - dep / 2 - 0.01), r=0.009)
 
 # Two floor toms (14", 16") on legs with brackets, on the drummer's right.
 def floor_tom(name, d, dep, c):
@@ -435,11 +434,10 @@ def floor_tom(name, d, dep, c):
         box(name + " bracket", (0.03, 0.03, 0.05), (bx, by, c[2] + 0.08), rot=(0, 0, a), mat=CHROME)
         rod(name + " leg", (bx, by, c[2] + 0.1), (c[0] + (r + 0.065) * math.cos(a), c[1] + (r + 0.065) * math.sin(a), 0.012), r=0.0085)
         cylinder(name + " foot", 0.013, 0.02, (c[0] + (r + 0.065) * math.cos(a), c[1] + (r + 0.065) * math.sin(a), 0.012), mat=RUBBER, verts=12)
-floor_tom("FLOOR", 0.356, 0.36, (0.5, 0.36, 0.38))
-floor_tom("FLOOR 2", 0.406, 0.40, (0.68, 0.86, 0.34))
+floor_tom("FLOOR", 0.356, 0.36, (0.46, 0.17, 0.42))
 
 # Hi-hat: two plates (the top on a clutch), its braced stand, the pull rod down to its pedal.
-hh = (-0.58, 0.68, 0.92)
+hh = (-0.606, 0.583, 0.92)
 lathe("HI-HAT top", cymbal_profile(0.178, bow_h=0.022), (hh[0], hh[1], hh[2] + 0.014), (0, 0, 0))
 lathe("HI-HAT bottom", cymbal_profile(0.178, bow_h=0.022), (hh[0], hh[1], hh[2] - 0.004), (math.pi, 0, 0))
 neon_rings("HI-HAT", (hh[0], hh[1], hh[2] + 0.014), (0, 0, 0), 0.178)
@@ -485,18 +483,11 @@ def boom_cymbal(name, diameter, centre, tilt=(0.25, 0, 0), china=False, base=(0.
 
 # Left of the hi-hat, low to high: the FX crash (holes), crash 1, crash 3; the splash over tom 1; crash 4 high behind;
 # crash 2 in the middle over the toms; crash 5 and 6 to the right; the china, the ride over the floor toms, china 2.
-boom_cymbal("FX CRASH", 0.457, (-0.98, 0.72, 1.08), tilt=(0.1, -0.15, 0), base=(-1.32, 0.86))
-holes("FX CRASH", (-0.98, 0.72, 1.08), (-0.1, -0.15, 0), 0.457 / 2)
-boom_cymbal("CRASH", 0.457, (-1.0, 0.51, 1.26), tilt=(0.12, -0.2, 0), base=(-1.32, 0.42))
-boom_cymbal("CRASH 3", 0.432, (-0.87, 0.24, 1.4), tilt=(0.12, -0.15, 0), drop=0.45, base=(-1.12, -0.12))
-boom_cymbal("SPLASH", 0.254, (-0.64, 0.07, 1.16), tilt=(0.12, -0.1, 0), base=(-0.92, -0.32))
-boom_cymbal("CRASH 4", 0.508, (-0.46, -0.05, 1.48), tilt=(0.12, -0.08, 0), drop=0.5, base=(-0.6, -0.6))
-boom_cymbal("CRASH 2", 0.508, (0.08, 0.11, 1.42), tilt=(0.12, 0.0, 0), drop=0.5, base=(0.08, -0.62))
-boom_cymbal("CRASH 5", 0.483, (0.61, -0.06, 1.48), tilt=(0.12, 0.1, 0), drop=0.5, base=(0.68, -0.55))
-boom_cymbal("CRASH 6", 0.457, (0.77, 0.37, 1.34), tilt=(0.12, 0.15, 0), base=(1.12, 0.22))
-boom_cymbal("CHINA", 0.457, (0.99, 0.69, 1.22), tilt=(0.1, 0.2, 0), china=True, base=(1.32, 0.62))
-boom_cymbal("RIDE", 0.533, (0.81, 0.95, 1.06), tilt=(0.1, 0.15, 0), base=(1.12, 1.18))
-boom_cymbal("CHINA 2", 0.406, (1.09, 1.11, 0.96), tilt=(0.1, 0.2, 0), china=True, base=(1.42, 1.28))
+boom_cymbal("CRASH", 0.406, (-0.741, 0.728, 1.35), tilt=(-0.05, -0.1, 0), base=(-0.95, 0.62))
+boom_cymbal("CRASH 2", 0.406, (-0.45, 0.54, 1.68), tilt=(-0.05, -0.05, 0), drop=0.45, base=(-0.6, 0.3))
+boom_cymbal("SPLASH", 0.305, (0.33, 0.50, 1.68), tilt=(-0.05, 0.05, 0), drop=0.75, base=(0.62, -0.15))
+boom_cymbal("RIDE", 0.52, (0.582, 0.61, 1.2), tilt=(-0.05, 0.08, 0), base=(0.95, 0.25))
+boom_cymbal("CHINA", 0.43, (0.792, 1.176, 1.3), tilt=(-0.05, 0.1, 0), china=True, base=(1.0, 1.15))
 
 # A right-handed kit: built with the hi-hat on the drummer's right, mirrored (x -> -x).
 for o in list(bpy.data.objects):
@@ -617,9 +608,8 @@ torus("KICK logo ring", 0.205, 0.003, (0, front_y, 0.29), rot=(math.pi / 2, 0, 0
 # ================================================================ passes for the plugin (0.14.0)
 # Which piece an object belongs to (its name's start), longest names first so "CRASH 2" isn't "CRASH".
 PIECES = ["kick:KICK", "kick:LOGO", "snare:SNARE", "tom1:TOM 1", "tom2:TOM 2", "tom3:TOM 3", "floor:FLOOR",
-          "floor2:FLOOR 2", "hihat:HI-HAT", "crash:CRASH", "crash2:CRASH 2", "crash3:CRASH 3", "crash4:CRASH 4",
-          "crash5:CRASH 5", "crash6:CRASH 6", "fxcrash:FX CRASH", "ride:RIDE", "china:CHINA", "china2:CHINA 2",
-          "splash:SPLASH"]   # (0.37.0: the owner's bigger kit; no tambourine)
+          "hihat:HI-HAT", "crash:CRASH", "crash2:CRASH 2", "ride:RIDE", "china:CHINA",
+          "splash:SPLASH"]   # (0.43.0: the 12 pieces the owner's sample pack records)
 PIECES.sort(key=lambda e: -len(e.split(":")[1]))
 
 def piece_of(name):
@@ -648,8 +638,7 @@ def zone_of(name):
         return 12                                     # RD (the lathe itself splits at the bell, below)
     # 0.37.0: the rack toms HT, MT, LT (high to low, left to right), the floor toms T4 and T5; crashes 1 to 6, the FX
     # crash, china 2 on 0.36.0's slots.
-    return {"kick": 0, "tom1": 9, "tom2": 7, "tom3": 5, "floor": 23, "floor2": 35, "crash": 11, "crash2": 14,
-            "crash3": 29, "crash4": 30, "crash5": 31, "crash6": 32, "fxcrash": 33, "china": 15, "china2": 34,
+    return {"kick": 0, "tom1": 9, "tom2": 7, "tom3": 5, "floor": 23, "crash": 11, "crash2": 14, "china": 15,
             "splash": 16}[piece]
 
 def flat_emission(name, value, ride_split=False):
@@ -760,11 +749,12 @@ elif VIEW == "pedal":      # a close-up of the kick pedal and beater
     cam.location = (0.35, 1.25, 0.6)
     target = Vector((0.0, 0.35, 0.15))
 elif VIEW == "panel":     # the plugin's KIT view: the drummer's view, framed for its panel
-    # 0.37.0: the owner's reference picture's viewpoint (higher and steeper than before: fitted to it); 0.42.0: framed
-    # for the reference's own shape, 1896 x 744 (lens 46 mm: the kit top to bottom, the floor wide on both sides).
+    # 0.43.0: the owner's second reference picture's viewpoint (fitted to it: far back, a long lens, about 38 degrees
+    # down, so the kit looks tightly packed and level), framed for 1896 x 744.
     cam_data.lens = LENS
-    cam.location = (-0.486, 6.8, 3.862)
-    target = Vector((-0.01, 0.115, 0.734 + TARGET_DZ))
+    cam_data.clip_end = 200
+    cam.location = (0.0, 12.02, 9.855)
+    target = Vector((0.0, 0.2, 0.62 + TARGET_DZ))
 else:
     cam_data.lens = 29
     if STYLE == "ink":

@@ -411,3 +411,47 @@ TEST_CASE ("THE PROGRESS BOX: a kit loading for over half a second, then gone; a
     CHECK_FALSE (box.isVisible());
     folder.deleteRecursively();
 }
+
+TEST_CASE ("THE DRUM MACHINE 0.43.0: FINISH gives the face its own finish (pearl white, black, white + neon), the plugin's untouched", "[machine][ui]")
+{
+    ParagonX1AudioProcessor p;
+    p.setPlayConfigDetails (0, 2, sampleRate, blockSize);
+    p.prepareToPlay (sampleRate, blockSize);
+    std::unique_ptr<juce::AudioProcessorEditor> editor (p.createEditor());
+    editor->setSize (1600, 900);
+    auto* view = dynamic_cast<MainView*> (editor->getChildComponent (0));
+    REQUIRE (view != nullptr);
+    view->getDrumPage().showView (DrumPage::View::machine);
+    auto& machine = view->getMachine();
+    CHECK (machine.getKey ("FINISH...").isVisible());
+    const auto plugin = Finish::get();
+    const auto was = Finish::getMachine();
+
+    // The face's brightness in each finish (a patch of chassis by the badge, away from keys and screen).
+    const auto chassisBrightness = [&machine]
+    {
+        const auto image = machine.createComponentSnapshot (machine.getLocalBounds(), true, 1.0f);
+        float total = 0.0f;
+        int count = 0;
+        for (int y = 200; y < 230; ++y)
+            for (int x = 440; x < 470; ++x)
+            {
+                total += image.getPixelAt (x, y).getBrightness();
+                ++count;
+            }
+        return total / (float) count;
+    };
+    machine.setFinish (Finish::Type::pearlBlack, false);
+    const auto black = chassisBrightness();
+    machine.setFinish (Finish::Type::pearlWhite, false);
+    const auto white = chassisBrightness();
+    machine.setFinish (Finish::Type::pearlWhiteNeon, false);
+    const auto neon = chassisBrightness();
+    INFO ("black " << black << ", white " << white << ", neon " << neon);
+    CHECK (black < 0.3f);
+    CHECK (white > 0.6f);
+    CHECK (neon > 0.6f);
+    CHECK (Finish::getMachine() == Finish::Type::pearlWhiteNeon);
+    CHECK (Finish::get() == plugin);   // the rest of the plugin as it was
+    machine.setFinish (was, false);
+}

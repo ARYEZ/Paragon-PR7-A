@@ -26,6 +26,10 @@ namespace Finish
     void paintAs (std::optional<Type>);
     // `remember` saves it to the settings file (off for tests and snapshots).
     void set (Type, bool remember = true);
+    // 0.43.0: THE DRUM MACHINE's own finish (its FINISH key; pearl black at first, as PR7-K's), kept beside the plugin's
+    // in the same settings file. Told through changes() too.
+    Type getMachine();
+    void setMachine (Type, bool remember = true);
     inline bool isBlack() { return get() == Type::pearlBlack; }          // the chassis colour
     inline bool neonKeys() { return get() != Type::pearlWhite; }         // the keys, knobs and pedal grips
 

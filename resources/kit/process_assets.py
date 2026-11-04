@@ -9,8 +9,8 @@ import numpy as np
 from PIL import Image, ImageFilter
 
 RAW, OUT = sys.argv[1], sys.argv[2]
-PIECES = ["kick", "snare", "tom1", "tom2", "tom3", "floor", "floor2", "hihat", "crash", "crash2", "crash3", "crash4",
-          "crash5", "crash6", "fxcrash", "ride", "china", "china2", "splash"]   # (0.37.0: the owner's bigger kit)
+PIECES = ["kick", "snare", "tom1", "tom2", "tom3", "floor", "hihat", "crash", "crash2", "ride", "china",
+          "splash"]   # (0.43.0: the 12 pieces of the owner's sample pack)
 LOW, HIGH = 330.0, 30.0     # the hues kept (degrees, through 0), inside the family's 318-42: JPEG drifts a few degrees
 
 def family_hues(rgb):

@@ -15,6 +15,7 @@ class SongTrack final : public juce::Component,
                         public juce::DragAndDropTarget,
                         public juce::FileDragAndDropTarget,
                         private juce::ChangeListener,
+                        private juce::ScrollBar::Listener,
                         private juce::Timer
 {
 public:
@@ -33,6 +34,7 @@ public:
     void mouseDoubleClick (const juce::MouseEvent&) override;
     void mouseMove (const juce::MouseEvent&) override;
     bool keyPressed (const juce::KeyPress&) override;
+    void mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
 
     bool isInterestedInDragSource (const SourceDetails&) override;
     void itemDragMove (const SourceDetails&) override;
@@ -89,11 +91,22 @@ public:
     double getBounceProgress() const;
     void cancelBounce();
     double getStartBeat() const noexcept { return startBeat; }
+
+    // 0.43.0: a long song scrolls. The lane shows up to `barsShown` bars (32 at first; Ctrl / Cmd + the wheel zooms,
+    // 4 to 256); the scroll bar under it, or the wheel, moves along; while the song plays the view follows it.
+    double totalBeats() const noexcept;   // the song and two bars after it, at least 16 bars, to a bar line
+    double getViewStart() const noexcept { return viewStart; }
+    void setViewStart (double beat);
+    void setBarsShown (double bars);
+    double getBarsShown() const noexcept { return barsShown; }
+    juce::ScrollBar& getScrollBar() noexcept { return scroll; }
     juce::TextButton& getPlayButton() noexcept { return play; }
 
 private:
     void changeListenerCallback (juce::ChangeBroadcaster*) override;
     void timerCallback() override;
+    void scrollBarMoved (juce::ScrollBar*, double) override;
+    void syncScroll();
     void edit (const std::function<void (song::Song&)>&);   // the song changed by `f`, as an undo step
     bool nearRightEdge (int block, juce::Point<float>) const;
     double beatsShown() const noexcept;
@@ -124,4 +137,6 @@ private:
     double grabOffset = 0.0, dragBeat = 0.0;
     double dropBeat = -1.0;   // a groove or file over the lane: where it would go (-1: none)
     double shownPosition = -2.0;
+    double viewStart = 0.0, barsShown = 32.0;
+    juce::ScrollBar scroll { false };
 };

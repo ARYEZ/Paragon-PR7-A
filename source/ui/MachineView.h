@@ -3,6 +3,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #include "PluginProcessor.h"
+#include "ui/Finish.h"
 #include "ui/PaintCache.h"
 
 // THE DRUM MACHINE (0.38.0): the DRUMS page's MACHINE view, a drum machine's face over the whole window under the
@@ -56,6 +57,9 @@ public:
     bool isCopyArmed() const noexcept { return copyArmed; }
     void clearChosen (bool wholePattern);   // the chosen drum's notes in the pattern (or all of them)
     void fillChosen();                      // the chosen drum on every step of the page
+    // 0.43.0: FINISH: the machine's own finish (Finish::getMachine), from its menu.
+    void showFinishMenu();
+    void setFinish (Finish::Type, bool remember = true);
 
     juce::TextButton& getKey (const juce::String& name);
     juce::TextButton& getStepKey (int step) { return *stepKeys[(size_t) step]; }
@@ -111,6 +115,7 @@ private:
 
     // What's drawn, as last drawn (a change repaints its part).
     juce::String shownScreen;
+    std::optional<Finish::Type> shownFinish;
     float meterLevel = 0.0f, shownMeter = -1.0f;
     int shownPlayStep = -2, shownChosen = -1;
     std::array<int, numColumns> shownSlots {};

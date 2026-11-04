@@ -22,11 +22,11 @@ namespace
 
     // The key names, in `keys`' order.
     const char* const keyNames[] = { "PLAY", "STOP", "REC", "TAP", "A", "B", "C", "D", "1-18", "19-36", "MUTE", "SOLO",
-                                     "KIT", "MACHINE", "DRUM", "SEQ", "SONG", "COPY", "CLEAR", "FILL", "<", ">" };
+                                     "KIT", "MACHINE", "DRUM", "SEQ", "SONG", "COPY", "CLEAR", "FILL", "<", ">", "FINISH..." };
     namespace K
     {
     enum Key { play, stop, rec, tapKey, patternA, patternB, patternC, patternD, bank1, bank2, mute, solo,
-               viewKit, viewMachine, viewDrum, viewSeq, song, copy, clear, fill, pagePrev, pageNext, numKeys };
+               viewKit, viewMachine, viewDrum, viewSeq, song, copy, clear, fill, pagePrev, pageNext, finish, numKeys };
     }
     static_assert (std::size (keyNames) == (size_t) K::numKeys);
 }
@@ -310,6 +310,7 @@ MachineView::MachineView (ParagonX1AudioProcessor& p) : processor (p)
     on (K::fill, [this] { fillChosen(); }, "FILL: the chosen drum on every step shown");
     on (K::pagePrev, [this] { setStepPage (stepPage - 1); }, "The pattern's steps before these");
     on (K::pageNext, [this] { setStepPage (stepPage + 1); }, "The pattern's steps after these");
+    on (K::finish, [this] { showFinishMenu(); }, "FINISH: the machine's own finish (pearl black, pearl white, or pearl white with neon keys)");
 
     for (int s = 0; s < numSteps; ++s)
     {
@@ -382,6 +383,25 @@ void MachineView::mouseDown (const juce::MouseEvent& e)
 juce::String MachineView::nameOf (int slot)
 {
     return slot >= 0 && slot < (int) std::size (padNames) ? padNames[slot] : "";
+}
+
+void MachineView::showFinishMenu()
+{
+    juce::PopupMenu menu;
+    for (int t = 0; t < Finish::names.size(); ++t)
+        menu.addItem (t + 1, Finish::names[t].toUpperCase(), true, (int) Finish::getMachine() == t);
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (keys[(size_t) K::finish].get()),
+                        [safe = juce::Component::SafePointer<MachineView> (this)] (int id)
+                        {
+                            if (id > 0 && safe != nullptr)
+                                safe->setFinish ((Finish::Type) (id - 1));
+                        });
+}
+
+void MachineView::setFinish (Finish::Type type, bool remember)
+{
+    Finish::setMachine (type, remember);
+    repaint();
 }
 
 juce::TextButton& MachineView::getKey (const juce::String& name)
@@ -790,6 +810,7 @@ void MachineView::resized()
         place (*stepKeys[(size_t) s], stepX (s), 860, 80, 50);
     place (*keys[K::pagePrev], 1654, 866, 94, 38);
     place (*keys[K::pageNext], 1756, 866, 94, 38);
+    place (*keys[K::finish], 1654, 768, 196, 32);
 
     screenArea = at (480, 34, 640, 190).toNearestInt();
     meterArea = at (1580, 38, 28, 178).toNearestInt();
@@ -846,7 +867,13 @@ void MachineView::paint (juce::Graphics& g)
 {
     // PR7-K's pearl black, its keys and knobs neon, whatever finish the rest of the plugin is in (the face and every
     // control on it: cleared again in paintOverChildren, after they've drawn).
-    Finish::paintAs (Finish::Type::pearlBlack);
+    Finish::paintAs (Finish::getMachine());   // (0.43.0: its own finish, chosen with FINISH)
+    if (shownFinish != Finish::getMachine())
+    {
+        shownFinish = Finish::getMachine();
+        faceCache.invalidate();
+        grain = {};
+    }
     faceCache.draw (g, getLocalBounds(), [this] (juce::Graphics& fg) { paintFace (fg); });
 
     // What changes: the screen, the meter, the drums' names (the chosen one red), the steps' line and numbers. Each

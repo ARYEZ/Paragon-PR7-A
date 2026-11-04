@@ -123,6 +123,13 @@ SongTrack::SongTrack (ParagonX1AudioProcessor& p) : processor (p)
     addAndMakeVisible (status);
     processor.songBroadcaster.addChangeListener (this);
     updateStatus();
+    // 0.43.0: the scroll bar under the lane (shown when the song is longer than the lane shows).
+    scroll.setAutoHide (true);
+    scroll.addListener (this);
+    scroll.setColour (juce::ScrollBar::thumbColourId, ParagonColours::accent.withAlpha (0.6f));
+    scroll.setColour (juce::ScrollBar::trackColourId, juce::Colour (0xff0d0a0e));
+    addAndMakeVisible (scroll);   // (shown only while there's more song than the lane shows: auto-hide)
+    syncScroll();
     startTimerHz (30);
 }
 
@@ -132,9 +139,9 @@ SongTrack::~SongTrack()
 }
 
 //==============================================================================
-double SongTrack::beatsShown() const noexcept
+double SongTrack::totalBeats() const noexcept
 {
-    // At least 16 bars; the song and two bars after it when it's longer (the strip fits it all, no scrolling); to a bar line.
+    // At least 16 bars; the song and two bars after it when it's longer; to a bar line.
     const auto& s = processor.getSong();
     auto want = juce::jmax (16.0 * s.beatsPerBar(), s.endBeat() + 2.0 * s.beatsPerBarAt (s.endBeat()));
     for (const auto& t : s.tempos)
@@ -145,14 +152,73 @@ double SongTrack::beatsShown() const noexcept
     return want;
 }
 
+double SongTrack::beatsShown() const noexcept
+{
+    // 0.43.0: what the lane shows: the whole song while it fits in `barsShown` bars (as before), else that many bars.
+    return juce::jmin (totalBeats(), barsShown * processor.getSong().beatsPerBar());
+}
+
 double SongTrack::beatAt (float x) const noexcept
 {
-    return juce::jmax (0.0, (double) (x - (float) lane.getX()) / juce::jmax (1, lane.getWidth()) * beatsShown());
+    return juce::jmax (0.0, viewStart + (double) (x - (float) lane.getX()) / juce::jmax (1, lane.getWidth()) * beatsShown());
 }
 
 float SongTrack::xOf (double beat) const noexcept
 {
-    return (float) lane.getX() + (float) (beat / beatsShown()) * (float) lane.getWidth();
+    return (float) lane.getX() + (float) ((beat - viewStart) / beatsShown()) * (float) lane.getWidth();
+}
+
+void SongTrack::setViewStart (double beat)
+{
+    const auto most = juce::jmax (0.0, totalBeats() - beatsShown());
+    beat = juce::jlimit (0.0, most, beat);
+    if (std::abs (beat - viewStart) < 1.0e-9)
+        return;
+    viewStart = beat;
+    syncScroll();
+    repaint();
+}
+
+void SongTrack::setBarsShown (double bars)
+{
+    // Zoomed about the lane's middle.
+    const auto middle = viewStart + 0.5 * beatsShown();
+    barsShown = juce::jlimit (4.0, 256.0, bars);
+    viewStart = juce::jmax (0.0, middle - 0.5 * beatsShown());
+    syncScroll();
+    setViewStart (viewStart);
+    repaint();
+}
+
+void SongTrack::syncScroll()
+{
+    // The song's length changes with every edit (and undo): the bar's range follows, and the view stays inside it.
+    const auto total = totalBeats(), span = beatsShown();
+    viewStart = juce::jlimit (0.0, juce::jmax (0.0, total - span), viewStart);
+    scroll.setRangeLimits (0.0, total, juce::dontSendNotification);
+    scroll.setCurrentRange (viewStart, span, juce::dontSendNotification);
+    scroll.setSingleStepSize (processor.getSong().beatsPerBar());
+}
+
+void SongTrack::scrollBarMoved (juce::ScrollBar*, double start)
+{
+    viewStart = start;
+    repaint();
+}
+
+void SongTrack::mouseWheelMove (const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel)
+{
+    if (e.mods.isCommandDown() || e.mods.isCtrlDown())
+    {
+        const auto step = wheel.deltaY != 0.0f ? wheel.deltaY : wheel.deltaX;
+        setBarsShown (barsShown * (step > 0.0f ? 0.8 : 1.25));
+        return;
+    }
+    const auto amount = std::abs (wheel.deltaX) > std::abs (wheel.deltaY) ? wheel.deltaX : wheel.deltaY;
+    if (beatsShown() < totalBeats() - 1.0e-9)
+        setViewStart (viewStart - (double) amount * (wheel.isReversed ? -1.0 : 1.0) * 0.5 * beatsShown());
+    else
+        Component::mouseWheelMove (e, wheel);
 }
 
 void SongTrack::resized()
@@ -174,7 +240,9 @@ void SongTrack::resized()
     status.setBounds (top.reduced (8, 0));
     area.removeFromTop (2);
     ruler = area.removeFromTop (rulerHeight);
+    scroll.setBounds (area.removeFromBottom (10).reduced (0, 1));   // 0.43.0
     lane = area;
+    syncScroll();
 }
 
 void SongTrack::visibilityChanged()
@@ -240,12 +308,15 @@ void SongTrack::paint (juce::Graphics& g)
 {
     const auto& s = processor.getSong();
     const auto bar = s.beatsPerBar();
-    const auto shown = beatsShown();
-    const auto pxPerBar = (float) lane.getWidth() * (float) (bar / shown);
+    const auto shown = totalBeats();   // (0.43.0: the whole song; the lane shows a part of it, clipped)
+    const auto pxPerBar = (float) lane.getWidth() * (float) (bar / beatsShown());
 
     g.setColour (ParagonColours::text);
     g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
     g.drawText ("SONG", 2, 0, 50, barHeight, juce::Justification::centredLeft, false);
+    juce::Graphics::ScopedSaveState clipped (g);
+    g.reduceClipRegion (ruler.getUnion (lane));
+    const auto firstShown = viewStart - bar, lastShown = viewStart + beatsShown() + bar;
 
     // The lane and the bar lines (with the time signature changes), numbered (every 2nd or 4th when they're close); a
     // change's time signature by its bar's number.
@@ -257,6 +328,8 @@ void SongTrack::paint (juce::Graphics& g)
     for (int b = 0; b < (int) lines.size() && lines[(size_t) b] < shown + 1.0e-9; ++b)
     {
         const auto at = lines[(size_t) b];
+        if (at < firstShown || at > lastShown)
+            continue;
         const auto x = xOf (at);
         const auto change = std::any_of (s.meters.begin(), s.meters.end(), [at] (const song::Meter& m) { return std::abs (m.beat - at) < 1.0e-9; })
                          || (b == 0 && (view == View::time || ! s.meters.empty()));
@@ -281,6 +354,8 @@ void SongTrack::paint (juce::Graphics& g)
     for (int i = 0; i < (int) s.blocks.size(); ++i)
     {
         const auto& b = s.blocks[(size_t) i];
+        if (b.end() < firstShown || b.start > lastShown)
+            continue;
         const auto r = juce::Rectangle<float> (xOf (b.start), (float) lane.getY() + 3.0f, xOf (b.end()) - xOf (b.start), (float) lane.getHeight() - 6.0f)
                            .reduced (1.0f, 0.0f);
         const auto colour = b.muted ? juce::Colour (0xff5a5559) : song::colourOf (b.part);
@@ -741,6 +816,7 @@ void SongTrack::changeListenerCallback (juce::ChangeBroadcaster*)
 {
     if (chosen >= (int) processor.getSong().blocks.size())
         chosen = -1;
+    syncScroll();
     updateStatus();
     repaint();
 }
@@ -780,6 +856,14 @@ void SongTrack::timerCallback()
     play.setButtonText (processor.isSongPlaying() ? "STOP" : "PLAY");
     if (const auto at = processor.getSongPosition(); at != shownPosition)
     {
+        // 0.43.0: playing past the lane's end (or before its start): the next page of the song.
+        if (at >= 0.0 && (at < viewStart || at >= viewStart + beatsShown()) && drag == Drag::none)
+        {
+            const auto bar = processor.getSong().beatsPerBar();
+            setViewStart (std::floor (at / bar) * bar);
+            shownPosition = at;
+            return;
+        }
         // 0.40.0: only the line's old and new places drawn again (the whole strip, every hit of every block, redrew 30
         // times a second while the song played).
         for (const auto beat : { shownPosition, at })

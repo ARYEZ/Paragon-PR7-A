@@ -23,7 +23,7 @@ public:
     // A click on a slot's part: DrumPage chooses it (and the view plays it).
     std::function<void (int slot, juce::ModifierKeys)> onChoose;
 
-    static constexpr int numPieces = 19;   // (12 until 0.37.0)
+    static constexpr int numPieces = 12;   // (12 until 0.37.0, 19 until 0.43.0)
     static const char* pieceName (int piece) noexcept;   // "kick", "snare", ... (the pictures' names)
     static int pieceOf (int slot) noexcept;              // the piece a slot glows on, -1 for none (CLP, SHK)
 

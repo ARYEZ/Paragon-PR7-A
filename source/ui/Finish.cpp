@@ -6,7 +6,7 @@ namespace Finish
 {
     namespace
     {
-        constexpr auto settingKey = "chassisFinish";
+        constexpr auto settingKey = "chassisFinish", machineKey = "machineFinish";
 
         juce::PropertiesFile::Options settingsOptions()
         {
@@ -26,9 +26,11 @@ namespace Finish
                 juce::PropertiesFile file (settingsOptions());
                 const auto saved = file.getIntValue (settingKey, 0);
                 type = saved == (int) Type::pearlBlack || saved == (int) Type::pearlWhiteNeon ? (Type) saved : Type::pearlWhite;
+                const auto machineSaved = file.getIntValue (machineKey, (int) Type::pearlBlack);
+                machine = machineSaved >= 0 && machineSaved <= (int) Type::pearlWhiteNeon ? (Type) machineSaved : Type::pearlBlack;
             }
 
-            Type type = Type::pearlWhite;
+            Type type = Type::pearlWhite, machine = Type::pearlBlack;
             std::optional<Type> painting;   // a component's own finish while it and its controls paint
             juce::ChangeBroadcaster broadcaster;
         };
@@ -56,6 +58,23 @@ namespace Finish
         if (state().type != type)
         {
             state().type = type;
+            state().broadcaster.sendSynchronousChangeMessage();
+        }
+    }
+
+    Type getMachine() { return state().machine; }
+
+    void setMachine (Type type, bool remember)
+    {
+        if (remember)
+        {
+            juce::PropertiesFile file (settingsOptions());
+            file.setValue (machineKey, (int) type);
+            file.saveIfNeeded();
+        }
+        if (state().machine != type)
+        {
+            state().machine = type;
             state().broadcaster.sendSynchronousChangeMessage();
         }
     }

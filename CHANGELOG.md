@@ -2,6 +2,33 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.43.0
+
+**The KIT VIEW is your 12-piece kit, laid out like your reference picture.** The Tron kit is rendered again with exactly the 12 pieces your Djent Drums pack records:
+- three rack toms and one floor tom
+- the hi-hat, snare and kick
+- Crash 1, Crash 2, the splash, the ride and the china
+
+- **The layout follows your picture, with your tweaks:** every piece was placed by measuring where it sits in your picture and working back to 3D. Then, with you:
+  - The rack toms sit on the kick, straight and level, with a little room between them, and the top of the kick shows below them.
+  - Crash 2 and the splash are set back from the toms.
+  - Every cymbal stand stands on clear floor (none passes through a drum).
+- **The camera** sits far back with a long lens, about 38 degrees down, so the kit looks tight and level as in your picture.
+- **Crashes 3-6, the FX crash, China 2 and Tom 5 left the picture.** They're still in the plugin and still play their recorded stand-ins (Crash 1 / 2, the china, Tom 4). They're still on the DRUM and SEQUENCER lists and the DRUM MACHINE; they just can't be clicked in the KIT VIEW.
+
+**The SONG track scrolls.** A song longer than 32 bars no longer squeezes into the strip:
+- A scroll bar under the lane shows which part you're seeing; drag it, or use the mouse wheel.
+- Ctrl (Cmd on a Mac) + the wheel zooms, from 4 to 256 bars across.
+- While the song plays, the view turns the page with it.
+- A song of 32 bars or less still fits whole, as before.
+
+**THE DRUM MACHINE's FINISH key.** A new FINISH... key on the machine's face (right-hand column, under SEQUENCE) gives it Pearl White, Pearl Black or Pearl White + Neon:
+- It's the machine's own finish, apart from the rest of the plugin's (SETTINGS).
+- It's remembered on your computer.
+- Pearl Black is still the default.
+
+**Tests:** the kit view's pieces, click map, glows and colours on the new pictures; the song strip's scrolling (32 bars shown, the scroll bar, the wheel, zoom, a bar's place after scrolling); the machine's three finishes (the face really changes, the plugin's own finish untouched). pluginval passes at strictness 10.
+
 ## 0.42.0
 
 **The KIT VIEW has the whole page, as you asked.** The list of drums down the left is gone from the KIT VIEW, and the Tron kit spreads across the full width of the page.
