@@ -1471,6 +1471,7 @@ TEST_CASE ("SONG 0.12 RECORD: on top of a repeating block (written out first), a
     timed.place (block ("B", 2), 0.0);
     timed.addTempo (0.0, 120.0);
     timed.addTempo (4.0, 60.0);
+    timed.countIn = false;   // (0.45.0: PLAY's take from its first beat, no count-in bar)
     t.p.setSong (timed);
     t.host.playing = false;
     t.p.setSongRecording (true);
@@ -1920,6 +1921,7 @@ TEST_CASE ("SONG CLICK 0.44.0: a click on every beat (higher on the bar's first)
     t.p.playSong (0.0);
     CHECK (onsets (t.play (1.2)).size() == 3);
     s.click = song::Song::Click::off;
+    s.countIn = false;   // (0.45.0: a count-in clicks whatever CLICK is)
     t.p.setSong (s);
     t.p.setSongRecording (true);
     t.p.playSong (0.0);
@@ -1939,6 +1941,7 @@ TEST_CASE ("SONG LOOP 0.44.0: a note played after the loop goes round is recorde
     s.loopStart = 0.0;
     s.loopEnd = 4.0;
     s.click = song::Song::Click::off;
+    s.countIn = false;   // (0.45.0: the take from PLAY's first sample)
     t.p.setSong (s);
     t.p.flushUndoStep();
     t.p.setSongRecording (true);
@@ -2125,7 +2128,7 @@ TEST_CASE ("GROOVES 0.45.0: OWN WINDOW puts the page in a window of its own; BAC
     CHECK (page.getParentComponent() == view);
     CHECK (page.getWindowButton().getButtonText() == "OWN WINDOW");
 
-    page.getWindowButton().triggerClick();
+    page.getWindowButton().onClick();   // (as a click: triggerClick would only post it)
     REQUIRE (view->areGroovesInOwnWindow());
     auto* window = view->getGroovesWindow();
     REQUIRE (window != nullptr);
