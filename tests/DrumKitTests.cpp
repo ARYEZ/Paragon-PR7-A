@@ -220,6 +220,9 @@ TEST_CASE ("DRUMS page: choosing a row points the drum's controls at it; every r
     Plugin p;
     DrumPage page (p.processor);
     page.setSize (1476, 672);
+    // 0.49.0: on the KIT VIEW (where the page opens) the rows are hidden and no pictures are made; the DRUM view makes them.
+    CHECK (page.getDisplay().getPicture().seconds == 0.0);
+    page.showView (DrumPage::View::drum);
     page.select (3);
     CHECK (page.getSelected() == 3);
     for (auto* control : page.getSlotControls())
