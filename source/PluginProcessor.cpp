@@ -97,6 +97,13 @@ ParagonX1AudioProcessor::ParagonX1AudioProcessor()
         for (size_t i = 0; i < std::size (ParamIDs::mbBandSettings); ++i)
             rack->multibandBandParameters[(size_t) band].values[i] = parameters.getRawParameterValue (ParamIDs::mbBand (band, ParamIDs::mbBandSettings[i]));
 
+    // 0.49.0: every parameter's value by its ID in a hash table, for `param` (read some hundred times a block): APVTS's
+    // own lookup walks a sorted map with a string compare per step, about 3% of the audio work on a busy preset.
+    for (auto* p : juce::AudioProcessor::getParameters())
+        if (auto* ranged = dynamic_cast<juce::RangedAudioParameter*> (p))
+            if (auto* value = parameters.getRawParameterValue (ranged->getParameterID()))
+                rawValues.emplace (std::string (ranged->getParameterID().toRawUTF8()), value);
+
     rigLibrary = std::make_unique<RigLibrary>();
     rack->setFolder (rigLibrary->getFolder());
     // THE GROOVE PLAYER: its folders and what was read from them (the GROOVES page reads them again when it opens).
@@ -632,8 +639,10 @@ juce::AudioProcessorParameter* ParagonX1AudioProcessor::getBypassParameter() con
 
 float ParagonX1AudioProcessor::param (const char* id) const
 {
-    // Looked up by ID each block. APVTS keeps these in a sorted map, so the
-    // lookup is a handful of string compares and never allocates.
+    // Looked up by ID each block: 0.49.0 through a hash table made in the constructor (no allocation: the key is
+    // only viewed); APVTS's own (sorted map) lookup for any ID not in it.
+    if (const auto it = rawValues.find (std::string_view (id)); it != rawValues.end())
+        return it->second->load();
     return parameters.getRawParameterValue (id)->load();
 }
 
@@ -1402,7 +1411,7 @@ void ParagonX1AudioProcessor::loadLayer (int slot, const juce::File& fileOrFolde
     // Through the mixer (a multi-mic drum, or one heard through SIMULATED MICS): a channel of its own, the drum's own
     // close mics 10 dB down so the layer leads (its room, overheads and bleed stay as they are).
     const auto instrument = drumInstruments[(size_t) slot];
-    const auto micSim = parameters.getRawParameterValue (ParamIDs::drumsMicSim)->load() > 0.5f;
+    const auto micSim = param (ParamIDs::drumsMicSim) > 0.5f;
     if ((instrument != nullptr && instrument->hasMics()) || micSim)
         if (createLayerChannel (slot) >= 0)
         {

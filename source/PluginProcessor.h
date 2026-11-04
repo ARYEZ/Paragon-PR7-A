@@ -4,6 +4,9 @@
 #include <juce_audio_utils/juce_audio_utils.h>
 
 #include <optional>
+#include <string>
+#include <string_view>
+#include <unordered_map>
 
 #include "LevelMeterSource.h"
 #include "MixerEffects.h"
@@ -606,6 +609,13 @@ private:
     effects::Modulation::Settings modSettingsFor (const ParamIDs::ModIds&) const noexcept;
     effects::LoFi::Settings loFiSettingsFor (int bus) const noexcept;   // -1: the whole sound's
     float param (const char* id) const;
+    // 0.49.0: the parameters' values by ID (std::string keys, looked up by string_view: `TransparentHash`).
+    struct TransparentHash
+    {
+        using is_transparent = void;
+        size_t operator() (std::string_view v) const noexcept { return std::hash<std::string_view>{} (v); }
+    };
+    std::unordered_map<std::string, std::atomic<float>*, TransparentHash, std::equal_to<>> rawValues;
     bool isOn (const char* id) const { return param (id) > 0.5f; }
 
     void timerCallback() override;

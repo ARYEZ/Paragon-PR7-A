@@ -109,6 +109,24 @@ public:
         refresh();
     }
 
+    void setFade (juce::Button& b, float fade)
+    {
+        if (std::abs (getFade (b) - fade) > 1.0e-4f)
+        {
+            b.getProperties().set ("fade", fade);
+            repaint (b.getBounds());
+        }
+    }
+    std::vector<juce::Button*> fadeButtons()
+    {
+        std::vector<juce::Button*> out;
+        for (auto& b : effects)
+            out.push_back (&b);
+        for (auto& b : sends)
+            out.push_back (&b);
+        return out;
+    }
+
     void setMeter (float peak)
     {
         // Falls back over about a third of a second.
@@ -120,7 +138,10 @@ public:
         }
     }
     void setSelected (bool s) { if (s != selected) { selected = s; repaint(); } }
-    void setInUse (bool u) { if (u != used) { used = u; setAlpha (used ? 1.0f : 0.45f); } }
+    // 0.49.0: faded with a sheet of the strip's own colour drawn over it (`paintOverChildren`), not `setAlpha`: a
+    // component with an alpha is drawn into a layer of its own and blended back, and with most strips and their effect
+    // and send buttons faded that blending was over a third of drawing the page.
+    void setInUse (bool u) { if (u != used) { used = u; repaint(); } }
 
     // The OUTPUT and SEND buttons' words (the timer: they follow undo, presets and the DAW).
     void refresh()
@@ -134,7 +155,7 @@ public:
             if (const auto text = page.describeEffect (strip, k); text != b.getButtonText())
                 b.setButtonText (text);
             b.setToggleState (fx.isLoaded() && fx.on, juce::dontSendNotification);
-            b.setAlpha (fx.isLoaded() ? (fx.on ? 1.0f : 0.75f) : 0.6f);
+            setFade (b, fx.isLoaded() ? (fx.on ? 1.0f : 0.75f) : 0.6f);
         }
         // (0.40.0: the effect buttons' set-up, repeated here every tick by mistake, removed: the constructor does it.)
         for (int k = 0; k < mixer::numSendSlots; ++k)
@@ -144,9 +165,29 @@ public:
             if (const auto text = page.describeSend (strip, k); text != b.getButtonText())
                 b.setButtonText (text);
             b.setToggleState (on, juce::dontSendNotification);
-            b.setAlpha (on ? 1.0f : 0.6f);
+            setFade (b, on ? 1.0f : 0.6f);
         }
     }
+
+    void paintOverChildren (juce::Graphics& g) override
+    {
+        // The faded buttons, then (not in use) the whole strip: the strip's colour over them at 1 - their alpha.
+        const auto behind = isBus (strip) ? juce::Colour (0xff120d0a) : juce::Colour (0xff0d0a0e);
+        for (auto* b : fadeButtons())
+            if (const auto fade = (float) b->getProperties().getWithDefault ("fade", 1.0f); fade < 1.0f && b->isVisible())
+            {
+                g.setColour (behind.withAlpha (1.0f - fade));
+                g.fillRect (b->getBounds());
+            }
+        if (! used)
+        {
+            g.setColour (behind.withAlpha (0.55f));
+            g.fillRoundedRectangle (getLocalBounds().toFloat().reduced (1.0f), 4.0f);
+        }
+    }
+
+    float getFade (const juce::Button& b) const { return (float) b.getProperties().getWithDefault ("fade", 1.0f); }
+    bool isInUse() const noexcept { return used; }
 
     juce::Rectangle<int> meterArea() const { return fader.getBounds().withWidth (6).translated (fader.getWidth() - 4, 0).withTrimmedBottom (20); }
 
@@ -303,8 +344,16 @@ public:
         refreshing = false;
         isDirect = direct;
         audio = hasAudio;
-        setAlpha (hasAudio ? 1.0f : 0.5f);
-        repaint();
+        repaint();   // (0.49.0: faded by `paintOverChildren`, not an alpha: no layer to blend)
+    }
+
+    void paintOverChildren (juce::Graphics& g) override
+    {
+        if (! audio)
+        {
+            g.setColour (ParagonColours::panel.withAlpha (0.5f));
+            g.fillRect (getLocalBounds());
+        }
     }
 
     void resized() override
