@@ -2,6 +2,30 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.44.0
+
+**THE SONG TRACK's LOOP AREA.** PLAY can now go round a part of the song while you work on it, or record over it take after take.
+
+- **Set it:** drag along the bar numbers. It snaps to whole bars and shows as an orange band, with the lane lightly washed between its edges. Or right-click a block (or the bar numbers): LOOP THIS BLOCK.
+- **LOOP** (a new button on the strip) turns it on and off. With no loop set yet, it loops the chosen block's bars, or four bars from PLAY's start.
+- **Exact:** PLAY jumps back to the loop's start on the very sample the loop ends, even in the middle of an audio block at an odd tempo, so the groove doesn't stumble at the seam.
+- **Recording in a loop:** notes you play after the loop goes round land in the loop's bars, where you played them.
+- **The loop is PLAY's.** While your DAW plays the song (FOLLOW DAW), your DAW's own cycle decides the looping. A bounce to audio always plays the whole song once, with no loop.
+- Right-click the bar numbers for: Loop, Loop This Block, Clear the Loop Area, PLAY From Here. A plain click on the bar numbers still sets PLAY's start.
+
+**THE CLICK: a metronome for the song.** CLICK... (beside LOOP) sets it:
+- **While Recording** (the default): it clicks only while REC is armed.
+- **Always:** whenever the song plays.
+- **Off.**
+
+It clicks on every beat, higher on each bar's first beat (it follows the song's time signature changes). It's the same short click as tap-to-find's metronome, about -12 dB. It goes into the main output only, never into a bounce.
+
+**Kept with your project:** the loop and the click setting are saved with the song, and changing them can be undone.
+
+**Not in this version:** a count-in before recording (ask if you'd like it next).
+
+**Tests:** the loop's wrap to the sample at 110 BPM (mid-block), playing on past the song's end inside a loop, no loop = plays to the end and stops; the click on every beat to the sample, its higher bar click (measured by pitch), each of its three settings; a note recorded after the wrap landing at its beat in the loop; the loop and click saved with the song. pluginval passes at strictness 10.
+
 ## 0.43.0
 
 **The KIT VIEW is your 12-piece kit, laid out like your reference picture.** The Tron kit is rendered again with exactly the 12 pieces your Djent Drums pack records:

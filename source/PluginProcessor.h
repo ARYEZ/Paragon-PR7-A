@@ -718,6 +718,12 @@ private:
         double endBeat = 0.0;
         song::Song timing;   // 0.11.0: only its tempo changes (PLAY's clock through them; none: the DAW's tempo)
         bool followDaw = true;   // 0.12.0: FOLLOW DAW
+        // 0.44.0: the LOOP AREA (PLAY's clock only), THE CLICK, and the bar lines (for the click's accent).
+        bool loopOn = false;
+        double loopStart = 0.0, loopEnd = 0.0;
+        song::Song::Click click = song::Song::Click::recording;
+        std::vector<double> barLines;
+        bool isBarLine (double beat) const noexcept;
     };
     void installSong (std::shared_ptr<const song::Song>);
     int collectSongHits (int numSamples, double ppq, double bpm, synth::drums::SlotHit* into, int room) noexcept;
@@ -733,7 +739,18 @@ private:
         bool active = false, timed = false;
         double from = 0.0, perSample = 0.0, samplesFrom = 0.0, bpm = 120.0;
         const SongPlayback* playback = nullptr;
+        // 0.44.0: PLAY went round the LOOP AREA in this piece at sample `wrapAt`: from there on these.
+        int wrapAt = 1 << 30;
+        double from2 = 0.0, samplesFrom2 = 0.0;
     } songChunk;   // audio thread
+    // THE CLICK (0.44.0): this block's clicks (their samples from the block's start, accented on a bar line), and the one
+    // sounding (it carries on into the next block). Added to MAIN after everything, as TAP TO FIND's.
+    struct SongClick { int sample = 0; bool accent = false; };
+    std::array<SongClick, 64> songClicks {};
+    int numSongClicks = 0, songClickAt = -1;
+    bool songClickAccent = false;
+    void noteSongClicks (int blockOffset, int numSamples, double bpm) noexcept;
+    void runSongClick (juce::AudioBuffer<float>&, int numSamples) noexcept;
     void recordSongNotes (const juce::MidiBuffer&, int offset, int numSamples, const synth::drums::KitSettings&) noexcept;
     // THE DRUM MACHINE's clock and REC (audio thread but the atomics): the sequencer's song position and tempo this block
     // (the DAW's while it plays, else PLAY's own, else -1), and the notes on their way to the pattern.

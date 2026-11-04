@@ -764,6 +764,18 @@ TEST_CASE ("Render the editor to a PNG", "[.][snapshot]")
                 processor.songBroadcaster.dispatchPendingMessages();
                 view->getSongTrack().setViewStart (64.0);
             }
+            // =7 (0.44.0): the LOOP AREA on bars 3-4 (on), THE CLICK always.
+            if (env ("PARAGON_SNAPSHOT_SONG") == "7")
+            {
+                auto looped = processor.getSong();
+                looped.loopOn = true;
+                looped.loopStart = 8.0;
+                looped.loopEnd = 16.0;
+                looped.click = song::Song::Click::always;
+                processor.setSong (looped);
+                processor.songBroadcaster.dispatchPendingMessages();
+                view->getSongTrack().syncButtons();
+            }
             // =2: EDIT BLOCK on the chorus, its snare chosen.
             if (env ("PARAGON_SNAPSHOT_SONG") == "2")
             {

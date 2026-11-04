@@ -1810,3 +1810,144 @@ TEST_CASE ("SONG STRIP 0.43.0: a song longer than 32 bars scrolls; the wheel and
     t.p.setSong (song::Song());
     CHECK (track.getViewStart() <= track.totalBeats());
 }
+
+//==============================================================================
+// 0.44.0: THE LOOP AREA and THE CLICK.
+TEST_CASE ("SONG LOOP 0.44.0: PLAY goes back to the loop's start on its very sample; off, it plays to the end and stops", "[song][song-player][loop]")
+{
+    Plugin t;
+    t.host.playing = false;
+    t.host.bpm = 110.0;   // a bar isn't a whole number of blocks: the wrap falls inside one
+    song::Song s;
+    s.place (block ("A", 1, { { 0.0, SD } }), 0.0);
+    s.place (block ("B", 1, { { 0.0, BD }, { 2.0, BD } }), s.endBeat());
+    s.place (block ("C", 1, { { 0.0, SD } }), s.endBeat());
+    s.loopOn = true;
+    s.loopStart = 4.0;
+    s.loopEnd = 8.0;   // block B
+    t.p.setSong (s);
+    const auto beat = 60.0 / 110.0 * sampleRate;   // samples a beat
+    t.p.playSong (4.0);
+    const auto o = onsets (t.play (5.0));
+    // B's kicks on beats 4 and 6, then again from the wrap (beat 8 -> 4), C's snare never reached.
+    REQUIRE (o.size() >= 4);
+    CHECK (o[0] == 0);
+    CHECK (std::abs (o[1] - 2.0 * beat) <= 1.0);
+    CHECK (std::abs (o[2] - 4.0 * beat) <= 1.0);
+    CHECK (std::abs (o[3] - 6.0 * beat) <= 1.0);
+    CHECK (t.p.isSongPlaying());   // past the song's... loop: still going
+    CHECK (t.p.getSongPosition() >= 4.0);
+    CHECK (t.p.getSongPosition() < 8.0);
+
+    // Off: from B on to C's snare and the end, then stopped.
+    s.loopOn = false;
+    t.p.setSong (s);
+    t.p.playSong (4.0);
+    const auto plain = onsets (t.play (5.0));
+    REQUIRE (plain.size() == 3);
+    CHECK (std::abs (plain[2] - 4.0 * beat) <= 1.0);
+    CHECK (! t.p.isSongPlaying());
+
+    // A loop reaching past the song's end: PLAY carries on round it rather than stopping at the end.
+    s.loopOn = true;
+    s.loopStart = 8.0;
+    s.loopEnd = 16.0;
+    t.p.setSong (s);
+    t.p.playSong (8.0);
+    t.play (6.0);
+    CHECK (t.p.isSongPlaying());
+
+    // Kept with the song (and undoable as an edit); a bounce plays the whole song, no loop.
+    const auto back = song::Song::fromXml (*t.p.getSong().toXml());
+    CHECK (back.loopOn);
+    CHECK (back.loopStart == 8.0);
+    CHECK (back.loopEnd == 16.0);
+    CHECK (back == t.p.getSong());
+    CHECK_FALSE (song::Song::fromXml (*song::Song().toXml()).loopOn);
+}
+
+TEST_CASE ("SONG CLICK 0.44.0: a click on every beat (higher on the bar's first) while recording, or always, or never", "[song][song-player][loop]")
+{
+    Plugin t;
+    t.host.playing = false;
+    song::Song s;
+    s.place (block ("Quiet", 2), 0.0);   // no hits: only the click sounds
+    REQUIRE (s.click == song::Song::Click::recording);   // the default
+    t.p.setSong (s);
+    t.p.playSong (0.0);
+    CHECK (onsets (t.play (1.5)).empty());   // not recording: no click
+
+    // Recording: a click on each beat at 120 BPM (every 24000 samples), from PLAY's first sample.
+    t.p.setSongRecording (true);
+    t.p.playSong (0.0);
+    const auto x = t.play (2.2);
+    const auto o = onsets (x);
+    REQUIRE (o.size() == 5);
+    for (size_t i = 0; i < o.size(); ++i)
+        CHECK (o[i] == (int) i * 24000);
+    // The bar's first beat higher (1600 Hz) than the others (1100 Hz): zero crossings in its first 10 ms.
+    const auto crossings = [&x] (int from)
+    {
+        int n = 0;
+        for (int i = from + 1; i < from + 480; ++i)
+            n += (x[(size_t) i - 1] < 0.0f) != (x[(size_t) i] < 0.0f);
+        return n;
+    };
+    CHECK (std::abs (crossings (o[0]) - 32) <= 2);   // 1600 Hz x 10 ms x 2
+    CHECK (std::abs (crossings (o[1]) - 22) <= 2);   // 1100 Hz
+    CHECK (std::abs (crossings (o[4]) - 32) <= 2);   // bar 2's first
+    t.p.setSongRecording (false);
+    t.p.stopSong();
+
+    // Always: without recording too; off: never.
+    s.click = song::Song::Click::always;
+    t.p.setSong (s);
+    t.p.playSong (0.0);
+    CHECK (onsets (t.play (1.2)).size() == 3);
+    s.click = song::Song::Click::off;
+    t.p.setSong (s);
+    t.p.setSongRecording (true);
+    t.p.playSong (0.0);
+    CHECK (onsets (t.play (1.2)).empty());
+    t.p.setSongRecording (false);
+    CHECK (song::Song::fromXml (*t.p.getSong().toXml()).click == song::Song::Click::off);
+}
+
+TEST_CASE ("SONG LOOP 0.44.0: a note played after the loop goes round is recorded at its place in the loop", "[song][song-player][loop]")
+{
+    Plugin t;
+    t.host.playing = false;
+    song::Song s;
+    s.place (block ("A", 1, { { 0.0, BD } }), 0.0);
+    s.place (block ("B", 1, { { 0.0, BD } }), s.endBeat());
+    s.loopOn = true;
+    s.loopStart = 0.0;
+    s.loopEnd = 4.0;
+    s.click = song::Song::Click::off;
+    t.p.setSong (s);
+    t.p.flushUndoStep();
+    t.p.setSongRecording (true);
+    t.p.playSong (0.0);
+    // A snare 1.25 s after PLAY (beat 2.5 at 120 BPM)... then one at 2.25 s: past the wrap at 2 s, so beat 0.5.
+    juce::AudioBuffer<float> buffer (2, blockSize);
+    const auto note = [] (int at) { juce::MidiBuffer m; m.addEvent (juce::MidiMessage::noteOn (1, 38, (juce::uint8) 100), at); return m; };
+    for (int done = 0; done < 3 * (int) sampleRate; done += blockSize)
+    {
+        juce::MidiBuffer midi;
+        for (const auto at : { 60000, 108000 })
+            if (at >= done && at < done + blockSize)
+                midi = note (at - done);
+        buffer.clear();
+        t.p.processBlock (buffer, midi);
+    }
+    t.p.setSongRecording (false);
+    std::vector<double> snares;
+    for (const auto& b : t.p.getSong().blocks)
+        for (const auto& h : b.hits)
+            if (h.slot == SD)
+                snares.push_back (b.start + h.beat);
+    std::sort (snares.begin(), snares.end());
+    REQUIRE (snares.size() == 2);
+    CHECK_THAT (snares[0], WithinAbs (0.5, 1.0e-3));
+    CHECK_THAT (snares[1], WithinAbs (2.5, 1.0e-3));
+}

@@ -80,6 +80,13 @@ namespace song
         // FOLLOW DAW (0.12.0): on, the song plays with the DAW's song position while it plays; off, only with PLAY (the
         // DAW playing or not): for when the song's MIDI is on a DAW track, which would play every hit a second time.
         bool followDaw = true;
+        // 0.44.0: THE LOOP AREA (PLAY goes back to `loopStart` when it reaches `loopEnd`, on bar lines; off or empty: no
+        // loop) and THE CLICK (a metronome while the song plays: off, only while REC is armed, or always).
+        bool loopOn = false;
+        double loopStart = 0.0, loopEnd = 0.0;
+        enum class Click { off, recording, always };
+        Click click = Click::recording;
+        bool hasLoop() const noexcept { return loopOn && loopEnd > loopStart + 1.0e-9; }
 
         double beatsPerBar() const noexcept { return numerator * 4.0 / juce::jmax (1, denominator); }   // the first bars'
         double endBeat() const noexcept { return blocks.empty() ? 0.0 : blocks.back().end(); }
@@ -87,7 +94,8 @@ namespace song
         bool operator== (const Song& o) const noexcept
         {
             return numerator == o.numerator && denominator == o.denominator && blocks == o.blocks && meters == o.meters
-                && tempos == o.tempos && followDaw == o.followDaw;
+                && tempos == o.tempos && followDaw == o.followDaw && loopOn == o.loopOn && loopStart == o.loopStart
+                && loopEnd == o.loopEnd && click == o.click;
         }
 
         // BARS (0.11.0), with the time signature changes: the time signature at a beat; every bar line from the start

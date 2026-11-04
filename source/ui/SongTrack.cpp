@@ -103,6 +103,18 @@ SongTrack::SongTrack (ParagonX1AudioProcessor& p) : processor (p)
             showNote ("FOLLOW DAW off: the song plays only with PLAY.", 5.0);
     };
     addAndMakeVisible (follow);
+    // THE LOOP AREA and THE CLICK (0.44.0).
+    loop.setClickingTogglesState (false);
+    loop.setColour (juce::TextButton::textColourOnId, ParagonColours::accent);
+    loop.setTooltip ("LOOP: PLAY goes round the loop area (shown on the bar numbers). Drag along the bar numbers to set it; "
+                     "right-click a block: LOOP THIS BLOCK. With none set, the chosen block's bars (else four bars from PLAY's start).");
+    loop.onClick = [this] { toggleLoop(); };
+    addAndMakeVisible (loop);
+    click.setColour (juce::TextButton::textColourOnId, ParagonColours::accent);
+    click.setTooltip ("THE CLICK: a metronome while the song plays (higher on each bar's first beat): off, only while REC is "
+                      "armed, or always.");
+    click.onClick = [this] { clickMenu().showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&click)); };
+    addAndMakeVisible (click);
     blocksView.setTooltip ("The blocks: arrange the song.");
     tempoView.setTooltip ("The song's tempo changes (used by PLAY and EXPORT MIDI; while your DAW plays, its tempo leads): "
                           "double-click to add one, drag one to move it, right-click it to glide to the next or remove it.");
@@ -237,6 +249,8 @@ void SongTrack::resized()
     timeView.setBounds (top.removeFromLeft (56).reduced (2, 2));
     top.removeFromLeft (8);
     follow.setBounds (top.removeFromLeft (98).reduced (2, 2));
+    loop.setBounds (top.removeFromLeft (58).reduced (2, 2));    // 0.44.0
+    click.setBounds (top.removeFromLeft (92).reduced (2, 2));
     status.setBounds (top.reduced (8, 0));
     area.removeFromTop (2);
     ruler = area.removeFromTop (rulerHeight);
@@ -462,6 +476,26 @@ void SongTrack::paint (juce::Graphics& g)
         g.drawRoundedRectangle (lane.toFloat().reduced (1.0f), 4.0f, 2.0f);
     }
 
+    // THE LOOP AREA (0.44.0): a band on the bar numbers (lit while on) and a faint wash over the lane; a drag's draft.
+    {
+        const auto& range = loopDraft.has_value() ? *loopDraft : std::make_pair (s.loopStart, s.loopEnd);
+        if (range.second > range.first + 1.0e-9)
+        {
+            const auto on = loopDraft.has_value() || s.loopOn;
+            const auto x0 = xOf (range.first), x1 = xOf (range.second);
+            g.setColour (ParagonColours::accent.withAlpha (on ? 0.45f : 0.15f));
+            g.fillRect (juce::Rectangle<float> (x0, (float) ruler.getY() + 1.0f, x1 - x0, (float) ruler.getHeight() - 2.0f));
+            if (on)
+            {
+                g.setColour (ParagonColours::accent.withAlpha (0.07f));
+                g.fillRect (juce::Rectangle<float> (x0, (float) lane.getY(), x1 - x0, (float) lane.getHeight()));
+                g.setColour (ParagonColours::accent.withAlpha (0.7f));
+                g.drawVerticalLine (juce::roundToInt (x0), (float) ruler.getY(), (float) lane.getBottom());
+                g.drawVerticalLine (juce::roundToInt (x1), (float) ruler.getY(), (float) lane.getBottom());
+            }
+        }
+    }
+
     // PLAY's start (a mark on the bar numbers) and where the song is playing.
     g.setColour (ParagonColours::accent);
     const auto sx = xOf (startBeat);
@@ -476,6 +510,88 @@ void SongTrack::paint (juce::Graphics& g)
 }
 
 //==============================================================================
+void SongTrack::syncButtons()
+{
+    // LOOP and CLICK as the song has them (undo, a project loaded).
+    loop.setToggleState (processor.getSong().hasLoop(), juce::dontSendNotification);
+    const auto clickText = juce::String ("CLICK: ") + (processor.getSong().click == song::Song::Click::off ? "OFF"
+                                                     : processor.getSong().click == song::Song::Click::always ? "ON" : "REC");
+    if (click.getButtonText() != clickText)
+        click.setButtonText (clickText);
+    click.setToggleState (processor.getSong().click != song::Song::Click::off, juce::dontSendNotification);
+}
+
+void SongTrack::setLoop (double fromBeat, double toBeat)
+{
+    edit ([&] (song::Song& s)
+    {
+        s.loopStart = s.snap (juce::jmax (0.0, fromBeat));
+        s.loopEnd = juce::jmax (s.snap (toBeat), s.loopStart + s.beatsPerBarAt (s.loopStart));
+        s.loopOn = true;
+    });
+    startBeat = processor.getSong().loopStart;   // PLAY starts at the loop
+    repaint();
+}
+
+void SongTrack::toggleLoop()
+{
+    const auto& s = processor.getSong();
+    if (s.loopEnd <= s.loopStart + 1.0e-9)
+    {
+        // None set yet: the chosen block's bars, else four bars from PLAY's start.
+        if (chosen >= 0 && chosen < (int) s.blocks.size())
+            setLoop (s.blocks[(size_t) chosen].start, s.blocks[(size_t) chosen].end());
+        else
+            setLoop (startBeat, startBeat + 4.0 * s.beatsPerBarAt (startBeat));
+        return;
+    }
+    const auto on = ! s.loopOn;
+    edit ([on] (song::Song& song) { song.loopOn = on; });
+    repaint();
+}
+
+juce::PopupMenu SongTrack::clickMenu()
+{
+    juce::PopupMenu menu;
+    const auto now = processor.getSong().click;
+    const auto set = [this] (song::Song::Click c) { edit ([c] (song::Song& s) { s.click = c; }); };
+    menu.addSectionHeader ("THE CLICK");
+    menu.addItem ("Off", true, now == song::Song::Click::off, [set] { set (song::Song::Click::off); });
+    menu.addItem ("While Recording", true, now == song::Song::Click::recording, [set] { set (song::Song::Click::recording); });
+    menu.addItem ("Always (while the song plays)", true, now == song::Song::Click::always, [set] { set (song::Song::Click::always); });
+    return menu;
+}
+
+juce::PopupMenu SongTrack::rulerMenu (double atBeat)
+{
+    juce::PopupMenu menu;
+    const auto& s = processor.getSong();
+    const auto has = s.loopEnd > s.loopStart + 1.0e-9;
+    menu.addSectionHeader ("THE LOOP AREA");
+    menu.addItem ("Loop", has, s.loopOn, [this] { toggleLoop(); });
+    const auto block = s.blockAt (atBeat);
+    menu.addItem ("Loop This Block", block >= 0, false, [this, block]
+    {
+        const auto& song = processor.getSong();
+        if (block >= 0 && block < (int) song.blocks.size())
+            setLoop (song.blocks[(size_t) block].start, song.blocks[(size_t) block].end());
+    });
+    menu.addItem ("Clear the Loop Area", has, false, [this]
+    {
+        edit ([] (song::Song& song) { song.loopOn = false; song.loopStart = song.loopEnd = 0.0; });
+        repaint();
+    });
+    menu.addSeparator();
+    menu.addItem ("PLAY From Here", [this, atBeat]
+    {
+        startBeat = processor.getSong().snap (atBeat);
+        if (processor.isSongPlaying())
+            processor.playSong (startBeat);
+        repaint();
+    });
+    return menu;
+}
+
 bool SongTrack::nearRightEdge (int block, juce::Point<float> p) const
 {
     const auto& s = processor.getSong();
@@ -506,10 +622,14 @@ void SongTrack::mouseDown (const juce::MouseEvent& e)
     const auto& s = processor.getSong();
     if (ruler.contains (e.getPosition()))
     {
-        startBeat = s.snap (beatAt (e.position.x));
-        if (processor.isSongPlaying())
-            processor.playSong (startBeat);
-        repaint();
+        // 0.44.0: right-click: the loop's menu; a drag: the loop area (set on release); a click: PLAY's start.
+        if (e.mods.isPopupMenu())
+        {
+            rulerMenu (beatAt (e.position.x)).showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this).withMousePosition());
+            return;
+        }
+        rulerFrom = beatAt (e.position.x);
+        loopDraft.reset();
         return;
     }
     if (! lane.contains (e.getPosition()))
@@ -555,6 +675,20 @@ void SongTrack::mouseDown (const juce::MouseEvent& e)
 
 void SongTrack::mouseDrag (const juce::MouseEvent& e)
 {
+    if (rulerFrom >= 0.0)
+    {
+        if (e.getDistanceFromDragStart() >= 4)
+        {
+            const auto& s = processor.getSong();
+            const auto a = juce::jmin (rulerFrom, beatAt (e.position.x)), b = juce::jmax (rulerFrom, beatAt (e.position.x));
+            auto from = s.snap (a), to = s.snap (b);
+            if (to <= from + 1.0e-9)
+                to = from + s.beatsPerBarAt (from);
+            loopDraft = std::make_pair (from, to);
+            repaint();
+        }
+        return;
+    }
     if (dragTempo >= 0 && tempoDraft.has_value())
     {
         // To the beat nearest, a whole BPM (between its neighbours: it can't pass them).
@@ -571,6 +705,24 @@ void SongTrack::mouseDrag (const juce::MouseEvent& e)
 
 void SongTrack::mouseUp (const juce::MouseEvent& e)
 {
+    if (rulerFrom >= 0.0)
+    {
+        const auto from = rulerFrom;
+        rulerFrom = -1.0;
+        if (auto draft = std::move (loopDraft); draft.has_value())
+        {
+            loopDraft.reset();
+            setLoop (draft->first, draft->second);
+        }
+        else
+        {
+            startBeat = processor.getSong().snap (from);
+            if (processor.isSongPlaying())
+                processor.playSong (startBeat);
+        }
+        repaint();
+        return;
+    }
     if (dragTempo >= 0)
     {
         auto draft = std::move (tempoDraft);
@@ -663,6 +815,12 @@ juce::PopupMenu SongTrack::menuFor (int block, double atBeat)
         return m;
     };
     menu.addSeparator();
+    menu.addItem ("Loop This Block", [this, block]
+    {
+        const auto& song = processor.getSong();
+        if (block < (int) song.blocks.size())
+            setLoop (song.blocks[(size_t) block].start, song.blocks[(size_t) block].end());
+    });
     menu.addItem ("Edit Block...", onEditBlock != nullptr, false, [this, block] { if (onEditBlock != nullptr) onEditBlock (block); });
     menu.addItem ("Use with Song Creator", onUseWithCreator != nullptr && b.source.existsAsFile(), false,
                   [this, file = b.source] { onUseWithCreator (file); });
@@ -830,6 +988,7 @@ void SongTrack::timerCallback()
         updateStatus();
     }
     follow.setToggleState (processor.getSong().followDaw, juce::dontSendNotification);
+    syncButtons();
     // RECORD: the notes played since, into the song (and REC as the processor has it).
     if (processor.isSongRecording() && processor.mergeRecordedNotes() > 0)
         updateStatus();
