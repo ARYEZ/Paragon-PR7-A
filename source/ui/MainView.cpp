@@ -202,7 +202,7 @@ MainView::MainView (ParagonX1AudioProcessor& processorToShow)
     groovesAwayNote.setJustificationType (juce::Justification::centred);
     groovesAwayNote.setFont (juce::FontOptions (18.0f, juce::Font::bold));
     groovesAwayNote.setColour (juce::Label::textColourId, ParagonColours::textDim);
-    groovesShowWindow.onClick = [this] { if (groovesWindow != nullptr) groovesWindow->toFront (true); };
+    groovesShowWindow.onClick = [this] { if (auto* w = getGroovesWindow()) w->toFront (true); };
     groovesBringBack.onClick = [this] { setGroovesInOwnWindow (false); };
     for (juce::Component* c : { (juce::Component*) &groovesAwayNote, (juce::Component*) &groovesShowWindow, (juce::Component*) &groovesBringBack })
         addChildComponent (c);
