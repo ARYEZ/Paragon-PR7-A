@@ -55,7 +55,8 @@ public:
     };
     void setHighlight (const Highlight&);
     std::function<void (int slot, juce::Point<float>)> onMenu;
-    std::optional<juce::Point<float>> pieceCentre (int piece) const;   // the middle of a piece's drawn area (its tags)
+    std::optional<juce::Point<float>> pieceCentre (int piece) const;   // the middle of a piece's drawn area
+    std::optional<juce::Point<float>> slotCentre (int slot) const;     // the middle of a slot's part (EDIT PLAY STYLE's flags)
     void updateLights();                     // each piece's glow from the kit's hits (DrumPage's timer)
     float getGlow (int piece) const noexcept { return glow[(size_t) piece]; }
 

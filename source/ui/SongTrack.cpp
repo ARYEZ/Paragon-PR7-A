@@ -821,7 +821,8 @@ bool SongTrack::keyPressed (const juce::KeyPress& key)
     // 0.46.0: P: EDIT PLAY STYLE on the chosen block; E: the GRID EDITOR.
     if (chosen >= 0 && chosen < (int) processor.getSong().blocks.size() && ! key.getModifiers().isAnyModifierKeyDown())
     {
-        const auto c = juce::CharacterFunctions::toLowerCase (key.getTextCharacter());
+        const auto typed = key.getTextCharacter() != 0 ? key.getTextCharacter() : (juce::juce_wchar) key.getKeyCode();
+        const auto c = juce::CharacterFunctions::toLowerCase (typed);
         if (c == 'p' && onPlayStyle != nullptr)
         {
             onPlayStyle (chosen);

@@ -362,6 +362,49 @@ std::optional<juce::Point<float>> KitView::pieceCentre (int piece) const
     return area.getTopLeft() + c.box.toFloat().getCentre() * scale;
 }
 
+std::optional<juce::Point<float>> KitView::slotCentre (int slot) const
+{
+    // Each slot's part's middle (the average of its pixels in the click map), worked out once for all of them.
+    static const auto centres = []
+    {
+        std::array<juce::Point<float>, synth::drums::numSlots> out {};
+        const auto& zones = pictures().zones;
+        if (! zones.isValid())
+            return out;
+        // (Only the top half of each part: a hi-hat's part runs down its stand, and the flag belongs on the hat.)
+        std::array<double, synth::drums::numSlots> sx {}, sy {}, n {};
+        std::array<int, synth::drums::numSlots> top {}, bottom {};
+        top.fill (1 << 30);
+        bottom.fill (-1);
+        const juce::Image::BitmapData pixels (zones, juce::Image::BitmapData::readOnly);
+        for (int pass = 0; pass < 2; ++pass)
+            for (int y = 0; y < pixels.height; ++y)
+                for (int x = 0; x < pixels.width; ++x)
+                    if (const auto z = (int) pixels.getPixelColour (x, y).getRed() - 1; z >= 0 && z < synth::drums::numSlots)
+                    {
+                        if (pass == 0)
+                        {
+                            top[(size_t) z] = juce::jmin (top[(size_t) z], y);
+                            bottom[(size_t) z] = juce::jmax (bottom[(size_t) z], y);
+                        }
+                        else if (y <= (top[(size_t) z] + bottom[(size_t) z]) / 2)
+                        {
+                            sx[(size_t) z] += x;
+                            sy[(size_t) z] += y;
+                            n[(size_t) z] += 1.0;
+                        }
+                    }
+        for (size_t k = 0; k < out.size(); ++k)
+            out[k] = n[k] > 0.0 ? juce::Point<float> ((float) (sx[k] / n[k]), (float) (sy[k] / n[k])) : juce::Point<float> (-1.0f, -1.0f);
+        return out;
+    }();
+    const auto area = pictureArea();
+    const auto& kit = pictures().kit;
+    if (slot < 0 || slot >= synth::drums::numSlots || centres[(size_t) slot].x < 0.0f || area.isEmpty() || ! kit.isValid())
+        return {};
+    return area.getTopLeft() + centres[(size_t) slot] * (area.getWidth() / (float) kit.getWidth());
+}
+
 void KitView::updateLights()
 {
     const auto& kit = processor.getDrumKit();

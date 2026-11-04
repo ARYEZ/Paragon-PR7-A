@@ -283,9 +283,13 @@ namespace song::playstyle
         auto out = source;
         for (size_t i = 0; i < count && i < places.size(); ++i)
         {
-            const auto level = levelAt (std::fmod (places[i].beat, beatsPerBar), beatsPerBar);
-            const auto velocity = kind == Kind::snare && level < 0.4 ? juce::jmin (loud, 0.35f)   // a ghost note
-                                                                     : loud * (float) (0.55 + 0.45 * level);
+            const auto inBar = std::fmod (places[i].beat, beatsPerBar);
+            const auto level = levelAt (inBar, beatsPerBar);
+            // A snare note off its backbeats (the bar's 2 and 4) is a ghost note: soft, a little less so on the beat.
+            const auto beatInBar = (int) std::floor (inBar + 1.0e-6);
+            const auto backbeat = inBar - beatInBar < 1.0e-4 && beatInBar % 2 == 1;
+            const auto velocity = kind == Kind::snare && ! backbeat ? juce::jmin (loud, 0.35f) * (float) (0.75 + 0.25 * level)
+                                                                    : loud * (float) (0.55 + 0.45 * level);
             out.push_back ({ places[i].beat, slot, juce::jlimit (1.0f / 127.0f, 1.0f, velocity) });
         }
         std::stable_sort (out.begin(), out.end(), [] (const Hit& x, const Hit& y) { return x.beat < y.beat; });

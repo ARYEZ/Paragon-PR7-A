@@ -720,6 +720,8 @@ int PlayStylePanel::pieceAt (juce::Point<int> at) const
 
 std::optional<juce::Point<int>> PlayStylePanel::tagPointFor (int slot) const
 {
+    if (const auto c = kit.slotCentre (slot))
+        return (*c).roundToInt() + kit.getPosition();
     if (const auto kitPiece = KitView::pieceOf (slot); kitPiece >= 0)
         if (const auto c = kit.pieceCentre (kitPiece))
             return (*c).roundToInt() + kit.getPosition();
