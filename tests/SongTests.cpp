@@ -1857,6 +1857,20 @@ TEST_CASE ("SONG LOOP 0.44.0: PLAY goes back to the loop's start on its very sam
     t.play (6.0);
     CHECK (t.p.isSongPlaying());
 
+    // The loop's end exactly on a block's end (120 BPM: a bar is 375 blocks): it still goes round.
+    t.host.bpm = 120.0;
+    s.loopStart = 4.0;
+    s.loopEnd = 8.0;
+    t.p.setSong (s);
+    t.p.playSong (4.0);
+    const auto exact = onsets (t.play (4.5));
+    REQUIRE (exact.size() == 5);
+    CHECK (exact[2] == 96000);   // beat 8 -> 4: B's first kick again, on the very sample
+    CHECK (exact[4] == 192000);
+    s.loopStart = 8.0;
+    s.loopEnd = 16.0;
+    t.p.setSong (s);
+
     // Kept with the song (and undoable as an edit); a bounce plays the whole song, no loop.
     const auto back = song::Song::fromXml (*t.p.getSong().toXml());
     CHECK (back.loopOn);
@@ -1883,8 +1897,9 @@ TEST_CASE ("SONG CLICK 0.44.0: a click on every beat (higher on the bar's first)
     const auto x = t.play (2.2);
     const auto o = onsets (x);
     REQUIRE (o.size() == 5);
+    // (A click is a sine from 0: its beat's own sample is its silent first one, so it shows from the next.)
     for (size_t i = 0; i < o.size(); ++i)
-        CHECK (o[i] == (int) i * 24000);
+        CHECK (o[i] - (int) i * 24000 == 1);
     // The bar's first beat higher (1600 Hz) than the others (1100 Hz): zero crossings in its first 10 ms.
     const auto crossings = [&x] (int from)
     {

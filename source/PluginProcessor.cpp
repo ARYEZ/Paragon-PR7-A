@@ -3676,6 +3676,13 @@ int ParagonX1AudioProcessor::collectSongHits (int numSamples, double ppq, double
         songSamples += rest;
         to = w2.to;
     }
+    else if (looping && w.from < s->loopEnd - 1.0e-9 && w.to >= s->loopEnd - 1.0e-9)
+    {
+        // The loop's end exactly on this piece's end: the next piece starts at the loop's start (else PLAY would carry on
+        // past the end, never inside it again).
+        restartAt (s->loopStart);
+        to = s->loopStart;
+    }
 
     // PLAY stops at the song's end (not while it's going round a loop that reaches past it).
     if (s == nullptr || (to >= s->endBeat && ! (looping && to < s->loopEnd + 1.0e-9)))
