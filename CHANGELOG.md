@@ -2,6 +2,58 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.47.0
+
+**THE GRID EDITOR, rebuilt** after section 7.3.2 of the manual you sent: a real note-by-note editor for a song block. It works the way the manual describes; the look, the words and the swing / randomize / dynamics maths are ours. Open it as before: E, right-click a block > Edit MIDI > Grid Editor, its tab beside EDIT PLAY STYLE, or a double-click when it was the one used last.
+
+**The rows:**
+- One row per instrument, with its notes count.
+- Instruments with articulations (snare, hi-hat, cymbals, ride) have an arrow that unfolds them: the snare's center, rimshot and sidestick each get their own row.
+- Drag a row's name up or down to reorder.
+- **M / S** mute or solo an instrument while the song plays. **CLEAR SOLO / MUTE** turns them all off, and **RECALL** brings them back.
+- **ROWS:** Show Unmapped / Turned-Off Drums, Reset Order, Collapse All, Expand All.
+
+**The notes** are diamonds, brighter the louder.
+- **POINTER:**
+  - click a note to choose it (SHIFT: more), drag on empty space for a lasso, click a row's name for all its notes;
+  - drag the chosen notes along the beat (onto the grid while SNAP is on) or onto another row (another drum or articulation);
+  - ALT-drag copies them;
+  - double-click empty space adds a note.
+- **PENCIL** (or CTRL + ALT held): click or drag along a row to draw notes on the resolution.
+- Right-click a note to remove it. Right-click empty space for Cut / Copy / Paste / Delete / Select All.
+
+**Timing** (on the chosen notes, or all when none):
+- **SNAP** and **RESOLUTION** (Auto, 1/4 to 1/32 and triplets; Auto follows the finest grid line drawn at the zoom) set where notes go.
+- **QUANTIZE** moves them part of the way to the grid (**MAX**: all the way).
+- **SWING** pushes every second step later (100: a full triplet swing) or earlier.
+- **RANDOMIZE** loosens them by up to a third of a step.
+- **NUDGE < >** (or ALT + arrows) moves them by one resolution step.
+- These sliders always work from the notes as they were when you chose them, so 0 puts them back.
+
+**The velocity lane** under the notes has a stalk for each note. Drag a stalk to set its velocity (the other chosen notes move with it), or draw across stalks with the pencil. Four sliders work on the chosen notes:
+- **VELOCITY:** half to twice as loud, balance kept;
+- **DYNAMICS:** loud and soft further apart, or closer;
+- **RANDOM VEL:** a human wobble;
+- **SLOPE:** a crescendo or decrescendo.
+
+**SELECT:**
+- Select All, Invert (SHIFT + I);
+- Exclude on beats or off beats;
+- Note Values (only the quarters, eighths... of the choice);
+- Jump To the next or previous note (the arrow keys).
+
+**OPTIONS:** Stretch Notes (1/2x, 2x, 2/3x, 3/2x; on the chosen notes, or the whole block with its length), and Preview Sounds on or off.
+
+**View:** ZOOM (ALT + wheel) and scrolling, AUTO SCROLL that follows the song as it plays, the playhead, and straight or triplet grid lines (right-click the bar numbers).
+
+**Keys:** DELETE, CTRL + A / C / X / V, ESC.
+
+Every change is one undo step.
+
+**Tests:** the rows (fold-out, reorder, hidden drums), click / SHIFT / lasso, moving on the grid, ALT copy, moving onto another row, the pencil (drag and CTRL + ALT), double-click, the velocity lane (with the chosen, the pencil), QUANTIZE 50 / 100 / 0 and its undo, SWING +100 / -50, RANDOMIZE (bounded, repeatable), VELOCITY, DYNAMICS, SLOPE, RANDOM VEL, Select by note value / exclude / invert / jump, nudge with wrap, keys, copy / paste, stretch, and MUTE / SOLO / CLEAR / RECALL heard in the audio. pluginval passes at strictness 10.
+
+**Next (0.48.0):** snap to "relative grid", the nudge unit, note lengths, and the grid editor in its own window. The CC / aftertouch lanes are left out, as you chose.
+
 ## 0.46.0
 
 **EDIT PLAY STYLE**, after section 7.3.1 of the manual you sent. You change how a song block's drums play, one instrument at a time, on the drawn kit. It works the way the manual describes. The look, the words and the way AMOUNT decides where notes go are ours.

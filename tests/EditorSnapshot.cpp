@@ -811,7 +811,20 @@ TEST_CASE ("Render the editor to a PNG", "[.][snapshot]")
             if (env ("PARAGON_SNAPSHOT_SONG") == "2")
             {
                 view->getBlockEditor().open (2);
-                view->getBlockEditor().chooseDrum (2, false);
+                view->getBlockEditor().selectRow (view->getBlockEditor().rowOf (2), false);
+            }
+            // 0.47.0: THE GRID EDITOR at work: the chorus zoomed in, the snare unfolded into its articulations, the hats
+            // chosen and swung at 1/8, the kick muted.
+            if (env ("PARAGON_SNAPSHOT_GRID") == "1")
+            {
+                auto& ed = view->getBlockEditor();
+                ed.open (2);
+                ed.setExpanded (1, true);
+                ed.setZoom (ed.getGrid().getWidth() / 4.0);
+                ed.selectRow (ed.rowOf (6), false);
+                ed.setResolution (2);
+                ed.setSliderValue (BlockEditor::Slider::swing, 60.0);
+                ed.setRowMute (0, true);
             }
             // 0.46.0: EDIT PLAY STYLE on the chorus (=1: as it opens), =2: the POWER HAND moved to the ride, =3: and more
             // kick (AMOUNT +50%), =4: and the snare busier (AMOUNT +40%: ghost notes).

@@ -501,6 +501,8 @@ namespace song
         }
     }
 
+    void tidyHits (Block& b) { tidy (b.hits); }
+
     SlotMask slotsOf (unsigned parts) noexcept
     {
         auto slots = 0u;

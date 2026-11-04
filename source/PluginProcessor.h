@@ -400,6 +400,9 @@ public:
     void previewSong (song::Song);
     void setSongSolo (song::SlotMask);
     song::SlotMask getSongSolo() const noexcept { return songSolo; }
+    // 0.47.0, the GRID EDITOR's row SOLO / MUTE: only these drums of the song heard (none: every drum; an empty mask:
+    // none at all).
+    void setSongHeard (std::optional<song::SlotMask>);
     // A block from a groove in linked folder `folder` (its notes through that folder's map, at the preview's TEMPO
     // factor and VELOCITY), and that block put in the song at `beat` (-1: after the last block). Returns its index.
     song::Block songBlockFrom (const grooves::Groove&, int folder) const;
@@ -735,6 +738,7 @@ private:
     };
     void installSong (std::shared_ptr<const song::Song>);
     song::SlotMask songSolo = 0;
+    std::optional<song::SlotMask> songHeard;
     int collectSongHits (int numSamples, double ppq, double bpm, synth::drums::SlotHit* into, int room) noexcept;
     std::shared_ptr<const song::Song> songData = std::make_shared<const song::Song>();
     std::optional<song::Block> songClipboard;

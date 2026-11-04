@@ -194,6 +194,7 @@ namespace song
     // Every note on drum `from` played by drum `to` instead, with `to`'s own (on the same beat: one, the louder).
     void moveDrum (Block&, int from, int to);
     void addHit (Block&, Hit);                                   // one more (replacing one on that drum and beat)
+    void tidyHits (Block&);                                      // 0.47.0: in time order, one per drum and beat (the louder)
     // 0.45.0: a note moved along its row to `toBeat` (wrapped into the loop); one already there is replaced. False: none at `fromBeat`.
     bool moveHit (Block&, int slot, double fromBeat, double toBeat);
     bool removeHitNear (Block&, int slot, double beat, double within);   // the nearest within that many beats

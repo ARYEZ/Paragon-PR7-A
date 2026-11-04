@@ -3492,6 +3492,8 @@ void ParagonX1AudioProcessor::installSong (std::shared_ptr<const song::Song> new
     playback->events = newSong->events();
     if (songSolo != 0)
         std::erase_if (playback->events, [this] (const song::Hit& h) { return (songSolo & song::slotBit (h.slot)) == 0; });
+    if (songHeard.has_value())
+        std::erase_if (playback->events, [this] (const song::Hit& h) { return (*songHeard & song::slotBit (h.slot)) == 0; });
     playback->endBeat = newSong->endBeat();
     playback->timing.tempos = newSong->tempos;
     playback->followDaw = newSong->followDaw;
@@ -3518,6 +3520,14 @@ void ParagonX1AudioProcessor::setSong (song::Song newSong)
 void ParagonX1AudioProcessor::previewSong (song::Song newSong)
 {
     installSong (std::make_shared<const song::Song> (std::move (newSong)));
+}
+
+void ParagonX1AudioProcessor::setSongHeard (std::optional<song::SlotMask> heard)
+{
+    if (heard == songHeard)
+        return;
+    songHeard = heard;
+    installSong (songData);
 }
 
 void ParagonX1AudioProcessor::setSongSolo (song::SlotMask slots)
