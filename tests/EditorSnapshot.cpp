@@ -805,7 +805,7 @@ TEST_CASE ("Render the editor to a PNG", "[.][snapshot]")
                 processor.stopSong();
                 processor.setSongRecording (true);
                 view->getSongTrack().getRecordButton().setToggleState (true, juce::dontSendNotification);
-                view->getSongTrack().getPlayButton().triggerClick();
+                view->getSongTrack().getPlayButton().onClick();   // (triggerClick only posts it)
             }
             // =2: EDIT BLOCK on the chorus, its snare chosen.
             if (env ("PARAGON_SNAPSHOT_SONG") == "2")
@@ -1155,7 +1155,10 @@ TEST_CASE ("Render the editor to a PNG", "[.][snapshot]")
     // PARAGON_SNAPSHOT_GROOVESWINDOW=1 (0.45.0, with PAGE=grooves): GROOVES in its own window (the plugin's window shows
     // where it went; the window's page written beside the snapshot as "<name>-window.png").
     if (env ("PARAGON_SNAPSHOT_GROOVESWINDOW") == "1")
+    {
+        MainView::groovesWindowOnDesktop = false;   // (no window manager here)
         view->setGroovesInOwnWindow (true);
+    }
     const auto width = juce::jmax (960, juce::SystemStats::getEnvironmentVariable ("PARAGON_SNAPSHOT_WIDTH", "1600").getIntValue());
     editor->setSize (width, width * 9 / 16);
     editor->resized();

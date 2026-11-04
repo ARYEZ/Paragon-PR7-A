@@ -70,6 +70,9 @@ public:
     // 0.45.0: THE GROOVES WINDOW: the GROOVES page in a window of its own (its OWN WINDOW button) and back (BACK IN PLUGIN,
     // or closing the window); while it's out, the GROOVES tab shows where it went.
     void setGroovesInOwnWindow (bool);
+    // False (tests, snapshots): the window kept off the screen (a display with no window manager can't take one: JUCE's
+    // window asks for the manager's properties and X stops the program); the page moves into it and back all the same.
+    static inline bool groovesWindowOnDesktop = true;
     bool areGroovesInOwnWindow() const noexcept { return groovesWindow != nullptr; }
     juce::Component* getGroovesWindow() const noexcept;
     MixerPage& getMixerPage() noexcept { return mixerPage; }

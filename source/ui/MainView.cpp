@@ -228,7 +228,8 @@ MainView::~MainView()
 struct MainView::GroovesWindow final : public juce::DocumentWindow
 {
     explicit GroovesWindow (MainView& v)
-        : juce::DocumentWindow ("Paragon PR7-D: GROOVES", ParagonColours::background, juce::DocumentWindow::allButtons), view (v)
+        : juce::DocumentWindow ("Paragon PR7-D: GROOVES", ParagonColours::background, juce::DocumentWindow::allButtons,
+                                MainView::groovesWindowOnDesktop), view (v)
     {
         // The system's own title bar (no JUCE colours), resizable; over the DAW, so clicking the DAW doesn't hide it.
         setUsingNativeTitleBar (true);

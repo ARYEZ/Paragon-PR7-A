@@ -83,7 +83,7 @@ BlockEditor::BlockEditor (ParagonX1AudioProcessor& p) : processor (p)
     }
     hint.setFont (juce::FontOptions (11.0f));
     hint.setColour (juce::Label::textColourId, ParagonColours::textDim);
-    hint.setText ("Click: a note.  Drag a note up / down: louder / softer.  Right-click: remove it.  Click a drum's name to "
+    hint.setText ("Click: a note.  Drag a note up / down: louder / softer; sideways: moves it (on GRID, ALT: free).  Right-click: remove it.  Click a drum's name to "
                   "choose it (CTRL: more); the buttons below work on the chosen drums, or all.",
                   juce::dontSendNotification);
     for (auto* c : std::initializer_list<juce::Component*> { &close, &quantizeButton, &removeButton, &copyButton, &pasteButton, &gridChoice,
