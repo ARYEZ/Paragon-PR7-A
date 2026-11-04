@@ -776,6 +776,37 @@ TEST_CASE ("Render the editor to a PNG", "[.][snapshot]")
                 processor.songBroadcaster.dispatchPendingMessages();
                 view->getSongTrack().syncButtons();
             }
+            // =8 (0.45.0): EDIT BLOCK on the chorus, a snare being dragged sideways a beat and a half; REC armed and PLAY
+            // pressed: the count-in's note in the strip's status line.
+            if (env ("PARAGON_SNAPSHOT_SONG") == "8")
+            {
+                auto& ed = view->getBlockEditor();
+                ed.open (2);
+                const auto& chorus = processor.getSong().blocks[2];
+                const song::Hit* snare = nullptr;
+                for (const auto& h : chorus.hits)
+                    if (h.slot == 2 && snare == nullptr)
+                        snare = &h;
+                if (snare != nullptr)
+                {
+                    const auto from = ed.cellOf (2, snare->beat).getCentre();
+                    const auto pxPerBeat = ed.cellOf (2, snare->beat + 1.0).getX() - ed.cellOf (2, snare->beat).getX();
+                    const auto to = from.translated (1.5f * pxPerBeat, 2.0f);
+                    const auto mouse = [&ed] (juce::Point<float> at, juce::Point<float> start)
+                    {
+                        return juce::MouseEvent (juce::Desktop::getInstance().getMainMouseSource(), at, juce::ModifierKeys::leftButtonModifier,
+                                                 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, &ed, &ed, juce::Time::getCurrentTime(), start,
+                                                 juce::Time::getCurrentTime(), 1, false);
+                    };
+                    ed.mouseDown (mouse (from, from));
+                    ed.mouseDrag (mouse (from.translated (8.0f, 0.0f), from));
+                    ed.mouseDrag (mouse (to, from));
+                }
+                processor.stopSong();
+                processor.setSongRecording (true);
+                view->getSongTrack().getRecordButton().setToggleState (true, juce::dontSendNotification);
+                view->getSongTrack().getPlayButton().triggerClick();
+            }
             // =2: EDIT BLOCK on the chorus, its snare chosen.
             if (env ("PARAGON_SNAPSHOT_SONG") == "2")
             {
@@ -1121,6 +1152,10 @@ TEST_CASE ("Render the editor to a PNG", "[.][snapshot]")
     // PARAGON_SNAPSHOT_PROGRESS=1 (0.40.0): the progress box over the page, a bounce 62% done, with CANCEL.
     if (env ("PARAGON_SNAPSHOT_PROGRESS") == "1")
         view->getProgressBox().show ({ "BOUNCING THE SONG TO AUDIO", [] { return 0.62; }, [] {} });
+    // PARAGON_SNAPSHOT_GROOVESWINDOW=1 (0.45.0, with PAGE=grooves): GROOVES in its own window (the plugin's window shows
+    // where it went; the window's page written beside the snapshot as "<name>-window.png").
+    if (env ("PARAGON_SNAPSHOT_GROOVESWINDOW") == "1")
+        view->setGroovesInOwnWindow (true);
     const auto width = juce::jmax (960, juce::SystemStats::getEnvironmentVariable ("PARAGON_SNAPSHOT_WIDTH", "1600").getIntValue());
     editor->setSize (width, width * 9 / 16);
     editor->resized();
@@ -1131,6 +1166,18 @@ TEST_CASE ("Render the editor to a PNG", "[.][snapshot]")
     juce::FileOutputStream stream (file);
     REQUIRE (stream.openedOk());
     REQUIRE (juce::PNGImageFormat().writeImageToStream (image, stream));
+    if (view->areGroovesInOwnWindow())
+    {
+        auto& page = view->getGroovesPage();
+        page.setSize (1600, 760);
+        const auto pageImage = page.createComponentSnapshot (page.getLocalBounds());
+        const auto other = file.getSiblingFile (file.getFileNameWithoutExtension() + "-window.png");
+        other.deleteFile();
+        juce::FileOutputStream out (other);
+        REQUIRE (out.openedOk());
+        REQUIRE (juce::PNGImageFormat().writeImageToStream (pageImage, out));
+        view->setGroovesInOwnWindow (false);
+    }
 }
 
 // PARAGON_SNAPSHOT=menu.png ./ParagonX1Tests "[snapshot-menu]": a drop-down

@@ -2126,7 +2126,6 @@ TEST_CASE ("GROOVES 0.45.0: OWN WINDOW puts the page in a window of its own; BAC
     CHECK (page.getWindowButton().getButtonText() == "OWN WINDOW");
 
     page.getWindowButton().triggerClick();
-    juce::MessageManager::getInstance()->runDispatchLoopUntil (50);
     REQUIRE (view->areGroovesInOwnWindow());
     auto* window = view->getGroovesWindow();
     REQUIRE (window != nullptr);
