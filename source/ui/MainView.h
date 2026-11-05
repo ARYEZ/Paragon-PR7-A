@@ -80,6 +80,11 @@ public:
     SettingsPage& getSettingsPage() noexcept { return settingsPage; }
     SongTrack& getSongTrack() noexcept { return songTrack; }
     BlockEditor& getBlockEditor() noexcept { return blockEditor; }
+    // 0.48.0: THE GRID EDITOR in a window of its own (OWN WINDOW / BACK IN PLUGIN; closing it brings it back).
+    void setGridEditorInOwnWindow (bool);
+    bool isGridEditorInOwnWindow() const noexcept { return gridWindow != nullptr; }
+    juce::Component* getGridEditorWindow() const noexcept;
+    void hideGridEditor();   // closed wherever it is
     PlayStylePanel& getPlayStyle() noexcept { return playStyle; }
     // EDIT PLAY STYLE (0.46.0) on the song track's chosen blocks (one of it, the GRID EDITOR and the SONG CREATOR at a time).
     void openPlayStyle (int block);
@@ -164,6 +169,8 @@ private:
     // tab shows meanwhile.
     struct GroovesWindow;
     std::unique_ptr<GroovesWindow> groovesWindow;
+    struct GridWindow;
+    std::unique_ptr<GridWindow> gridWindow;   // 0.48.0 (after the editor: it lets go of the editor first)
     juce::Label groovesAwayNote;
     juce::TextButton groovesShowWindow { "SHOW ITS WINDOW" }, groovesBringBack { "BACK IN PLUGIN" };
     void showGroovesAway();

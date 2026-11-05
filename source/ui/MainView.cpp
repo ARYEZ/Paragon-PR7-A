@@ -147,7 +147,7 @@ MainView::MainView (ParagonX1AudioProcessor& processorToShow)
         if (playStyle.isVisible() && ! playStyle.getBlocks().empty() && playStyle.getBlocks().front() == block)
             playStyle.close();
         else if (blockEditor.isVisible() && blockEditor.getBlock() == block)
-            blockEditor.setVisible (false);
+            hideGridEditor();
         else
             songTrack.onEditMidi (block);
     };
@@ -167,7 +167,21 @@ MainView::MainView (ParagonX1AudioProcessor& processorToShow)
         songTrack.setRecordingAllowed (true);
     };
     playStyle.onGridEditor = [this] (int block) { openGridEditor (block); };
-    blockEditor.onPlayStyle = [this] (int block) { openPlayStyle (block); };
+    blockEditor.onPlayStyle = [this] (int block) { if (gridWindow != nullptr) setGridEditorInOwnWindow (false); openPlayStyle (block); };
+    blockEditor.onToggleWindow = [this] { setGridEditorInOwnWindow (gridWindow == nullptr); };
+    blockEditor.onClose = [this]
+    {
+        // Closed (X, or its block gone) while in its own window: the window goes too.
+        if (gridWindow != nullptr)
+            juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<MainView> (this)]
+            {
+                if (safe != nullptr && safe->gridWindow != nullptr)
+                {
+                    safe->setGridEditorInOwnWindow (false);
+                    safe->blockEditor.setVisible (false);
+                }
+            });
+    };
     // THE SONG CREATOR: CREATOR... on the strip (again: closes it), USE WITH SONG CREATOR on a groove or a block, a groove
     // from the GROOVES list dropped on it; its grooves dragged onto the strip.
     addChildComponent (songCreator);
@@ -255,6 +269,7 @@ MainView::~MainView()
 {
     audioProcessor.rigBroadcaster.removeChangeListener (this);
     groovesWindow.reset();   // (lets go of the page before the page goes)
+    gridWindow.reset();
 }
 
 //==============================================================================
@@ -296,6 +311,73 @@ struct MainView::GroovesWindow final : public juce::DocumentWindow
 };
 
 juce::Component* MainView::getGroovesWindow() const noexcept { return groovesWindow.get(); }
+
+// THE GRID EDITOR'S WINDOW (0.48.0), as the GROOVES window.
+struct MainView::GridWindow final : public juce::DocumentWindow
+{
+    explicit GridWindow (MainView& v)
+        : juce::DocumentWindow ("Paragon PR7-D: GRID EDITOR", ParagonColours::background, juce::DocumentWindow::allButtons,
+                                MainView::groovesWindowOnDesktop), view (v)
+    {
+        setUsingNativeTitleBar (true);
+        setLookAndFeel (&view.getLookAndFeel());
+        setContentNonOwned (&view.blockEditor, false);
+        setResizable (true, false);
+        setResizeLimits (1100, 560, 6000, 4000);
+        if (juce::Desktop::getInstance().getDisplays().getPrimaryDisplay() != nullptr)
+            centreWithSize (pageArea.getWidth(), pageArea.getHeight());
+        else
+            setSize (pageArea.getWidth(), pageArea.getHeight());
+        setAlwaysOnTop (true);
+    }
+    ~GridWindow() override
+    {
+        clearContentComponent();
+        setLookAndFeel (nullptr);
+    }
+    void closeButtonPressed() override
+    {
+        juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<MainView> (&view)]
+        {
+            if (safe != nullptr)
+                safe->setGridEditorInOwnWindow (false);
+        });
+    }
+    MainView& view;
+};
+
+juce::Component* MainView::getGridEditorWindow() const noexcept { return gridWindow.get(); }
+
+void MainView::setGridEditorInOwnWindow (bool own)
+{
+    if (own == (gridWindow != nullptr))
+    {
+        if (own)
+            gridWindow->toFront (true);
+        return;
+    }
+    if (own)
+    {
+        blockEditor.setVisible (true);
+        gridWindow = std::make_unique<GridWindow> (*this);
+        gridWindow->setVisible (true);
+    }
+    else
+    {
+        gridWindow.reset();
+        addChildComponent (blockEditor);
+        blockEditor.setBounds (pageArea);
+        blockEditor.toFront (false);
+    }
+    blockEditor.setInOwnWindow (own);
+}
+
+void MainView::hideGridEditor()
+{
+    if (gridWindow != nullptr)
+        setGridEditorInOwnWindow (false);
+    blockEditor.setVisible (false);
+}
 
 void MainView::setGroovesInOwnWindow (bool own)
 {
@@ -374,6 +456,13 @@ void MainView::checkLongJobs (double nowMs)
     if (songTrack.isBouncing())
     {
         progressBox.show ({ "BOUNCING THE SONG TO AUDIO", [this] { return songTrack.getBounceProgress(); }, [this] { songTrack.cancelBounce(); } });
+        return;
+    }
+    // 0.51.0: IMPORT A RENDER cutting its hits.
+    if (audioProcessor.getRenderImportProgress() >= 0.0)
+    {
+        progressBox.show ({ "IMPORTING THE RENDER", [this] { return audioProcessor.getRenderImportProgress(); },
+                            [this] { audioProcessor.cancelRenderImport(); } });
         return;
     }
     // A kit loading: shown once it's taken half a second (a single sample's load would only flash it up).
@@ -552,7 +641,8 @@ void MainView::resized()
     mixerPage.setBounds (pageArea);
     rigBrowser.setBounds (pageArea);
     settingsPage.setBounds (pageArea);
-    blockEditor.setBounds (pageArea);
+    if (gridWindow == nullptr)
+        blockEditor.setBounds (pageArea);
     playStyle.setBounds (pageArea);
     songCreator.setBounds (pageArea);
     machine.setBounds (machineArea);
@@ -569,7 +659,8 @@ void MainView::openPlayStyle (int block)
 {
     showSong (true);
     songCreator.setVisible (false);
-    blockEditor.setVisible (false);
+    if (gridWindow == nullptr)   // (in its own window it stays up)
+        blockEditor.setVisible (false);
     playStyleLast = true;
     auto chosen = songTrack.getSelection();
     if (std::find (chosen.begin(), chosen.end(), block) == chosen.end())
@@ -590,12 +681,15 @@ void MainView::openGridEditor (int block)
         playStyle.close();
     playStyleLast = false;
     blockEditor.open (block);
+    if (gridWindow != nullptr)
+        gridWindow->toFront (true);
 }
 
 void MainView::openSongCreator (const juce::File& source)
 {
     showSong (true);
-    blockEditor.setVisible (false);
+    if (gridWindow == nullptr)   // (in its own window it stays up)
+        blockEditor.setVisible (false);
     if (playStyle.isVisible())
         playStyle.close();
     if (source != juce::File())
@@ -650,7 +744,8 @@ void MainView::updateDragHover (double nowMs, bool dragStillOn)
     {
         dragPeek = false;
         songCreator.setVisible (false);
-        blockEditor.setVisible (false);
+        if (gridWindow == nullptr)   // (in its own window it stays up)
+            blockEditor.setVisible (false);
         if (playStyle.isVisible())
             playStyle.close();
         showPage (Page::drums);

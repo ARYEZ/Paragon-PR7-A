@@ -54,6 +54,9 @@ public:
     // buttons with an LED stripe (SAVE, BYPASS...). The stripe lights when
     // the button's toggle state is on.
     static constexpr const char* pedalButtonProperty = "pedalButton";
+    // With pedalButtonProperty: how far from the button's left edge (pixels) its lettering must keep clear of an LED
+    // drawn over it there (THE DRUM MACHINE's keys). Lettering that fits centred stays centred; else it moves right.
+    static constexpr const char* ledClearanceProperty = "ledClearance";
 
     // Set this on a TextButton to draw it as the mockup's light outlined
     // buttons printed on the metal (VOLUME, WAH / FILTER, MORPH / FX). Its
@@ -111,20 +114,22 @@ public:
 private:
     juce::Typeface::Ptr regular, semiBold, blackItalic;
 
-    static void drawPedalKnob (juce::Graphics&, juce::Rectangle<float> bounds, float angle);
-
 public:
+    static void drawPedalKnob (juce::Graphics&, juce::Rectangle<float> bounds, float angle);   // (public: tests draw one)
+
     // The mockup's piano-black keys (footswitches, slot blocks, small
     // buttons): a glossy black top set in chamfered edges, the top bevel
     // catching the light, the side bevels reflecting the red glow, and a
-    // soft shadow on the metal. `bevel` is the chamfer's width. `neon`
-    // draws it pink to red to orange (the pearl black unit's keys).
+    // soft shadow on the metal. `bevel` is the chamfer's width. Black on
+    // every finish (0.53.0: the neon finishes' colour is in the rings).
     static void drawPianoKey (juce::Graphics&, juce::Rectangle<float> area, float radius, float bevel,
-                              bool pressed, bool highlighted, bool neon = false);
+                              bool pressed, bool highlighted);
 
     // The mockup's LED bars: when lit, a neon tube (white-hot core inside a
     // red-orange outline, with a soft glow); when off, a dimmer solid red.
-    static void drawNeonBar (juce::Graphics&, juce::Rectangle<float> bar, bool lit);
+    // `glow` false: the tube alone, no light round it (bars stacked close, like a meter's segments, whose glows would
+    // pile up into a cloud: the meter draws one glow behind its lit segments instead).
+    static void drawNeonBar (juce::Graphics&, juce::Rectangle<float> bar, bool lit, bool glow = true);
     // A raised chrome bezel on the metal with a dark well inside it, the way a
     // real unit's footswitches and big keys are mounted. Returns the well,
     // for the key to be drawn in.

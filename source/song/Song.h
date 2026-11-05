@@ -23,9 +23,13 @@ namespace song
         double beat = 0.0;   // quarter notes (in a block: from its start; in a song's events: from the song's)
         int slot = 0;        // the kit's drum
         float velocity = 1.0f;
+        // 0.48.0, the GRID EDITOR's note lengths: how long the note is held (beats; 0: not set, the old short note).
+        // Its end lets go of the drum: a cymbal set to MUTE TAIL > NOTE OFF is grabbed there.
+        double length = 0.0;
         bool operator== (const Hit& o) const noexcept
         {
-            return juce::exactlyEqual (beat, o.beat) && slot == o.slot && juce::exactlyEqual (velocity, o.velocity);
+            return juce::exactlyEqual (beat, o.beat) && slot == o.slot && juce::exactlyEqual (velocity, o.velocity)
+                && juce::exactlyEqual (length, o.length);
         }
     };
 
@@ -194,6 +198,7 @@ namespace song
     // Every note on drum `from` played by drum `to` instead, with `to`'s own (on the same beat: one, the louder).
     void moveDrum (Block&, int from, int to);
     void addHit (Block&, Hit);                                   // one more (replacing one on that drum and beat)
+    void tidyHits (Block&);                                      // 0.47.0: in time order, one per drum and beat (the louder)
     // 0.45.0: a note moved along its row to `toBeat` (wrapped into the loop); one already there is replaced. False: none at `fromBeat`.
     bool moveHit (Block&, int slot, double fromBeat, double toBeat);
     bool removeHitNear (Block&, int slot, double beat, double within);   // the nearest within that many beats

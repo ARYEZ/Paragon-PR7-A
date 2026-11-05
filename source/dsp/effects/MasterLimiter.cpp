@@ -116,25 +116,29 @@ namespace effects
 
         float TruePeakDetector::push (float sample, float atLeast) noexcept
         {
+            // PR7-D 0.49.0: each sample written twice, `taps` apart, so the last `taps` samples always sit side by side
+            // (history[position + 1 .. position + taps], oldest first) and the filter reads them with no wrapping index:
+            // the same numbers added in the same order (bit for bit as before), in about half the time.
             history[(size_t) position] = sample;
+            history[(size_t) (position + taps)] = sample;
+            const auto* window = history.data() + position + 1;   // window[taps - 1] is the newest
             const auto& table = interpolation();
             // The points between m and m + 1, m = `delay` samples back: from the
             // samples m - (delay - 1) to m + delay (the newest).
-            constexpr int mask = 127;
-            const auto centre = std::abs (history[(size_t) ((position - delay) & mask)]);
-            const auto next = std::abs (history[(size_t) ((position - delay + 1) & mask)]);
+            const auto centre = std::abs (window[taps - 1 - delay]);
+            const auto next = std::abs (window[taps - delay]);
             float between = 0.0f;
             if (juce::jmax (centre, next) >= atLeast * 0.5f)
                 for (const auto& point : table)
                 {
                     float value = 0.0f;
                     for (int j = 0; j < taps; ++j)
-                        value += point[(size_t) j] * history[(size_t) ((position - (taps - 1) + j) & mask)];
+                        value += point[(size_t) j] * window[j];
                     between = juce::jmax (between, std::abs (value));
                 }
             const auto result = juce::jmax (centre, previousBetween, between);
             previousBetween = between;
-            position = (position + 1) & mask;
+            position = (position + 1) % taps;
             return result;
         }
 

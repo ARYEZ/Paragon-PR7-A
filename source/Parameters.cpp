@@ -34,6 +34,7 @@ namespace
     constexpr int pr7d0351 = 37; // PR7-D 0.35.1: NOTE NAMES
     constexpr int pr7d0360 = 38; // PR7-D 0.36.0: drums 30 to 36 (every setting of theirs)
     constexpr int pr7d0380 = 39; // PR7-D 0.38.0: THE DRUM MACHINE's own TEMPO
+    constexpr int pr7d0500 = 40; // PR7-D 0.50.0: LAYERS 2 and 3
 
     const ToText asDb = [] (float value, int) { return juce::String (value, 1) + " dB"; };
     const ToText asPercent = [] (float value, int) { return juce::String (juce::roundToInt (value * 100.0f)) + "%"; };
@@ -176,6 +177,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
             add (layout, drum (k, "LayerLevel"), name + "Layer Level", { -60.0f, 12.0f, 0.1f }, 0.0f,
                  [] (float v, int) { return v <= -59.95f ? juce::String ("Off") : juce::String (v, 1) + " dB"; }, at (pr7d0290));
             addChoice (layout, drum (k, "LayerOut"), name + "Layer Out", layerOutNames, 0, at (pr7d0290));
+            for (int n = 1; n < numLayers; ++n)
+            {
+                add (layout, drum (k, layerLevel (n)), name + "Layer " + juce::String (n + 1) + " Level", { -60.0f, 12.0f, 0.1f }, 0.0f,
+                     [] (float v, int) { return v <= -59.95f ? juce::String ("Off") : juce::String (v, 1) + " dB"; }, pr7d0500);
+                addChoice (layout, drum (k, layerOut (n)), name + "Layer " + juce::String (n + 1) + " Out", layerOutNames, 0, pr7d0500);
+            }
         }
 
         // THE MIXER (0.20.0): the mic channels.

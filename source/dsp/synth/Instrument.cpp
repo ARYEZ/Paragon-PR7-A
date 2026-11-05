@@ -223,18 +223,29 @@ namespace synth::drums
             return inst;
         }
 
+        bool hasMicFolders (const juce::File& folder)
+        {
+            if (! folder.isDirectory() || ! folder.findChildFiles (juce::File::findFiles, false, "*.wav;*.aif;*.aiff;*.flac;*.ogg").isEmpty())
+                return false;
+            auto mics = 0;
+            for (const auto& sub : folder.findChildFiles (juce::File::findDirectories, false))
+                if (mixer::channelForName (sub.getFileName()) >= 0)
+                    ++mics;
+            return mics >= 2;
+        }
+
         std::shared_ptr<const Instrument> fromFolder (const juce::File& folder)
         {
             const juce::String audio ("*.wav;*.aif;*.aiff;*.flac;*.ogg");
             auto files = folder.findChildFiles (juce::File::findFiles, false, audio);
             files.sort();
-            struct Loaded { std::shared_ptr<const Sample> sample; juce::String path; float level; int layer, rr; std::vector<Instrument::Hit::Mic> mics; };
+            struct Loaded { std::shared_ptr<const Sample> sample; juce::String path; float level; int layer, rr; std::vector<Instrument::Hit::Mic> mics; int velocity; };
             std::vector<Loaded> hits;
             const auto add = [&hits] (std::shared_ptr<const Sample> s, const juce::File& f, std::vector<Instrument::Hit::Mic> mics)
             {
                 const auto name = f.getFileNameWithoutExtension();
                 hits.push_back ({ s, f.getFullPathName(), loudness (*s), numberAfter (name, { "vel", "v", "layer", "dyn" }),
-                                  numberAfter (name, { "rr", "round", "take" }), std::move (mics) });
+                                  numberAfter (name, { "rr", "round", "take" }), std::move (mics), numberAfter (name, { "vel" }) });
             };
             for (const auto& f : files)
                 if (auto s = sampleFiles::load (f))
@@ -272,10 +283,25 @@ namespace synth::drums
             inst->kind = Instrument::Kind::folder;
             inst->source = folder;
 
-            // Named layers: every hit says its layer.
+            // Named layers: every hit says its layer. 0.51.0: "vel<n>" in every name (IMPORT A RENDER's files): n is the
+            // velocity that played it, so the layers keep their velocities (each up to halfway to the next).
             const auto named = std::all_of (hits.begin(), hits.end(), [] (const auto& h) { return h.layer >= 0; });
+            const auto byVelocity = named && std::all_of (hits.begin(), hits.end(), [] (const auto& h) { return h.velocity >= 1 && h.velocity <= 127; });
             std::vector<std::vector<Loaded>> groups;
-            if (named)
+            std::vector<int> velocities;
+            if (byVelocity)
+            {
+                std::map<int, std::vector<Loaded>> byVel;
+                for (const auto& h : hits)
+                    byVel[h.velocity].push_back (h);
+                for (auto& [v, g] : byVel)
+                {
+                    std::sort (g.begin(), g.end(), [] (const auto& a, const auto& b) { return a.rr < b.rr; });
+                    groups.push_back (g);
+                    velocities.push_back (v);
+                }
+            }
+            else if (named)
             {
                 std::map<int, std::vector<Loaded>> byLayer;
                 for (const auto& h : hits)
@@ -306,13 +332,18 @@ namespace synth::drums
                 for (size_t i = 0; i < hits.size(); ++i)
                     groups[i * (size_t) layerCount / hits.size()].push_back (hits[i]);
             }
-            // Velocities shared out evenly, quietest layer lowest.
+            // Velocities shared out evenly, quietest layer lowest (or, by velocity, halfway between their own).
             const auto n = (int) groups.size();
             for (int i = 0; i < n; ++i)
             {
                 Instrument::Layer l;
                 l.lo = 1 + 127 * i / n;
                 l.hi = 127 * (i + 1) / n;
+                if (! velocities.empty())
+                {
+                    l.lo = i == 0 ? 1 : (velocities[(size_t) i - 1] + velocities[(size_t) i]) / 2 + 1;
+                    l.hi = i == n - 1 ? 127 : (velocities[(size_t) i] + velocities[(size_t) i + 1]) / 2;
+                }
                 for (const auto& h : groups[(size_t) i])
                     l.hits.push_back ({ h.sample, juce::StringArray (h.path), h.mics });
                 inst->layers.push_back (std::move (l));

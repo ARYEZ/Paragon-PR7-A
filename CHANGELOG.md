@@ -2,6 +2,219 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.53.3
+
+**THE DRUM MACHINE's MASTER meter without its halo** (you spotted it after 0.53.2). Each lit segment of the meter drew its own glow, and the glow was wider than the gaps between the segments, so together they piled up into a red cloud round the whole meter. Now the segments are drawn as clean lit tubes, with one soft glow behind the lit part of the column. The meter reads and moves exactly as before.
+
+## 0.53.2
+
+**THE DRUM MACHINE's PLAY key: its lettering clear of its light** (you asked for it after 0.53.1). The light at the left of each key sat on the "P" of PLAY, the narrowest key. A key's lettering that would reach its light is now centred in the room to the right of it instead. Every other key's lettering already fitted, so they look the same as before.
+
+## 0.53.1
+
+**No more halos round THE DRUM MACHINE's lit keys and pads** (you spotted them on 0.53.0):
+- **The keys' LEDs** (MACHINE, 1-18, A, SONG, PLAY...): each lit LED had a round red blob round it. The LED's glow was sized for a lying bar (the neon stripes elsewhere), so on an upright LED it spread as wide as the key is tall. It's now sized by the LED's thickness, so it's a thin lit line with a tight glow. The lying neon bars everywhere else (the pads' stripes, the step keys, the rack units, the footswitches) draw exactly as before.
+- **The pads:** a sounding pad drew four stepped rings of pink light outside its bezel, which read as a halo round the new neon bezel. They're gone: a sounding pad now lights up inside the key, and its stripe lights.
+
+## 0.53.0
+
+**Black keys in neon rings** on the two neon finishes, Pearl Black and Pearl White + Neon. This is the family's new look, as PR7-G 0.59.0 has it (your design, chosen from three mockups):
+- **Every key and knob is black**, as on Pearl White (no more pink-to-orange keys and knobs).
+- **The pink-to-red-to-orange moves to the rings round them:**
+  - the bezels round the big keys (the FX rack's POWER footswitches, THE DRUM MACHINE's pads), lit along the top and darker at the front like the chrome they replace;
+  - the small keys' surrounds;
+  - the knobs' glowing ring (brightened a little, as it's a light);
+  - THE DRUM MACHINE's fader slots (PR7-D's own: the rings round the fader caps).
+- The keys' lettering is light on black, lit orange, as on Pearl White.
+- **Pearl White doesn't change:** renders before and after match pixel for pixel, apart from the live displays.
+
+Where you'll see it: THE DRUM MACHINE (its FINISH key; Pearl Black by default). The rest of the window has no finish setting of its own in PR7-D, so it stays Pearl White.
+
+**Tests:** a pad and a knob drawn in each finish: the key and the knob's top black in all three, the bezel's rim neon on the two neon finishes and chrome on Pearl White, the knob's ring a coloured light in all three.
+
+## 0.52.0
+
+Two fixes from using EDIT PLAY STYLE and THE GRID EDITOR.
+
+**POWER HAND by its list, not by dragging.** Dragging the POWER HAND flag over the kit picture caught on the wrong pieces, and some drums were hard to reach. Now **click the flag** (or its arrow):
+- First, ticked: the instrument it's on, with its articulations under it (the hi-hat's Closed, Open 1 ... Shoulder; the ride's Bow, Bell, Edge). The pedal is left out: it's a foot.
+- Then every other drum and cymbal your kit has, A to Z.
+  - Left out: the kick (a foot), the clap, tambourine and shaker, and pieces switched off in the kit.
+- Pick one and the power hand moves there: its notes go to that instrument, merged with what it already plays.
+- The OPENING HIT flag has the same list. Dragging still works too, if you like it.
+
+**G and H zoom THE GRID EDITOR**, as in a DAW's MIDI editor: G zooms out, H zooms in, by half again each press, the middle of the view kept where it is. The ZOOM slider and ALT + the wheel still work.
+
+**Tests:** the list's order (the current instrument and its articulations first, the rest A to Z, the left-out ones missing), moving the power hand and the opening hit from it; G / H zoom steps, the middle kept, the limits, CTRL + G not a zoom.
+
+## 0.51.0
+
+**IMPORT A RENDER**: turns a drum you bounced out of another drum program into a layer, for the kit you reinforce (your Progressive Foundry snare under the Djent Drums snare, say). DRUMS > LOAD... > IMPORT A RENDER as layers.
+
+**What to bounce:**
+1. A MIDI clip with the drum's hits at the velocities you want (e.g. 20, 40 ... 127), each repeated a few times for round robins, spaced so each hit dies away (about 2 s for a snare, more for a cymbal). A snare's centre and its rimshot can share one clip.
+2. Bounced **one file per mic channel**, named after the mic: "Snare Top", "Snare Bottom", "OH", "Room", "Kick In"... Any name the mixer knows works.
+3. The bounced files and the MIDI file in one folder.
+
+**What it does:**
+- Each file goes to the mixer channel its name says. A whole-mix file ("Main", "Master", "Mix") and files with names no channel goes by are left out, and the summary says so.
+- The hits are cut where the MIDI says, **every mic at exactly the same moments**, so the room stays as late after the close mic as it was recorded. 1 ms before each hit is kept.
+- If the bounce started at another bar, or with silence before it, the audio and the MIDI are lined up first.
+- Each hit is kept up to the next one, its silent tail trimmed (70 dB under its loudest, all mics together) and its end faded.
+- Each note becomes its own multi-mic instrument: each velocity played becomes a velocity layer (up to 16), its repeats round robins. **The velocities are kept as played**: each layer covers the velocities halfway to the next.
+- Written into your presets folder's "Rendered Layers", so presets and projects find them again. Each is loaded as a layer on the drum its note plays (in the layout you choose), into the first free layer.
+  - Close mics go to the layer's own USER channel, overheads and room into theirs.
+- **No MIDI?** It finds the hits by listening, and guesses their velocities from how loud each is. It puts them on the drum you have chosen.
+- A summary after: which mics went where, each note's drum and layer, its velocity layers and round robins, anything left out. The drum's LAYERS tab opens on it (AUTO-ALIGN, LEVEL, where it plays).
+- The progress box shows it working; CANCEL stops it and loads nothing.
+
+**Tests:** a render made in the tests (three mics, the room 5 ms after the close mic, a whole mix and an unknown file beside them, two notes, three velocities, three round robins): the mics and hits found, a bounce started a quarter second or a whole bar early followed to the sample, tails trimmed, the layers' velocities, the room still 5 ms after the close mic when played, hits found with no MIDI, CANCEL.
+
+**Not checked here:** real bounces from your drum program (send me the file names of one if anything lands in the wrong channel), and how they sound (your ears).
+
+## 0.50.0
+
+**THREE LAYERS per drum, built for reinforcing a kit** (the Djent Drums kit with renders bounced out of another drum program, say). Up to three of your own sounds play with each of a drum's hits, each with its own settings, and AUTO-ALIGN lines each one up with the drum.
+
+**The LAYERS tab** (DRUMS > the DRUM view, beside ENVELOPE and VELOCITY). A row per layer:
+- **LOAD... / REMOVE:** a file (one hit), a folder of hits (named by velocity layer and round robin, "..._V1_RR2", or sorted by loudness), or a folder holding a folder per mic (SNARE TOP, OH, ROOM...).
+- **LEVEL** and **OUT:** WITH THE DRUM (its VOLUME, PAN, INSERT, OUTPUT), or a mixer channel with its own fader, effects and sends.
+- **PITCH:** semitones and hundredths, to tune it to the drum.
+- **OFFSET:** later (+) or earlier (-) than the drum, to the sample. Earlier works by starting a little way into the layer's sound, so nothing has to wait.
+- **INVERT:** the layer's polarity turned over.
+- **VEL LOW / VEL HIGH:** the hits it plays on (e.g. a crack layer only above 90).
+- **LENGTH:** WHOLE, or it fades out after that many ms (just a layer's attack, say).
+- **AUTO-ALIGN:** sets OFFSET and INVERT so the layer lines up with the drum's own hit (its close mic).
+  - Two sounds a fraction of a millisecond apart, or one turned over, partly cancel each other: the drum gets thinner, not bigger.
+  - It finds both hits' starts, lines up their loudness shapes, then the waveforms within 0.3 ms of that, keeping the delay where the two add up the most.
+  - It reports the offset, whether it turned the layer over, and how alike the two are (MATCH).
+- **The picture under the rows:** the drum's hit (white) and each layer's (orange, pink, gold) from 2 ms before the drum's start, as they'll play, their offsets and polarities included. Lined up, they rise together.
+
+**Multi-mic layers.** A folder of mic folders (a render bounced out a channel at a time) plays like a multi-mic drum: its close mics into the layer's own channel, its overheads and room into OVERHEADS and ROOM. It gets a USER channel of its own when it's loaded ("SNARE LAYER", "SNARE LAYER 2"...), onto the drum's bus. The first layer of a drum through the mixer still turns the drum's own close mics down 10 dB so the layer leads.
+
+**Old presets, kits and projects** load their one layer as LAYER 1, as it sounded. Presets, kits (.pr7kit) and projects keep all three layers and their settings.
+
+**Fixed:** loading two things one straight after the other (two layers, or two drums' samples) could lose the first: every load stopped the one before it. Now a load only replaces an earlier load of the same drum or layer.
+
+**Tests:** three layers at their levels, velocity ranges, PITCH (an octave up measured at the frequency), OFFSET to the sample both ways, INVERT cancelling an identical hit, LENGTH, AUTO-ALIGN (a hit late by 37 samples and turned over: found to the sample, then the two add up to exactly twice the drum; an early one; a different drum), multi-mic layers' channels, and saving in presets, kits and projects.
+
+**Not checked here:** how your renders sound layered (your ears).
+
+## 0.49.0
+
+**A quicker plugin**, from a second round of measuring (as in 0.40.0): timings and instruction counts of each page's drawing, opening the window, and the factory presets playing. Nothing sounds different: every audio change gives the same samples, bit for bit.
+
+**The window:**
+- **Opening the plugin's window:** 357 ms -> 135 ms the first time, and about 250 ms -> 83 ms after that.
+  - It used to render every drum's sound to draw its picture in the drum list, all 36 of them.
+  - The window opens on the KIT VIEW, where that list isn't shown.
+  - The pictures are now made when the DRUM or SEQUENCER view is first shown.
+- **The MIXER page draws about five times faster** (a full redraw 60 ms -> 12 ms):
+  - The unused strips, and the effect and send buttons that aren't on, were faded by making them see-through.
+  - That draws each one into a picture of its own and blends it back in, and with most strips unused it was most of the page's drawing time.
+  - Now a sheet of the strip's own colour is drawn over them: the same look, no blending.
+- **EDIT PLAY STYLE's kit** (dimmed, with the played drums outlined) is drawn once and copied, instead of being worked out afresh on every repaint (every frame while drums glow): 20 ms -> under 9 ms the first time, and only the copy and the glows after that.
+
+**The sound engine:**
+- **The LIMITER's true-peak detector does about a third of the work.**
+  - It looks between samples for peaks, through a 64-sample filter at 8 points, for every sample.
+  - The samples it reads now sit side by side in memory, so it no longer works out where each one is in a ring.
+  - The same numbers in the same order: bit for bit the same result.
+- **Settings read every block are looked up by name in a hash table** instead of a sorted list (a few hundred lookups a block, about 3% of the work).
+- **Together:** the Djent Kit playing takes 15% less work (2,765 million -> 2,354 million instructions measured over the same seconds).
+
+**Measured and left alone:**
+- The modelled drums' and cymbals' sound-making itself: the biggest share, the instrument's own work.
+- The simulated mics: the room and mic delays are real work.
+- The mixer's SATURATION (MARS): copied unchanged from PR7-X, so better sped up there and ported back.
+
+**Tests:** all pass, pluginval at strictness 10. The limiter's tests compare its output as before, and the screenshots match the old drawing (MIXER, EDIT PLAY STYLE: differences of a few levels at the edges of the outlines).
+
+## 0.48.0
+
+**THE GRID EDITOR, part 2**: the rest of the manual's section 7.3.2, except the CC / aftertouch lanes, as you chose.
+
+**OWN WINDOW.** A button in the editor's top bar puts the whole GRID EDITOR in a window of its own, resizable and staying above your DAW (on a second screen, say). Meanwhile the plugin's window is free for the kit, the mixer and the song.
+- BACK IN PLUGIN, the window's close button, or the editor's X brings it back.
+- The editor stays up in its window while EDIT PLAY STYLE, the SONG CREATOR or the other pages open in the plugin.
+
+**NOTE LENGTHS.** Right-click a row's name for its menu, then Show Note Length.
+- That row's notes are drawn with a bar to where they end.
+- Drag a note's end to set how long it's held, on the grid while SNAP is on. If the note is chosen, the other chosen notes get the same length.
+- The pencil on a row showing lengths draws notes one resolution step long.
+- A note's end lets go of its drum. So a cymbal set to MUTE TAIL > NOTE OFF on the DRUMS page is grabbed right there, as when you let go of a key or pad: a crash held half a beat stops after half a beat.
+- Lengths are saved with the song, and EXPORT MIDI writes each note that long.
+- Notes with no length set play exactly as before.
+
+**OPTIONS:**
+- **Snap To:**
+  - **Grid:** a dragged note lands on the grid, as before;
+  - **Relative Grid:** notes move by whole steps and keep how far off the grid they were, so a late snare you played stays as late when you move it.
+- **Nudge Unit:** Follow Resolution (as before), 1/128 note, or 1, 5 or 10 milliseconds at the song's tempo.
+
+**Tests:**
+- a late snare moved by grid and by relative grid;
+- the nudge units;
+- a note length dragged by its end, set on all the chosen notes together, drawn by the pencil, saved and exported to MIDI;
+- a crash held half a beat with MUTE TAIL > NOTE OFF: ringing before its end, silent from 0.15 s after it (and ringing on with MUTE TAIL off);
+- the window: out, staying up, back, its X, and the plugin closed with it out.
+
+pluginval passes at strictness 10.
+
+**Not checked here:** the window in a real DAW on Windows, and how a grabbed cymbal sounds (your ears).
+
+## 0.47.0
+
+**THE GRID EDITOR, rebuilt** after section 7.3.2 of the manual you sent: a real note-by-note editor for a song block. It works the way the manual describes; the look, the words and the swing / randomize / dynamics maths are ours. Open it as before: E, right-click a block > Edit MIDI > Grid Editor, its tab beside EDIT PLAY STYLE, or a double-click when it was the one used last.
+
+**The rows:**
+- One row per instrument, with its notes count.
+- Instruments with articulations (snare, hi-hat, cymbals, ride) have an arrow that unfolds them: the snare's center, rimshot and sidestick each get their own row.
+- Drag a row's name up or down to reorder.
+- **M / S** mute or solo an instrument while the song plays. **CLEAR SOLO / MUTE** turns them all off, and **RECALL** brings them back.
+- **ROWS:** Show Unmapped / Turned-Off Drums, Reset Order, Collapse All, Expand All.
+
+**The notes** are diamonds, brighter the louder.
+- **POINTER:**
+  - click a note to choose it (SHIFT: more), drag on empty space for a lasso, click a row's name for all its notes;
+  - drag the chosen notes along the beat (onto the grid while SNAP is on) or onto another row (another drum or articulation);
+  - ALT-drag copies them;
+  - double-click empty space adds a note.
+- **PENCIL** (or CTRL + ALT held): click or drag along a row to draw notes on the resolution.
+- Right-click a note to remove it. Right-click empty space for Cut / Copy / Paste / Delete / Select All.
+
+**Timing** (on the chosen notes, or all when none):
+- **SNAP** and **RESOLUTION** (Auto, 1/4 to 1/32 and triplets; Auto follows the finest grid line drawn at the zoom) set where notes go.
+- **QUANTIZE** moves them part of the way to the grid (**MAX**: all the way).
+- **SWING** pushes every second step later (100: a full triplet swing) or earlier.
+- **RANDOMIZE** loosens them by up to a third of a step.
+- **NUDGE < >** (or ALT + arrows) moves them by one resolution step.
+- These sliders always work from the notes as they were when you chose them, so 0 puts them back.
+
+**The velocity lane** under the notes has a stalk for each note. Drag a stalk to set its velocity (the other chosen notes move with it), or draw across stalks with the pencil. Four sliders work on the chosen notes:
+- **VELOCITY:** half to twice as loud, balance kept;
+- **DYNAMICS:** loud and soft further apart, or closer;
+- **RANDOM VEL:** a human wobble;
+- **SLOPE:** a crescendo or decrescendo.
+
+**SELECT:**
+- Select All, Invert (SHIFT + I);
+- Exclude on beats or off beats;
+- Note Values (only the quarters, eighths... of the choice);
+- Jump To the next or previous note (the arrow keys).
+
+**OPTIONS:** Stretch Notes (1/2x, 2x, 2/3x, 3/2x; on the chosen notes, or the whole block with its length), and Preview Sounds on or off.
+
+**View:** ZOOM (ALT + wheel) and scrolling, AUTO SCROLL that follows the song as it plays, the playhead, and straight or triplet grid lines (right-click the bar numbers).
+
+**Keys:** DELETE, CTRL + A / C / X / V, ESC.
+
+Every change is one undo step.
+
+**Tests:** the rows (fold-out, reorder, hidden drums), click / SHIFT / lasso, moving on the grid, ALT copy, moving onto another row, the pencil (drag and CTRL + ALT), double-click, the velocity lane (with the chosen, the pencil), QUANTIZE 50 / 100 / 0 and its undo, SWING +100 / -50, RANDOMIZE (bounded, repeatable), VELOCITY, DYNAMICS, SLOPE, RANDOM VEL, Select by note value / exclude / invert / jump, nudge with wrap, keys, copy / paste, stretch, and MUTE / SOLO / CLEAR / RECALL heard in the audio. pluginval passes at strictness 10.
+
+**Next (0.48.0):** snap to "relative grid", the nudge unit, note lengths, and the grid editor in its own window. The CC / aftertouch lanes are left out, as you chose.
+
 ## 0.46.0
 
 **EDIT PLAY STYLE**, after section 7.3.1 of the manual you sent. You change how a song block's drums play, one instrument at a time, on the drawn kit. It works the way the manual describes. The look, the words and the way AMOUNT decides where notes go are ours.

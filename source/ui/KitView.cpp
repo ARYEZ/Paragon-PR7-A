@@ -452,16 +452,66 @@ void KitView::paint (juce::Graphics& g)
     {
         return juce::AffineTransform::translation ((float) (origin.x + at.x), (float) (origin.y + at.y)).scaled (1.0f / scale);
     };
-    g.drawImageTransformed (shownAt.kit, place ({}));
-    for (int k = 0; k < numPieces; ++k)
+    if (highlight.on)
     {
-        auto level = highlight.on ? 0.0f : glow[(size_t) k];   // (in EDIT PLAY STYLE drawn after the dimming)
-        if (highlight.on)
+        // EDIT PLAY STYLE: the kit dimmed, the pieces the block plays drawn again over it, each outlined (the chosen ones
+        // brighter, glowing): 0.49.0 drawn once into a picture at the screen's pixels (`highlightShown`), then only
+        // copied, with the glows of hits on top. It was drawn afresh, the pieces resampled, on every repaint (each hit's
+        // glow, every frame while the song plays): about 20 ms each time.
+        if (highlightShown.isNull() || ! (highlightFor == highlight) || ! juce::exactlyEqual (highlightScale, scale)
+            || highlightArea != area)
         {
-            if (pieceOf (hovered) == k)
-                level = hoverGlow;
+            highlightFor = highlight;
+            highlightScale = scale;
+            highlightArea = area;
+            highlightShown = shownAt.kit.createCopy();
+            juce::Graphics h (highlightShown);
+            const auto& cuts = pieceCuts();
+            const auto toScreen = (float) highlightShown.getWidth() / (float) pictures().kit.getWidth();
+            const auto boxOf = [&] (int k) { return cuts[(size_t) k].box.toFloat() * toScreen; };
+            h.setColour (juce::Colours::black.withAlpha (0.72f));
+            h.fillAll();
+            h.setImageResamplingQuality (juce::Graphics::highResamplingQuality);
+            for (int k = 0; k < numPieces; ++k)
+            {
+                const auto& c = cuts[(size_t) k];
+                if (c.cut.isNull() || ! (highlight.used[(size_t) k] || highlight.chosen[(size_t) k]))
+                    continue;
+                h.setOpacity (highlight.used[(size_t) k] ? 1.0f : 0.55f);
+                h.drawImage (c.cut, boxOf (k), juce::RectanglePlacement::stretchToFit);
+                h.setOpacity (1.0f);
+            }
+            for (int k = 0; k < numPieces; ++k)
+            {
+                const auto& c = cuts[(size_t) k];
+                const auto chosen = highlight.chosen[(size_t) k];
+                if (c.outline.isNull() || (! chosen && ! highlight.used[(size_t) k]))
+                    continue;
+                if (chosen && shownAt.lit[(size_t) k].isValid())
+                {
+                    h.setOpacity (0.85f);
+                    h.drawImageAt (shownAt.lit[(size_t) k], shownAt.litAt[(size_t) k].x, shownAt.litAt[(size_t) k].y);
+                    h.setOpacity (1.0f);
+                }
+                h.setColour (chosen ? ParagonColours::accent.brighter (0.3f) : ParagonColours::accent.withAlpha (0.45f));
+                h.drawImage (c.outline, boxOf (k), juce::RectanglePlacement::stretchToFit, true);
+            }
         }
-        else if (pieceOf (selected) == k)
+        g.drawImageTransformed (highlightShown, place ({}));
+        for (int k = 0; k < numPieces; ++k)
+            if (glow[(size_t) k] > 0.0f && shownAt.lit[(size_t) k].isValid())
+            {
+                g.setOpacity (juce::jmin (1.0f, glow[(size_t) k]));
+                g.drawImageTransformed (shownAt.lit[(size_t) k], place (shownAt.litAt[(size_t) k]));
+            }
+        g.setOpacity (1.0f);
+    }
+    else
+        g.drawImageTransformed (shownAt.kit, place ({}));
+    for (int k = 0; ! highlight.on && k < numPieces; ++k)
+    {
+        auto level = glow[(size_t) k];
+        if (pieceOf (selected) == k)
             level = juce::jmax (level, chosenGlow);
         if (pieceOf (hovered) == k)
             level = juce::jmax (level, hoverGlow);
@@ -473,50 +523,6 @@ void KitView::paint (juce::Graphics& g)
     }
     g.setOpacity (1.0f);
 
-    if (highlight.on)
-    {
-        // EDIT PLAY STYLE: the kit dimmed, the pieces the block plays drawn again over it, each outlined (the chosen ones
-        // brighter, glowing), then the glows of hits again on top.
-        const auto& cuts = pieceCuts();
-        const auto toView = area.getWidth() / (float) pictures().kit.getWidth();
-        const auto boxOf = [&] (int k) { return (cuts[(size_t) k].box.toFloat() * toView) + area.getTopLeft(); };
-        g.setColour (juce::Colours::black.withAlpha (0.72f));
-        g.fillRect (area);
-        g.setImageResamplingQuality (juce::Graphics::mediumResamplingQuality);
-        for (int k = 0; k < numPieces; ++k)
-        {
-            const auto& c = cuts[(size_t) k];
-            if (c.cut.isNull() || ! (highlight.used[(size_t) k] || highlight.chosen[(size_t) k]))
-                continue;
-            g.setOpacity (highlight.used[(size_t) k] ? 1.0f : 0.55f);
-            g.drawImage (c.cut, boxOf (k), juce::RectanglePlacement::stretchToFit);
-            g.setOpacity (1.0f);
-        }
-        for (int k = 0; k < numPieces; ++k)
-        {
-            const auto& c = cuts[(size_t) k];
-            if (c.outline.isNull())
-                continue;
-            const auto chosen = highlight.chosen[(size_t) k];
-            if (! chosen && ! highlight.used[(size_t) k])
-                continue;
-            if (chosen && shownAt.lit[(size_t) k].isValid())
-            {
-                g.setOpacity (0.85f);
-                g.drawImageTransformed (shownAt.lit[(size_t) k], place (shownAt.litAt[(size_t) k]));
-                g.setOpacity (1.0f);
-            }
-            g.setColour (chosen ? ParagonColours::accent.brighter (0.3f) : ParagonColours::accent.withAlpha (0.45f));
-            g.drawImage (c.outline, boxOf (k), juce::RectanglePlacement::stretchToFit, true);
-        }
-        for (int k = 0; k < numPieces; ++k)
-            if (glow[(size_t) k] > 0.0f && shownAt.lit[(size_t) k].isValid())
-            {
-                g.setOpacity (juce::jmin (1.0f, glow[(size_t) k]));
-                g.drawImageTransformed (shownAt.lit[(size_t) k], place (shownAt.litAt[(size_t) k]));
-            }
-        g.setOpacity (1.0f);
-    }
 
     // The picture's edges fade into the panel, so it sits in it without a frame.
     const auto fade = juce::jmin (40.0f, area.getHeight() * 0.08f);

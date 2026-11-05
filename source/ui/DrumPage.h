@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ui/LayerPanel.h"
+
 #include "PluginProcessor.h"
 #include "dsp/synth/Drums.h"
 #include "ui/ArticulationPanel.h"
@@ -130,6 +132,10 @@ public:
     // 0.18.0: the DRUM view's strip shows the ENVELOPE (and the hit) or the chosen drum's VELOCITY curve and gate.
     void showVelocity (bool);
     bool isShowingVelocity() const noexcept { return velocityMode; }
+    void showLayers (bool);   // 0.50.0: the LAYERS tab
+    void showRenderImport (ParagonX1AudioProcessor::RenderImport&);   // 0.51.0: what IMPORT A RENDER did
+    bool isShowingLayers() const noexcept { return layersMode; }
+    LayerPanel& getLayerPanel() noexcept { return layerPanel; }
     VelocityCurveEditor& getVelocityEditor() noexcept { return velocityEditor; }
     // The chosen drums' curve changed (every chosen drum gets it; `final`: one undo step).
     void setVelocityCurve (const synth::drums::VelocityCurve&, bool final);
@@ -163,13 +169,12 @@ private:
     bool showingAcoustic = false;
     int labelledModel = -1;   // the model the shaping knobs' names are for
     bool showingInstrument = false;
-    std::vector<std::unique_ptr<ParamControl>> layerControls;   // 0.29.0: LAYER LEVEL, LAYER OUT (while it has a layer)
-    bool showingLayer = false;   // the chosen drum holds an instrument (THE SAMPLE ENGINE, 0.19.0): its controls show
     void showLoadMenu();
     void importSfzKit();
     void importDrumGizmoKit();
     void importSamplePack();   // 0.33.0   // 0.27.0
-    void chooseLayer();          // 0.29.0
+    void importRender();   // 0.51.0: IMPORT A RENDER
+    void chooseLayer (int layer = -1);   // 0.29.0 (0.50.0: which of the three; -1: the first free)
     DrumHitDisplay display;
     MultiPointEditor envelope;
     juce::TextButton play { "PLAY" }, load { "LOAD SAMPLE..." }, clear { "CLEAR" }, wholeFile { "WHOLE FILE" };
@@ -190,6 +195,10 @@ private:
     VelocityCurveEditor velocityEditor;
     bool velocityMode = false;
     juce::Rectangle<int> velocityArea;
+    // THE LAYERS (0.50.0): the third tab, in the strip and picture's place.
+    juce::TextButton layersTab { "LAYERS" };
+    LayerPanel layerPanel;
+    bool layersMode = false;
     void updateDrumPanels();
     void placeArticulations();
     juce::TextButton kitTab { "KIT VIEW" }, drumTab { "DRUM" }, sequencerTab { "SEQUENCER" }, machineTab { "MACHINE" };

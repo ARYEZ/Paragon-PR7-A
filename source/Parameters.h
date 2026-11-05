@@ -39,11 +39,15 @@ namespace ParamIDs
     // A drum's layer (0.29.0) is saved as instrument numDrums + slot, so its number moves when drums are added: files
     // saved with version (a preset's or project's parameterVersion, a kit file's version) 1 or 2 counted 23 drums, 3
     // (0.33.0 to 0.35.x) 29, 4 (0.36.0) 36.
+    // 0.50.0: up to three LAYERS per drum: instrument numDrums x (1 + n) + slot (layer n = 0, 1, 2).
+    inline constexpr int numLayers = 3;
+    inline constexpr int numInstruments = (1 + numLayers) * numDrums;
     inline constexpr int drumsSavedBy (int version) noexcept { return version < 3 ? 23 : version < 4 ? 29 : numDrums; }
     inline constexpr int instrumentIndexFrom (int saved, int version) noexcept
     {
         const auto then = drumsSavedBy (version);
-        return saved >= then && saved < 2 * then ? numDrums + (saved - then) : saved;
+        // 0.50.0: layers 2 and 3 after the first's (block 2, 3), counted the same way.
+        return saved >= then && saved < (1 + numLayers) * then ? (saved / then) * numDrums + saved % then : saved;
     }
     // The same for 0.36.0's seven (older presets, kits and projects: off, so their notes play the stand-ins).
     // 0.39.0: the routes that start on a drum bus (mixer::defaultRouteOf). A preset or project saved before it that doesn't
@@ -109,7 +113,10 @@ namespace ParamIDs
                                                     // 0.24.0 (hint 32): THE ACOUSTIC MODELS' strike POSITION, SHELL, VARIATION
                                                     "Position", "Shell", "Variation",
                                                     "Mics",     // 0.26.0 (hint 33): heard through SIMULATED MICS
-                                                    "LayerLevel", "LayerOut" };   // 0.29.0 (hint 34): a LAYER of your own
+                                                    "LayerLevel", "LayerOut",   // 0.29.0 (hint 34): a LAYER of your own
+                                                    // 0.50.0 (hint 40): LAYERS 2 and 3 (the rest of each layer's settings
+                                                    // are preset data: ModMatrix::drumLayers)
+                                                    "Layer2Level", "Layer2Out", "Layer3Level", "Layer3Out" };
     consteval int drumSetting (std::string_view what)
     {
         for (int i = 0; i < (int) std::size (drumSettings); ++i)
@@ -117,6 +124,9 @@ namespace ParamIDs
                 return i;
         throw "not a drum setting";
     }
+    // 0.50.0: layer n's (0-2) LEVEL and OUT: "LayerLevel" / "LayerOut", then "Layer2Level"...
+    inline const char* layerLevel (int n) noexcept { return n <= 0 ? "LayerLevel" : n == 1 ? "Layer2Level" : "Layer3Level"; }
+    inline const char* layerOut (int n) noexcept { return n <= 0 ? "LayerOut" : n == 1 ? "Layer2Out" : "Layer3Out"; }
 
     // THE DRUM SEQUENCER (stage 6b, version hint 22): the kit's beat. Its notes are preset data (ModMatrix::drumPatterns).
     inline constexpr auto dseqOn       = "dseqOn";

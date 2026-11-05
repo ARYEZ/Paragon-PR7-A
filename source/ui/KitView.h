@@ -82,6 +82,11 @@ private:
 
     ParagonX1AudioProcessor& processor;
     Highlight highlight;
+    // 0.49.0: the highlighted kit as last drawn (for that highlight, scale and area).
+    juce::Image highlightShown;
+    Highlight highlightFor;
+    float highlightScale = 0.0f;
+    juce::Rectangle<float> highlightArea;
     std::array<float, numPieces> glow {};
     int selected = 0, hovered = -1;
 };

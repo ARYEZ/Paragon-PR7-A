@@ -28,6 +28,7 @@
 //                                    PARAGON_SNAPSHOT_KIT=1: the kick, snare, crash and china just hit, glowing, the ride's bell chosen;
 //                                    PARAGON_SNAPSHOT_ARTIC=1: the hi-hat's articulations, OPEN 3 off, the pedal half open;
 //                                    PARAGON_SNAPSHOT_VELOCITY=1: the snare's VELOCITY curve and gate;
+//                                    PARAGON_SNAPSHOT_LAYERS=1: the snare's LAYERS (one aligned, one multi-mic);
 //                                    PARAGON_SNAPSHOT_INSTRUMENT=1: the snare from a folder of 16 hits, its layers)
 //   PARAGON_SNAPSHOT_PAGE=fx         THE RACK (PARAGON_SNAPSHOT_RACK=1: at work on a beat, the sends and bus A too; PARAGON_SNAPSHOT_FX=eq|dominion|comp|limiter|sends|delay|reverb|modfx|mod|mod2|lofi|inserts|insdrive|insglitch|insmod|inslofi: that view, the inserts' on bus PARAGON_SNAPSHOT_BUS=1-4)
 //   PARAGON_SNAPSHOT_PAGE=mixer      THE MIXER (0.20.0) with a multi-mic kit, a hit just played
@@ -145,6 +146,9 @@ TEST_CASE ("Render the editor to a PNG", "[.][snapshot]")
             processor.processBlock (buffer, midi);
     }
 
+    // 0.53.0: PARAGON_SNAPSHOT_FINISH=0|1|2: the plugin's finish (pearl white, pearl black, pearl white + neon; not saved).
+    if (const auto f = env ("PARAGON_SNAPSHOT_FINISH"); f.isNotEmpty())
+        Finish::set ((Finish::Type) juce::jlimit (0, 2, f.getIntValue()), false);
     std::unique_ptr<juce::AudioProcessorEditor> editor (processor.createEditor());
     auto* view = dynamic_cast<MainView*> (editor->getChildComponent (0));
     REQUIRE (view != nullptr);
@@ -365,7 +369,8 @@ TEST_CASE ("Render the editor to a PNG", "[.][snapshot]")
             drums.refreshPictures();
         }
         if (env ("PARAGON_SNAPSHOT_DRUMS") != "2" && env ("PARAGON_SNAPSHOT_KIT").isEmpty() && env ("PARAGON_SNAPSHOT_ARTIC").isEmpty()
-            && env ("PARAGON_SNAPSHOT_VELOCITY").isEmpty() && env ("PARAGON_SNAPSHOT_INSTRUMENT").isEmpty())
+            && env ("PARAGON_SNAPSHOT_VELOCITY").isEmpty() && env ("PARAGON_SNAPSHOT_INSTRUMENT").isEmpty()
+            && env ("PARAGON_SNAPSHOT_LAYERS").isEmpty())
             drums.select (juce::jmax (1, env ("PARAGON_SNAPSHOT_DRUM").getIntValue()) - 1);
         if (env ("PARAGON_SNAPSHOT_DRUMS") == "1")
         {
@@ -447,6 +452,61 @@ TEST_CASE ("Render the editor to a PNG", "[.][snapshot]")
             drums.refreshPictures();
         }
         // 0.18.0: the snare's VELOCITY: a curve with soft hits lifted and a bend, SOFT on, the gate raised.
+        // 0.50.0: THE LAYERS on the snare: a generated snare, layer 1 another drum's hit (late and turned over, then
+        // AUTO-ALIGNED), layer 2 a folder with two mic folders, a third free.
+        if (env ("PARAGON_SNAPSHOT_LAYERS") == "1")
+        {
+            static const auto folder = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("pr7d-snapshot-layers");
+            folder.deleteRecursively();
+            const auto hit = [] (double hz, int at, float sign, double decay, double noise)
+            {
+                juce::AudioBuffer<float> b (1, 24000);
+                juce::Random r (7);
+                for (int i = 0; i < b.getNumSamples(); ++i)
+                {
+                    const auto t = (double) (i - at) / 48000.0;
+                    const auto v = i < at ? 0.0 : std::exp (-t / decay) * (std::sin (juce::MathConstants<double>::twoPi * hz * t + 0.6)
+                                                                           + noise * (r.nextFloat() * 2.0 - 1.0) * std::exp (-t / 0.01));
+                    b.setSample (0, i, sign * 0.5f * (float) v);
+                }
+                return b;
+            };
+            const auto write = [] (const juce::File& f, const juce::AudioBuffer<float>& b)
+            {
+                f.getParentDirectory().createDirectory();
+                juce::WavAudioFormat wav;
+                std::unique_ptr<juce::AudioFormatWriter> w (wav.createWriterFor (new juce::FileOutputStream (f), 48000.0, 1, 24, {}, 0));
+                if (w != nullptr)
+                    w->writeFromAudioSampleBuffer (b, 0, b.getNumSamples());
+            };
+            auto snare = std::make_shared<synth::drums::Sample>();
+            snare->name = "Snare";
+            snare->sampleRate = 48000.0;
+            {
+                const auto b = hit (190.0, 100, 1.0f, 0.06, 0.8);
+                snare->channels.assign (1, std::vector<float> (b.getReadPointer (0), b.getReadPointer (0) + b.getNumSamples()));
+            }
+            processor.setDrumSample (2, snare);
+            if (auto* m = processor.getParameters().getParameter (ParamIDs::drum (2, "Model")))
+                m->setValueNotifyingHost (m->convertTo0to1 ((float) synth::drums::Model::sample));
+            write (folder.getChildFile ("Foundry Snare Center.wav"), hit (210.0, 160, -1.0f, 0.08, 0.5));
+            write (folder.getChildFile ("Foundry Snare Rim").getChildFile ("Snare Top").getChildFile ("rim_V1_RR1.wav"), hit (230.0, 100, 1.0f, 0.05, 1.0));
+            write (folder.getChildFile ("Foundry Snare Rim").getChildFile ("OH").getChildFile ("rim_V1_RR1.wav"), hit (230.0, 140, 1.0f, 0.12, 0.3));
+            processor.loadLayer (2, folder.getChildFile ("Foundry Snare Center.wav"), 0);
+            processor.loadLayer (2, folder.getChildFile ("Foundry Snare Rim"), 1);
+            processor.waitForInstruments (60000);
+            if (auto* l = processor.getParameters().getParameter (ParamIDs::drum (2, ParamIDs::layerLevel (1))))
+                l->setValueNotifyingHost (l->convertTo0to1 (-6.0f));
+            auto t = processor.getLayerTweak (2, 1);
+            t.velLo = 90;
+            t.lengthMs = 180.0f;
+            t.pitch = -0.5f;
+            processor.setLayerTweak (2, 1, t);
+            drums.showView (DrumPage::View::drum);
+            drums.select (2);
+            drums.showLayers (true);
+            drums.getLayerPanel().align (0);
+        }
         if (env ("PARAGON_SNAPSHOT_VELOCITY") == "1")
         {
             drums.showView (DrumPage::View::drum);
@@ -811,7 +871,34 @@ TEST_CASE ("Render the editor to a PNG", "[.][snapshot]")
             if (env ("PARAGON_SNAPSHOT_SONG") == "2")
             {
                 view->getBlockEditor().open (2);
-                view->getBlockEditor().chooseDrum (2, false);
+                view->getBlockEditor().selectRow (view->getBlockEditor().rowOf (2), false);
+            }
+            // 0.47.0: THE GRID EDITOR at work: the chorus zoomed in, the snare unfolded into its articulations, the hats
+            // chosen and swung at 1/8, the kick muted.
+            if (env ("PARAGON_SNAPSHOT_GRID") == "1")
+            {
+                auto& ed = view->getBlockEditor();
+                ed.open (2);
+                ed.setExpanded (1, true);
+                ed.setZoom (ed.getGrid().getWidth() / 4.0);
+                ed.selectRow (ed.rowOf (6), false);
+                ed.setResolution (2);
+                ed.setSliderValue (BlockEditor::Slider::swing, 60.0);
+                ed.setRowMute (0, true);
+            }
+            // 0.48.0: the snare's NOTE LENGTHS shown, each held half a beat (the first a beat).
+            if (env ("PARAGON_SNAPSHOT_GRID") == "2")
+            {
+                auto& ed = view->getBlockEditor();
+                ed.open (2);
+                ed.setShowLength (1, true);
+                ed.selectRow (ed.rowOf (2), false);
+                if (const auto notes = ed.getSelection(); ! notes.empty())
+                {
+                    ed.setNoteLength (notes.front().slot, notes.front().beat, 0.5);
+                    ed.selectNone();
+                    ed.setNoteLength (notes.front().slot, notes.front().beat, 1.0);
+                }
             }
             // 0.46.0: EDIT PLAY STYLE on the chorus (=1: as it opens), =2: the POWER HAND moved to the ride, =3: and more
             // kick (AMOUNT +50%), =4: and the snare busier (AMOUNT +40%: ghost notes).

@@ -73,6 +73,8 @@ namespace synth::drums
         // 0.20.0: a folder with no hits of its own but a subfolder per mic ("Kick In", "OH", "Room"...) is a multi-mic
         // instrument: each hit's file found by name in every mic's folder, its loudness that of them summed.
         std::shared_ptr<const Instrument> fromFolder (const juce::File& folder);
+        // 0.50.0: a folder laid out as a multi-mic instrument (no hits of its own, two or more mic folders).
+        bool hasMicFolders (const juce::File& folder);
         // 0.29.0: one audio file as an instrument of one hit (a drum's layer).
         std::shared_ptr<const Instrument> fromFile (const juce::File& file);
 

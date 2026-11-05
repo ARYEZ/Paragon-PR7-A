@@ -20,6 +20,7 @@ add_executable(ParagonX1Tests
     MicSimTests.cpp
     DrumGizmoTests.cpp
     LayerTests.cpp
+    RenderImportTests.cpp
     RiffTests.cpp
     SamplePackTests.cpp
     DrumSeqPluginTests.cpp
@@ -37,6 +38,7 @@ add_executable(ParagonX1Tests
     RhythmTests.cpp
     SongTests.cpp
     PlayStyleTests.cpp
+    GridEditorTests.cpp
     UndoTests.cpp
     EffectTests.cpp
     EqTests.cpp

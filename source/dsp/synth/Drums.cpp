@@ -263,6 +263,7 @@ namespace synth::drums
         active = true;
         reversed = false;
         gateLeft = options.gateSamples;
+        gateFade = 0.003;
         {
             // The note's own pan: a balance, centre unchanged.
             const auto pan = juce::jlimit (-1.0f, 1.0f, options.pan);
@@ -1274,7 +1275,7 @@ namespace synth::drums
             position += step;
             t += 1.0 / sampleRate;
             if (gateLeft > 0 && --gateLeft == 0)
-                fadeOut (0.003);
+                fadeOut (gateFade);
             if (fadeStep > 0.0f && (fade -= fadeStep) <= 0.0f)
             {
                 active = false;
@@ -1346,7 +1347,7 @@ namespace synth::drums
                 position += reversed ? -step : step;
                 t += 1.0 / sampleRate;
                 if (gateLeft > 0 && --gateLeft == 0)
-                    fadeOut (0.003);
+                    fadeOut (gateFade);
                 if (fadeStep > 0.0f && (fade -= fadeStep) <= 0.0f)
                 {
                     active = false;
@@ -1372,7 +1373,7 @@ namespace synth::drums
             left[i] += x * panLeft;
             right[i] += x * panRight;
             if (gateLeft > 0 && --gateLeft == 0)
-                fadeOut (0.003);
+                fadeOut (gateFade);
             if (fadeStep > 0.0f && (fade -= fadeStep) <= 0.0f)
             {
                 active = false;
@@ -1618,44 +1619,132 @@ namespace synth::drums
         }
         noiseSeed = noiseSeed * 1664525u + 1013904223u;
         const auto age = ++ages;
-        // ITS LAYER (0.29.0): the user's sample with the hit, as a voice of the hit (same age: choked, stolen and
-        // faded with it; not counted as a hit of its own), whole, at its own pitch, the velocity's level x LAYER LEVEL,
-        // into its mixer channel (late by that channel's TIME OFFSET) or the drum's own way.
-        const auto startLayer = [&]
+        // THE MIXER (0.20.0): a voice per mic, into its channel, at the bleed / close-mic level the mixer gives this
+        // piece there, late by the channel's TIME OFFSET; the channel's RELEASE fades it after that long. 0.50.0: a
+        // layer's mics too (`closeTo`: its close mics into its own channel; `skip`: seconds skipped into each mic's
+        // sample, for a layer set earlier).
+        const auto piece = juce::jlimit (0, mixer::numPieces - 1, pieceOfSlot (slot));
+        const auto startMics = [&] (const std::vector<Instrument::Hit::Mic>& hitMics, const SlotSettings& base, float gain0,
+                                    const HitOptions& hitOptions, bool primaryFirst, int closeTo, double skip, int gateSamples, double gateFade)
         {
-            if (slotSettings.layer == nullptr || slotSettings.layerGain <= 0.0f)
-                return;
-            const auto choice = slotSettings.layer->choose (juce::jlimit (1, 127, juce::roundToInt (hitVelocity * 127.0f)), slotSettings.randomize,
-                                                            slotSettings.adjacent, 0, layerMemory[(size_t) slot]);
-            if (choice.sample == nullptr || choice.sample->length() < 2)
-                return;
-            auto part = slotSettings;
-            part.model = Model::sample;
-            part.sample = choice.sample;
-            part.instrument = nullptr;
-            part.start = 0.0f;
-            part.end = 1.0f;
-            part.reverseSource = nullptr;
-            part.pitch = 0.0f;
-            part.decay = 1.0f;
-            part.tone = 0.5f;
-            part.snap = 0.5f;
-            part.envelope = nullptr;
-            part.delay = 0.0f;
-            const auto channel = slotSettings.layerChannel >= 0 && slotSettings.layerChannel < mixer::numMicChannels ? slotSettings.layerChannel : -1;
-            if (channel >= 0)
-                part.delay = (float) settings.channels[(size_t) channel].offsetSeconds;
-            HitOptions plain;
-            plain.pan = options.pan;
-            plain.gateSamples = options.gateSamples;
-            auto* voice = freeVoice();
-            voice->start (part, slot, plainVelocityGain * choice.gain * slotSettings.layerGain, sampleRate, noiseSeed, plain);
-            voice->age = age;
-            voice->channel = channel;
-            voice->primary = false;
-            voice->micGain = 1.0f;
-            voice->bleed = false;
-            voice->releaseLeft = -1;
+            auto first = primaryFirst;
+            // DISK STREAMING (0.28.0): a streamed hit claims one stream for all its mics (none free: its heads only).
+            auto stream = -1;
+            if (settings.streamer != nullptr)
+                for (const auto& mic : hitMics)
+                    if (mic.sample != nullptr && mic.sample->stream != nullptr)
+                    {
+                        stream = settings.streamer->claim (*mic.sample->stream);
+                        break;
+                    }
+            for (const auto& mic : hitMics)
+            {
+                // The mic's own channel (by its name), then ROUTE INSTRUMENT MICROPHONES' (0.23.0): another channel, a user
+                // channel, or none. It stays direct or bleed, and takes its BLEED FROM INSTRUMENTS cell, as in its own
+                // channel; the channel it plays in gives the rest (bleed level and on, offset, release).
+                const auto source = mic.channel >= 0 ? mic.channel : homeChannel (slot);
+                // 0.33.0: a mic of the drum's own that has a USER channel to itself (a sample pack's sub kick, trigger, tom 4)
+                // is its direct sound, with no BLEED FROM INSTRUMENTS cell (that table has the 13 named channels).
+                const auto own = source >= mixer::numChannels;
+                const auto direct = own || isDirect (slot, source);
+                auto channel = mixer::routedChannel (settings.micRoutes, pieceOfSlot (slot), source);
+                if (closeTo >= 0 && direct && (own || ! mixer::hearsWholeKit (source)))
+                    channel = closeTo;
+                if (channel < 0)
+                    continue;
+                const auto& ch = settings.channels[(size_t) channel];
+                auto gain = settings.bleed != nullptr && ! own ? (*settings.bleed)[(size_t) source][(size_t) piece].gain() : 1.0f;
+                if (! direct)
+                    gain *= ch.bleedOn ? ch.bleedGain : 0.0f;
+                if (std::abs (gain) < 1.0e-9f || mic.sample == nullptr)
+                    continue;
+                auto part = base;
+                part.sample = mic.sample.get();
+                part.delay = (float) (juce::jmax (0.0, (double) base.delay) + ch.offsetSeconds);
+                if (skip > 0.0 && part.sample->length() > 2)
+                    part.start = (float) juce::jlimit (0.0, 0.99, skip * part.sample->sampleRate / part.sample->length());
+                auto* voice = freeVoice();
+                voice->start (part, slot, gain0, sampleRate, noiseSeed, hitOptions);
+                voice->age = age;
+                voice->channel = channel;
+                voice->primary = first;
+                voice->micGain = gain;
+                voice->bleed = ! direct;
+                voice->releaseLeft = ch.releaseSeconds > 0.0 ? juce::jmax (1, (int) (ch.releaseSeconds * sampleRate)) + voice->waitLeft : -1;
+                if (gateSamples > 0)
+                {
+                    voice->gateLeft = gateSamples;
+                    voice->gateFade = gateFade;
+                }
+                voice->enableStream (settings.streamer, stream, settings.waitForDisk);
+                first = false;
+            }
+        };
+        // ITS LAYERS (0.29.0; three since 0.50.0): the user's sounds with the hit, as voices of the hit (same age:
+        // choked, stolen and faded with it; not counted as hits of their own), whole, at their own pitch (+ PITCH), the
+        // velocity's level x LEVEL (POLARITY: turned over), later by OFFSET (earlier: skipped into), into their mixer
+        // channel (late by its TIME OFFSET) or the drum's own way; a multi-mic layer's mics into theirs. Each plays only
+        // on the velocities it's set to, and fades at its LENGTH.
+        const auto startLayers = [&]
+        {
+            const auto asked127 = juce::jlimit (0.0f, 127.0f, velocity * 127.0f);
+            for (int n = 0; n < numLayers; ++n)
+            {
+                const auto& layer = slotSettings.layers[(size_t) n];
+                if (layer.instrument == nullptr || layer.gain <= 0.0f)
+                    continue;
+                static const LayerTweak plainTweak;
+                const auto& tweak = layer.tweak != nullptr ? *layer.tweak : plainTweak;
+                if (asked127 < (float) tweak.velLo - 0.5f || asked127 > (float) tweak.velHi + 0.5f)
+                    continue;
+                const auto choice = layer.instrument->choose (juce::jlimit (1, 127, juce::roundToInt (hitVelocity * 127.0f)), slotSettings.randomize,
+                                                              slotSettings.adjacent, 0, layerMemory[(size_t) slot][(size_t) n]);
+                if (choice.sample == nullptr || choice.sample->length() < 2)
+                    continue;
+                auto part = slotSettings;
+                part.model = Model::sample;
+                part.sample = choice.sample;
+                part.instrument = nullptr;
+                part.start = 0.0f;
+                part.end = 1.0f;
+                part.reverseSource = nullptr;
+                part.pitch = juce::jlimit (-48.0f, 48.0f, tweak.pitch);
+                part.decay = 1.0f;
+                part.tone = 0.5f;
+                part.snap = 0.5f;
+                part.envelope = nullptr;
+                part.delay = juce::jmax (0.0f, tweak.offsetMs * 0.001f);
+                const auto skip = juce::jmax (0.0, -(double) tweak.offsetMs * 0.001);
+                const auto gain = plainVelocityGain * choice.gain * layer.gain * (tweak.invert ? -1.0f : 1.0f);
+                const auto gate = tweak.lengthMs > 0.0f ? juce::jmax (1, juce::roundToInt (tweak.lengthMs * 0.001 * sampleRate)) : -1;
+                const auto gateFadeSeconds = juce::jlimit (0.003, 0.05, 0.25 * tweak.lengthMs * 0.001);
+                const auto channel = layer.channel >= 0 && layer.channel < mixer::numMicChannels ? layer.channel : -1;
+                HitOptions plain;
+                plain.pan = options.pan;
+                plain.gateSamples = options.gateSamples;
+                if (choice.mics != nullptr && ! choice.mics->empty())
+                {
+                    startMics (*choice.mics, part, gain, plain, false, channel, skip, gate, gateFadeSeconds);
+                    continue;
+                }
+                if (channel >= 0)
+                    part.delay += (float) settings.channels[(size_t) channel].offsetSeconds;
+                if (skip > 0.0)
+                    part.start = (float) juce::jlimit (0.0, 0.99, skip * part.sample->sampleRate / part.sample->length());
+                auto* voice = freeVoice();
+                voice->start (part, slot, gain, sampleRate, noiseSeed, plain);
+                voice->age = age;
+                voice->channel = channel;
+                voice->primary = false;
+                voice->micGain = 1.0f;
+                voice->bleed = false;
+                voice->releaseLeft = -1;
+                if (gate > 0)
+                {
+                    voice->gateLeft = gate;
+                    voice->gateFade = gateFadeSeconds;
+                }
+            }
         };
         if (mics == nullptr)
         {
@@ -1665,56 +1754,11 @@ namespace synth::drums
             chosen->channel = -1;
             chosen->primary = true;
             chosen->releaseLeft = -1;
-            startLayer();
+            startLayers();
             return;
         }
-        // THE MIXER (0.20.0): a voice per mic, into its channel, at the bleed / close-mic level the mixer gives this
-        // piece there, late by the channel's TIME OFFSET; the channel's RELEASE fades it after that long.
-        const auto piece = juce::jlimit (0, mixer::numPieces - 1, pieceOfSlot (slot));
-        auto first = true;
-        // DISK STREAMING (0.28.0): a streamed hit claims one stream for all its mics (none free: its heads only).
-        auto stream = -1;
-        if (settings.streamer != nullptr)
-            for (const auto& mic : *mics)
-                if (mic.sample != nullptr && mic.sample->stream != nullptr)
-                {
-                    stream = settings.streamer->claim (*mic.sample->stream);
-                    break;
-                }
-        for (const auto& mic : *mics)
-        {
-            // The mic's own channel (by its name), then ROUTE INSTRUMENT MICROPHONES' (0.23.0): another channel, a user
-            // channel, or none. It stays direct or bleed, and takes its BLEED FROM INSTRUMENTS cell, as in its own
-            // channel; the channel it plays in gives the rest (bleed level and on, offset, release).
-            const auto source = mic.channel >= 0 ? mic.channel : homeChannel (slot);
-            const auto channel = mixer::routedChannel (settings.micRoutes, pieceOfSlot (slot), source);
-            if (channel < 0)
-                continue;
-            // 0.33.0: a mic of the drum's own that has a USER channel to itself (a sample pack's sub kick, trigger, tom 4)
-            // is its direct sound, with no BLEED FROM INSTRUMENTS cell (that table has the 13 named channels).
-            const auto own = source >= mixer::numChannels;
-            const auto direct = own || isDirect (slot, source);
-            const auto& ch = settings.channels[(size_t) channel];
-            auto gain = settings.bleed != nullptr && ! own ? (*settings.bleed)[(size_t) source][(size_t) piece].gain() : 1.0f;
-            if (! direct)
-                gain *= ch.bleedOn ? ch.bleedGain : 0.0f;
-            if (std::abs (gain) < 1.0e-9f || mic.sample == nullptr)
-                continue;
-            auto part = s;
-            part.sample = mic.sample.get();
-            part.delay = (float) (juce::jmax (0.0, (double) s.delay) + ch.offsetSeconds);
-            auto* voice = freeVoice();
-            voice->start (part, slot, velocityGain, sampleRate, noiseSeed, options);
-            voice->age = age;
-            voice->channel = channel;
-            voice->primary = first;
-            voice->micGain = gain;
-            voice->bleed = ! direct;
-            voice->releaseLeft = ch.releaseSeconds > 0.0 ? juce::jmax (1, (int) (ch.releaseSeconds * sampleRate)) + voice->waitLeft : -1;
-            voice->enableStream (settings.streamer, stream, settings.waitForDisk);
-            first = false;
-        }
-        startLayer();
+        startMics (*mics, s, velocityGain, options, true, -1, 0.0, -1, 0.003);
+        startLayers();
     }
 
     double Kit::reverseSeconds (const SlotSettings& s, float notePitch, double) noexcept
@@ -1835,6 +1879,13 @@ namespace synth::drums
                 if (h.slot < 0 || h.slot >= numSlots || h.offset < 0)
                     continue;
                 renderTo (h.offset);
+                if (h.velocity < 0.0f)
+                {
+                    // A song note's end (0.48.0): let go, as a MIDI note-off would.
+                    if (const auto played = settings.playsAs (h.slot); played >= 0 && settings.slots[(size_t) played].muteTail == MuteTail::noteOff)
+                        grab (played);
+                    continue;
+                }
                 startHit (h.slot, juce::jlimit (0.0f, 1.0f, h.velocity), settings);
             }
         };

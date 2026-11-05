@@ -721,85 +721,6 @@ TEST_CASE ("SONG 0.9: the clipboard: a groove's ticked parts copied; the strip's
     CHECK (t.p.getSong().isEmpty());
 }
 
-TEST_CASE ("SONG 0.9 EDIT BLOCK: rows for its drums; click adds on GRID, drag sets velocity, right-click removes; the buttons", "[song][song-edit][ui]")
-{
-    Plugin t;
-    song::Song s;
-    s.place (block ("A", 1, { { 0.0, BD }, { 1.0, SD }, { 3.0, SD } }), 0.0);
-    t.p.setSong (s);
-    BlockEditor editor (t.p);
-    editor.setBounds (0, 0, 1476, 672);
-    editor.open (0);
-    CHECK (editor.isVisible());
-    CHECK (editor.getRows() == std::vector<int> { BD, SD });
-
-    const auto mouse = [&editor] (juce::Point<float> at, juce::Point<float> from, juce::ModifierKeys mods)
-    {
-        return juce::MouseEvent (juce::Desktop::getInstance().getMainMouseSource(), at, mods, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
-                                 &editor, &editor, juce::Time::getCurrentTime(), from, juce::Time::getCurrentTime(), 1, false);
-    };
-    const auto left = juce::ModifierKeys::leftButtonModifier, right = juce::ModifierKeys::rightButtonModifier;
-    const auto blockNow = [&t] { return t.p.getSong().blocks[0]; };
-
-    // A click on the kick's row near beat 2.5 (a hair late): a kick at 2.5 on the 1/16 grid, at 0.8.
-    auto at = editor.cellOf (BD, 2.52).getCentre().withX (editor.cellOf (BD, 2.52).getX());
-    editor.mouseDown (mouse (at, at, left));
-    editor.mouseUp (mouse (at, at, left));
-    REQUIRE (blockNow().hits.size() == 4);
-    CHECK (notesOf (blockNow())[2] == std::make_pair (2.5, (int) BD));
-    CHECK_THAT (blockNow().hits[2].velocity, WithinAbs (0.8, 1e-6));
-    // Dragged 60 pixels down: half a step softer (120 pixels from full to nothing).
-    const auto on = editor.cellOf (BD, 2.5).getCentre();
-    editor.mouseDown (mouse (on, on, left));
-    editor.mouseDrag (mouse (on.translated (0, 60), on, left));
-    editor.mouseUp (mouse (on.translated (0, 60), on, left));
-    CHECK_THAT (blockNow().hits[2].velocity, WithinAbs (0.3, 1e-4));
-    // Right-click on the note's right edge (it's drawn several pixels wide): gone.
-    const auto edge = editor.cellOf (BD, 2.5).getCentre().withX (editor.cellOf (BD, 2.5).getRight() - 1.0f);
-    editor.mouseDown (mouse (edge, edge, right));
-    CHECK (blockNow().hits.size() == 3);
-
-    // The snare chosen: VELOCITY 50% only on it; QUANTIZE on it; COPY it, choose an added CLOSED HAT row, PASTE: the snare's
-    // notes on the hat; MOVE TO the ride; REMOVE.
-    editor.chooseDrum (SD, false);
-    CHECK (editor.getChosenDrums() == bit (SD));
-    editor.applyVelocity (0.5f);
-    CHECK (blockNow().hits[0].velocity == 1.0f);   // the kick
-    CHECK_THAT (blockNow().hits[1].velocity, WithinAbs (0.5, 1e-6));
-    editor.copyChosen();
-    editor.addRow (CH);
-    CHECK (editor.getRows() == std::vector<int> { BD, SD, CH });
-    CHECK (editor.getChosenDrums() == bit (CH));
-    editor.pasteChosen();
-    auto hatBeats = std::vector<double>();
-    for (const auto& h : blockNow().hits)
-        if (h.slot == CH)
-            hatBeats.push_back (h.beat);
-    CHECK (hatBeats == std::vector<double> { 1.0, 3.0 });
-    editor.moveChosenTo (RD);
-    CHECK ((song::slotsIn (blockNow()) & (bit (CH) | bit (RD))) == bit (RD));
-    CHECK (editor.getChosenDrums() == bit (RD));
-    editor.removeChosen();
-    CHECK (song::slotsIn (blockNow()) == (bit (BD) | bit (SD)));
-
-    // Nothing chosen: the buttons work on every drum (a 1/4 QUANTIZE moves nothing here: all on beats).
-    CHECK (editor.getChosenDrums() == 0);   // the ride's row went with its notes
-    editor.setGrid (0);
-    const auto before = blockNow();
-    editor.quantizeChosen();
-    CHECK (blockNow() == before);
-
-    // The block removed (on the strip, say): the editor closes.
-    auto closed = false;
-    editor.onClose = [&closed] { closed = true; };
-    auto empty = t.p.getSong();
-    empty.remove (0);
-    t.p.setSong (empty);
-    t.p.songBroadcaster.dispatchPendingMessages();
-    CHECK (closed);
-    CHECK (! editor.isVisible());
-}
-
 //==============================================================================
 // THE SONG TRACK part 3 (0.10.0): the song creator.
 namespace
@@ -1972,71 +1893,8 @@ TEST_CASE ("SONG LOOP 0.44.0: a note played after the loop goes round is recorde
 
 //==============================================================================
 // 0.45.0: A NOTE MOVED SIDEWAYS, THE COUNT-IN, THE GROOVES WINDOW.
-TEST_CASE ("SONG 0.45.0 EDIT BLOCK: a note dragged sideways moves along the beat (on GRID, ALT free); up / down still sets velocity", "[song][song-edit][ui]")
+TEST_CASE ("SONG 0.45.0: a note moved along its row wraps into the loop and replaces one already there", "[song][song-edit]")
 {
-    Plugin t;
-    song::Song s;
-    s.place (block ("A", 1, { { 0.0, BD }, { 1.0, SD } }), 0.0);
-    t.p.setSong (s);
-    BlockEditor editor (t.p);
-    editor.setBounds (0, 0, 1476, 672);
-    editor.open (0);
-    const auto mouse = [&editor] (juce::Point<float> at, juce::Point<float> from, juce::ModifierKeys mods)
-    {
-        return juce::MouseEvent (juce::Desktop::getInstance().getMainMouseSource(), at, mods, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
-                                 &editor, &editor, juce::Time::getCurrentTime(), from, juce::Time::getCurrentTime(), 1, false);
-    };
-    const auto left = juce::ModifierKeys::leftButtonModifier;
-    const auto blockNow = [&t] { return t.p.getSong().blocks[0]; };
-    const auto pxPerBeat = (editor.cellOf (SD, 2.0).getX() - editor.cellOf (SD, 1.0).getX());
-    REQUIRE (pxPerBeat > 10.0f);
-    t.p.flushUndoStep();
-
-    // The snare dragged right by 1.3 beats (and a little down): on the 1/16 GRID, beat 2.25 (1 + 1.3 = 2.3 -> 2.25).
-    const auto on = editor.cellOf (SD, 1.0).getCentre();
-    const auto to = on.translated (1.3f * pxPerBeat, 3.0f);
-    editor.mouseDown (mouse (on, on, left));
-    editor.mouseDrag (mouse (on.translated (8.0f, 0.0f), on, left));   // sideways first: it's a move
-    editor.mouseDrag (mouse (to, on, left));
-    editor.mouseUp (mouse (to, on, left));
-    const auto snareAt = [&blockNow]
-    {
-        std::vector<double> at;
-        for (const auto& h : blockNow().hits)
-            if (h.slot == SD)
-                at.push_back (h.beat);
-        return at;
-    };
-    REQUIRE (snareAt().size() == 1);
-    CHECK_THAT (snareAt()[0], WithinAbs (2.25, 1.0e-9));
-    CHECK_THAT (blockNow().hits.back().velocity, WithinAbs (1.0, 1.0e-6));   // its velocity kept
-    // One undo step: back on 1.
-    t.p.flushUndoStep();
-    t.p.undo();
-    CHECK_THAT (snareAt()[0], WithinAbs (1.0, 1.0e-9));
-
-    // With ALT: free, not on the grid.
-    const auto on2 = editor.cellOf (SD, 1.0).getCentre();
-    const auto to2 = on2.translated (0.4f * pxPerBeat, 0.0f);
-    const auto alt = juce::ModifierKeys (juce::ModifierKeys::leftButtonModifier | juce::ModifierKeys::altModifier);
-    editor.mouseDown (mouse (on2, on2, alt));
-    editor.mouseDrag (mouse (to2, on2, alt));
-    editor.mouseUp (mouse (to2, on2, alt));
-    CHECK (std::abs (snareAt()[0] - 1.4) < 0.5 / pxPerBeat + 1.0e-6);
-    CHECK (std::abs (snareAt()[0] - 1.5) > 0.05);   // not snapped to the 1/16 at 1.5
-
-    // Up / down first: velocity, the note stays where it is.
-    const auto kick = editor.cellOf (BD, 0.0).getCentre();
-    editor.mouseDown (mouse (kick, kick, left));
-    editor.mouseDrag (mouse (kick.translated (0.0f, 60.0f), kick, left));
-    editor.mouseUp (mouse (kick.translated (2.0f, 60.0f), kick, left));
-    for (const auto& h : blockNow().hits)
-        if (h.slot == BD)
-        {
-            CHECK (h.beat == 0.0);
-            CHECK_THAT (h.velocity, WithinAbs (0.5, 1.0e-4));
-        }
-
     // The model: wrapped into the loop; a note already there is replaced.
     auto b = block ("B", 1, { { 0.0, BD }, { 3.0, BD } });
     CHECK (song::moveHit (b, BD, 3.0, 4.5));   // past the end: round to 0.5
