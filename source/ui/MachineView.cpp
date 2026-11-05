@@ -133,7 +133,7 @@ private:
 };
 
 //==============================================================================
-// A drum's pad: a big black key in a bezel (chrome, or the neon on pearl black and white + neon). Clicked, it chooses the drum and plays it; it glows as the drum
+// A drum's pad: a big black key in a bezel (chrome, or the neon on pearl black and white + neon). Clicked, it chooses the drum and plays it; it lights up as the drum
 // sounds (from anything: the beat, the DAW, a groove), and its stripe is lit while it's the chosen drum.
 class MachineView::Pad final : public juce::Component, public juce::SettableTooltipClient
 {
@@ -162,12 +162,8 @@ public:
     {
         const auto s = (float) getWidth() / 110.0f;   // its own units: 110 wide (the pad's 78 and room for the glow)
         const auto area = getLocalBounds().toFloat().reduced (16.0f * s);
-        if (light > 0.0f)
-            for (int i = 4; i >= 1; --i)
-            {
-                g.setColour (ParagonColours::glow.withAlpha (0.07f * light));
-                g.fillRoundedRectangle (area.expanded ((float) i * 3.5f * s), 12.0f * s);
-            }
+        // (0.53.1: no glow outside the bezel any more: its stepped rings read as a halo round the neon bezel. The key
+        // lights up inside and its stripe is lit instead.)
         // The chrome bezel and the key, drawn once for each look (pressed, hovered) at this size and scale (0.40.0: they
         // were most of a glowing pad's 30 Hz redraw).
         const auto look = (pressed ? 1 : 0) + (isMouseOver() ? 2 : 0);

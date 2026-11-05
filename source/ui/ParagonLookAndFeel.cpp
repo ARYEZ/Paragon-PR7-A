@@ -672,7 +672,11 @@ void ParagonLookAndFeel::drawPianoKey (juce::Graphics& g, juce::Rectangle<float>
 
 void ParagonLookAndFeel::drawNeonBar (juce::Graphics& g, juce::Rectangle<float> bar, bool lit)
 {
-    const auto radius = bar.getHeight() * 0.5f;
+    // Its thickness is the short side: a bar standing upright (THE DRUM MACHINE's key LEDs) glows as much as a lying one
+    // (0.53.1: the glow was sized by the height, so an upright LED had a halo as wide as the key was tall).
+    const auto thick = juce::jmin (bar.getWidth(), bar.getHeight());
+    const auto upright = bar.getHeight() > bar.getWidth();
+    const auto radius = thick * 0.5f;
     const juce::Colour neon { 0xffff3a2a };
     if (! lit)
     {
@@ -685,13 +689,15 @@ void ParagonLookAndFeel::drawNeonBar (juce::Graphics& g, juce::Rectangle<float> 
 
     // Glow round the tube, the red-orange outline, then the white-hot core.
     g.setColour (neon.withAlpha (0.18f));
-    g.fillRoundedRectangle (bar.expanded (bar.getHeight() * 1.6f, bar.getHeight() * 1.3f), radius * 3.0f);
+    const auto along = thick * 1.6f, across = thick * 1.3f;
+    g.fillRoundedRectangle (upright ? bar.expanded (across, along) : bar.expanded (along, across), radius * 3.0f);
     g.setColour (neon.withAlpha (0.4f));
-    g.fillRoundedRectangle (bar.expanded (bar.getHeight() * 0.6f), radius * 1.6f);
+    g.fillRoundedRectangle (bar.expanded (thick * 0.6f), radius * 1.6f);
     g.setColour (neon);
     g.fillRoundedRectangle (bar.expanded (1.0f), radius + 1.0f);
     g.setColour (juce::Colour (0xfffff2ee));
-    g.fillRoundedRectangle (bar.reduced (bar.getHeight() * 0.18f, bar.getHeight() * 0.22f), radius * 0.6f);
+    const auto coreAlong = thick * 0.18f, coreAcross = thick * 0.22f;
+    g.fillRoundedRectangle (upright ? bar.reduced (coreAcross, coreAlong) : bar.reduced (coreAlong, coreAcross), radius * 0.6f);
 }
 
 juce::Rectangle<float> ParagonLookAndFeel::drawChromeBezel (juce::Graphics& g, juce::Rectangle<float> bezel, float radius)

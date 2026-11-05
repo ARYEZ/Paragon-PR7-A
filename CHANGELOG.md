@@ -2,6 +2,12 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.53.1
+
+**No more halos round THE DRUM MACHINE's lit keys and pads** (you spotted them on 0.53.0):
+- **The keys' LEDs** (MACHINE, 1-18, A, SONG, PLAY...): each lit LED had a round red blob round it. The LED's glow was sized for a lying bar (the neon stripes elsewhere), so on an upright LED it spread as wide as the key is tall. It's now sized by the LED's thickness, so it's a thin lit line with a tight glow. The lying neon bars everywhere else (the pads' stripes, the step keys, the rack units, the footswitches) draw exactly as before.
+- **The pads:** a sounding pad drew four stepped rings of pink light outside its bezel, which read as a halo round the new neon bezel. They're gone: a sounding pad now lights up inside the key, and its stripe lights.
+
 ## 0.53.0
 
 **Black keys in neon rings** on the two neon finishes, Pearl Black and Pearl White + Neon. This is the family's new look, as PR7-G 0.59.0 has it (your design, chosen from three mockups):
