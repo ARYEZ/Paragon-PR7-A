@@ -455,3 +455,52 @@ TEST_CASE ("THE DRUM MACHINE 0.43.0: FINISH gives the face its own finish (pearl
     CHECK (Finish::get() == plugin);   // the rest of the plugin as it was
     machine.setFinish (was, false);
 }
+
+TEST_CASE ("FINISH 0.53.0: black keys and knobs on every finish; the neon finishes' colour is in the rings round them", "[machine][ui]")
+{
+    // A pad (bezel + key) and a knob drawn in each finish: the key's face and the knob's top black in all three; the
+    // bezel's rim the neon (saturated) on pearl black and pearl white + neon, chrome (grey) on pearl white.
+    struct Look { float keyBrightness, rimSaturation, knobTopBrightness, ringSaturation; };
+    const auto draw = [] (Finish::Type type)
+    {
+        Finish::paintAs (type);
+        juce::Image image (juce::Image::ARGB, 300, 140, true);
+        {
+            juce::Graphics g (image);
+            g.fillAll (juce::Colour (0xff202020));
+            const auto well = ParagonLookAndFeel::drawChromeBezel (g, { 10.0f, 10.0f, 120.0f, 80.0f }, 9.0f);
+            ParagonLookAndFeel::drawPianoKey (g, well.reduced (1.5f), 7.0f, 4.5f, false, false);
+            ParagonLookAndFeel::drawPedalKnob (g, { 160.0f, 0.0f, 120.0f, 120.0f }, 0.0f);
+        }
+        Finish::paintAs (std::nullopt);
+        Look look {};
+        look.keyBrightness = image.getPixelAt (70, 45).getBrightness();       // the key's face
+        look.rimSaturation = image.getPixelAt (70, 12).getSaturation();       // the bezel's top rim
+        look.knobTopBrightness = image.getPixelAt (220, 44).getBrightness();  // the knob's top, off its pointer
+        // The ring's most coloured bright pixel (its sides and front: the knob hides its back).
+        float best = 0.0f;
+        for (int x = 178; x < 262; ++x)
+            for (int y = 45; y < 100; ++y)
+                if (const auto c = image.getPixelAt (x, y); c.getBrightness() > 0.5f)
+                    best = juce::jmax (best, c.getSaturation());
+        look.ringSaturation = best;
+        return look;
+    };
+    for (const auto type : { Finish::Type::pearlWhite, Finish::Type::pearlBlack, Finish::Type::pearlWhiteNeon })
+    {
+        Finish::paintAs (type);
+        const auto rings = Finish::neonRings();
+        Finish::paintAs (std::nullopt);
+        CHECK (rings == (type != Finish::Type::pearlWhite));
+        const auto look = draw (type);
+        INFO ("finish " << (int) type << ": key " << look.keyBrightness << ", rim saturation " << look.rimSaturation << ", knob top "
+                        << look.knobTopBrightness << ", ring saturation " << look.ringSaturation);
+        CHECK (look.keyBrightness < 0.25f);          // black keys everywhere
+        CHECK (look.knobTopBrightness < 0.6f);       // the knob's top dark metal everywhere
+        if (rings)
+            CHECK (look.rimSaturation > 0.3f);       // the neon rim
+        else
+            CHECK (look.rimSaturation < 0.1f);       // chrome
+        CHECK (look.ringSaturation > 0.3f);          // the knob's ring a coloured light on every finish
+    }
+}

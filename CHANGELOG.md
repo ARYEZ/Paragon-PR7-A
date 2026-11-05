@@ -2,6 +2,22 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.53.0
+
+**Black keys in neon rings** on the two neon finishes, Pearl Black and Pearl White + Neon. This is the family's new look, as PR7-G 0.59.0 has it (your design, chosen from three mockups):
+- **Every key and knob is black**, as on Pearl White (no more pink-to-orange keys and knobs).
+- **The pink-to-red-to-orange moves to the rings round them:**
+  - the bezels round the big keys (the FX rack's POWER footswitches, THE DRUM MACHINE's pads), lit along the top and darker at the front like the chrome they replace;
+  - the small keys' surrounds;
+  - the knobs' glowing ring (brightened a little, as it's a light);
+  - THE DRUM MACHINE's fader slots (PR7-D's own: the rings round the fader caps).
+- The keys' lettering is light on black, lit orange, as on Pearl White.
+- **Pearl White doesn't change:** renders before and after match pixel for pixel, apart from the live displays.
+
+Where you'll see it: THE DRUM MACHINE (its FINISH key; Pearl Black by default). The rest of the window has no finish setting of its own in PR7-D, so it stays Pearl White.
+
+**Tests:** a pad and a knob drawn in each finish: the key and the knob's top black in all three, the bezel's rim neon on the two neon finishes and chrome on Pearl White, the knob's ring a coloured light in all three.
+
 ## 0.52.0
 
 Two fixes from using EDIT PLAY STYLE and THE GRID EDITOR.

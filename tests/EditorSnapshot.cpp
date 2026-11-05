@@ -146,6 +146,9 @@ TEST_CASE ("Render the editor to a PNG", "[.][snapshot]")
             processor.processBlock (buffer, midi);
     }
 
+    // 0.53.0: PARAGON_SNAPSHOT_FINISH=0|1|2: the plugin's finish (pearl white, pearl black, pearl white + neon; not saved).
+    if (const auto f = env ("PARAGON_SNAPSHOT_FINISH"); f.isNotEmpty())
+        Finish::set ((Finish::Type) juce::jlimit (0, 2, f.getIntValue()), false);
     std::unique_ptr<juce::AudioProcessorEditor> editor (processor.createEditor());
     auto* view = dynamic_cast<MainView*> (editor->getChildComponent (0));
     REQUIRE (view != nullptr);

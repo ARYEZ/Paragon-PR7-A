@@ -57,7 +57,16 @@ public:
         const auto slot = juce::Rectangle<float> (15.0f * s, 14.0f * s, 36.0f * s, (float) getHeight() - 28.0f * s);
         g.setColour (juce::Colours::black.withAlpha (0.55f));
         g.fillRoundedRectangle (slot.translated (0.0f, 2.0f), 7.0f * s);
-        g.setGradientFill (juce::ColourGradient (juce::Colour (0xffe9dde3), slot.getX(), slot.getY(), juce::Colour (0xff3e3238), slot.getX(), slot.getBottom(), false));
+        // The slot's lip: chrome, or (pearl black, white + neon) the neon, lit along the top like chrome (0.53.0).
+        if (Finish::neonRings())
+        {
+            g.setGradientFill (Finish::neonGradient (slot.getX(), slot.getRight()));
+            g.fillRoundedRectangle (slot, 7.0f * s);
+            g.setGradientFill (juce::ColourGradient (juce::Colours::white.withAlpha (0.4f), slot.getX(), slot.getY(),
+                                                     juce::Colours::black.withAlpha (0.45f), slot.getX(), slot.getBottom(), false));
+        }
+        else
+            g.setGradientFill (juce::ColourGradient (juce::Colour (0xffe9dde3), slot.getX(), slot.getY(), juce::Colour (0xff3e3238), slot.getX(), slot.getBottom(), false));
         g.fillRoundedRectangle (slot, 7.0f * s);
         const auto well = slot.reduced (3.0f * s);
         g.setColour (juce::Colour (0xff050405));
@@ -81,7 +90,7 @@ public:
 
         const auto cap = juce::Rectangle<float> (slot.getWidth() + 16.0f * s, 26.0f * s).withCentre ({ slot.getCentreX(), capY });
         juce::DropShadow (juce::Colours::black.withAlpha (0.6f), juce::jmax (1, (int) (7 * s)), { 0, (int) (3 * s) }).drawForRectangle (g, cap.toNearestInt());
-        ParagonLookAndFeel::drawPianoKey (g, cap, 3.5f * s, 2.2f * s, false, isMouseOverOrDragging(), Finish::neonKeys());
+        ParagonLookAndFeel::drawPianoKey (g, cap, 3.5f * s, 2.2f * s, false, isMouseOverOrDragging());
         g.setColour (juce::Colours::black.withAlpha (0.45f));
         g.fillRect (cap.withSizeKeepingCentre (cap.getWidth() - 10.0f * s, 1.8f * s));
     }
@@ -124,7 +133,7 @@ private:
 };
 
 //==============================================================================
-// A drum's pad: a big neon key in a chrome bezel. Clicked, it chooses the drum and plays it; it glows as the drum
+// A drum's pad: a big black key in a bezel (chrome, or the neon on pearl black and white + neon). Clicked, it chooses the drum and plays it; it glows as the drum
 // sounds (from anything: the beat, the DAW, a groove), and its stripe is lit while it's the chosen drum.
 class MachineView::Pad final : public juce::Component, public juce::SettableTooltipClient
 {
@@ -166,7 +175,7 @@ public:
         keyCache[(size_t) look].draw (g, getLocalBounds(), [&] (juce::Graphics& kg)
         {
             const auto w = ParagonLookAndFeel::drawChromeBezel (kg, area, 9.0f * s);
-            ParagonLookAndFeel::drawPianoKey (kg, w.reduced (1.5f * s), 7.0f * s, 4.5f * s, look & 1, (look & 2) != 0, Finish::neonKeys());
+            ParagonLookAndFeel::drawPianoKey (kg, w.reduced (1.5f * s), 7.0f * s, 4.5f * s, look & 1, (look & 2) != 0);
         });
         well = area.reduced (4.5f);   // (the bezel's well, exactly as drawChromeBezel works it out)
         if (light > 0.0f)
@@ -310,7 +319,7 @@ MachineView::MachineView (ParagonX1AudioProcessor& p) : processor (p)
     on (K::fill, [this] { fillChosen(); }, "FILL: the chosen drum on every step shown");
     on (K::pagePrev, [this] { setStepPage (stepPage - 1); }, "The pattern's steps before these");
     on (K::pageNext, [this] { setStepPage (stepPage + 1); }, "The pattern's steps after these");
-    on (K::finish, [this] { showFinishMenu(); }, "FINISH: the machine's own finish (pearl black, pearl white, or pearl white with neon keys)");
+    on (K::finish, [this] { showFinishMenu(); }, "FINISH: the machine's own finish (pearl black or pearl white + neon: black keys and knobs in neon pink-to-orange rings; pearl white: chrome rings)");
 
     for (int s = 0; s < numSteps; ++s)
     {
@@ -865,7 +874,7 @@ void MachineView::paintFace (juce::Graphics& g)
 
 void MachineView::paint (juce::Graphics& g)
 {
-    // PR7-K's pearl black, its keys and knobs neon, whatever finish the rest of the plugin is in (the face and every
+    // Its own finish (pearl black by default: black keys and knobs in neon rings), whatever finish the rest of the plugin is in (the face and every
     // control on it: cleared again in paintOverChildren, after they've drawn).
     Finish::paintAs (Finish::getMachine());   // (0.43.0: its own finish, chosen with FINISH)
     if (shownFinish != Finish::getMachine())

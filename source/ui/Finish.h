@@ -4,9 +4,13 @@
 
 #include <optional>
 
-// The unit's finish: the original pearl white with black keys, or pearl
-// white or pearl black with neon keys and knobs (pink to red to orange). Only the unit itself changes (its chassis, the expression
-// pedal's plate, the lettering printed on it, its keys and knobs); the
+// The unit's finish: pearl white, pearl black, or pearl white + neon. The
+// keys and knobs are black on every finish; on pearl black and pearl
+// white + neon the rings round them (the footswitches' and pads' bezels,
+// the small keys' surrounds, the knobs' rings, THE DRUM MACHINE's fader
+// slots) carry the neon (pink to red to orange); on pearl white they are
+// chrome and plain red (PR7-G 0.59.0's look, PR7-D 0.53.0). Only the unit
+// itself changes (its chassis, the lettering printed on it, its rings); the
 // screens, the neon and the dark panels round it stay as they are.
 //
 // It's a preference of the person, not part of a project or a rig: kept in a
@@ -31,7 +35,7 @@ namespace Finish
     Type getMachine();
     void setMachine (Type, bool remember = true);
     inline bool isBlack() { return get() == Type::pearlBlack; }          // the chassis colour
-    inline bool neonKeys() { return get() != Type::pearlWhite; }         // the keys, knobs and pedal grips
+    inline bool neonRings() { return get() != Type::pearlWhite; }        // the rings round keys and knobs
 
     // Told whenever the finish changes, to repaint.
     juce::ChangeBroadcaster& changes();

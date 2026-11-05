@@ -111,16 +111,16 @@ public:
 private:
     juce::Typeface::Ptr regular, semiBold, blackItalic;
 
-    static void drawPedalKnob (juce::Graphics&, juce::Rectangle<float> bounds, float angle);
-
 public:
+    static void drawPedalKnob (juce::Graphics&, juce::Rectangle<float> bounds, float angle);   // (public: tests draw one)
+
     // The mockup's piano-black keys (footswitches, slot blocks, small
     // buttons): a glossy black top set in chamfered edges, the top bevel
     // catching the light, the side bevels reflecting the red glow, and a
-    // soft shadow on the metal. `bevel` is the chamfer's width. `neon`
-    // draws it pink to red to orange (the pearl black unit's keys).
+    // soft shadow on the metal. `bevel` is the chamfer's width. Black on
+    // every finish (0.53.0: the neon finishes' colour is in the rings).
     static void drawPianoKey (juce::Graphics&, juce::Rectangle<float> area, float radius, float bevel,
-                              bool pressed, bool highlighted, bool neon = false);
+                              bool pressed, bool highlighted);
 
     // The mockup's LED bars: when lit, a neon tube (white-hot core inside a
     // red-orange outline, with a soft glow); when off, a dimmer solid red.
