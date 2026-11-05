@@ -8,6 +8,7 @@
 #include "song/PlayStyle.h"
 #include "ui/MainView.h"
 #include "ui/PlayStylePanel.h"
+#include "ui/ParagonLookAndFeel.h"
 #include "ui/SongTrack.h"
 
 using Catch::Matchers::WithinAbs;
@@ -390,4 +391,116 @@ TEST_CASE ("PLAY STYLE 0.46.0: cut, copy, paste, quantize and articulation from 
             pasteOn = it.getItem().isEnabled;
     CHECK (pasteOn);
     panel.close();
+}
+
+TEST_CASE ("PLAY STYLE 0.52.0: the POWER HAND's list: the instrument it's on and its articulations, then the kit's others A to Z", "[playstyle][ui]")
+{
+    Plugin t;
+    song::Song s;
+    s.place (rockBeat(), 0.0);
+    t.p.setSong (s);
+    // A crash switched off in the kit: not offered.
+    auto* off = t.p.getParameters().getParameter (ParamIDs::drum (synth::drums::notemap::C4, "On"));
+    REQUIRE (off != nullptr);
+    off->setValueNotifyingHost (0.0f);
+    PlayStylePanel panel (t.p);
+    panel.setBounds (0, 0, 1476, 672);
+    panel.open ({ 0 });
+    struct Entry { juce::String text; bool ticked; std::function<void()> action; };
+    const auto entries = [&panel] (bool power)
+    {
+        std::vector<Entry> list;
+        const auto menu = panel.tagMenu (power);
+        for (juce::PopupMenu::MenuItemIterator it (menu); it.next();)
+        {
+            const auto& item = it.getItem();
+            if (! item.isSectionHeader && ! item.isSeparator)
+                list.push_back ({ item.text.startsWith (juce::String (juce::CharPointer_UTF8 ("\xc2\xb7"))) ? "   " + item.text.substring (1).trim() : item.text,
+                              item.isTicked, item.action });
+        }
+        return list;
+    };
+    auto list = entries (true);
+    REQUIRE (list.size() > 8);
+    // First: the hi-hat (ticked), then its articulations without the pedal (a foot), CLOSED ticked.
+    CHECK (list[0].text == "HI-HAT");
+    CHECK (list[0].ticked);
+    CHECK (list[1].text.trim() == "Closed");
+    CHECK (list[1].ticked);
+    for (const auto& e : list)
+        CHECK (e.text.trim() != "Pedal");
+    // Then the others A to Z, the kick, clap, tambourine, shaker and the switched-off crash left out.
+    std::vector<juce::String> others;
+    for (const auto& e : list)
+        if (! e.text.startsWith (" ") && e.text != "HI-HAT")
+            others.push_back (e.text);
+    for (size_t i = 1; i < others.size(); ++i)
+        CHECK (others[i - 1].compareNatural (others[i]) < 0);
+    for (const auto* gone : { "KICK", "CLAP", "TAMBOURINE", "SHAKER", "CRASH 4" })
+        CHECK (std::find (others.begin(), others.end(), juce::String (gone)) == others.end());
+    for (const auto* there : { "RIDE", "CRASH 1", "CHINA", "SNARE", "TOM 1" })
+        CHECK (std::find (others.begin(), others.end(), juce::String (there)) != others.end());
+    // Picking RIDE moves it there: the ride first, ticked, its bow ticked; the hats among the others.
+    for (const auto& e : list)
+        if (e.text == "RIDE")
+            e.action();
+    CHECK (ps::powerHandPiece (t.p.getSong().blocks[0]) == ride);
+    list = entries (true);
+    CHECK (list[0].text == "RIDE");
+    CHECK (list[0].ticked);
+    CHECK (list[1].text.trim() == "Bow");
+    CHECK (list[1].ticked);
+    CHECK (std::any_of (list.begin(), list.end(), [] (const Entry& e) { return e.text == "HI-HAT"; }));
+    // An articulation from the list: the bell.
+    for (const auto& e : list)
+        if (e.text.trim() == "Bell")
+            e.action();
+    CHECK (ps::powerHandSlot (t.p.getSong().blocks[0]) == RB);
+    // The OPENING HIT's list works the same way: onto the china.
+    for (const auto& e : entries (false))
+        if (e.text == "CHINA")
+            e.action();
+    CHECK (t.p.getSong().blocks[0].openingSlot == synth::drums::notemap::CHN);
+}
+
+// PARAGON_SNAPSHOT=powerhand.png ./ParagonX1Tests "[snapshot-powerhand]": the POWER HAND's list as the plugin draws it
+// (menus open in their own window, so the editor snapshot can't show one), on a rock beat's hats.
+TEST_CASE ("Render the POWER HAND's list to a PNG", "[.][snapshot-powerhand]")
+{
+    Plugin t;
+    song::Song s;
+    s.place (rockBeat(), 0.0);
+    t.p.setSong (s);
+    PlayStylePanel panel (t.p);
+    panel.setBounds (0, 0, 1476, 672);
+    panel.open ({ 0 });
+    const auto menu = panel.tagMenu (true);
+    ParagonLookAndFeel look;
+    struct Row { juce::String text; bool header, separator, ticked; };
+    std::vector<Row> rows;
+    for (juce::PopupMenu::MenuItemIterator it (menu); it.next();)
+        rows.push_back ({ it.getItem().text, it.getItem().isSectionHeader, it.getItem().isSeparator, it.getItem().isTicked });
+    constexpr int scale = 2, width = 190, itemHeight = 24, separator = 9;
+    auto height = 8;
+    for (const auto& r : rows)
+        height += r.separator ? separator : itemHeight;
+    juce::Image image (juce::Image::ARGB, width * scale, height * scale, true);
+    juce::Graphics g (image);
+    g.addTransform (juce::AffineTransform::scale ((float) scale));
+    look.drawPopupMenuBackground (g, width, height);
+    auto y = 4;
+    for (const auto& r : rows)
+    {
+        if (r.header)
+            look.drawPopupMenuSectionHeader (g, { 0, y, width, itemHeight }, r.text);
+        else
+            look.drawPopupMenuItem (g, { 0, y, width, r.separator ? separator : itemHeight }, r.separator, true, r.text == "RIDE", r.ticked,
+                                    false, r.text, {}, nullptr, nullptr);
+        y += r.separator ? separator : itemHeight;
+    }
+    juce::File file (juce::File::getCurrentWorkingDirectory().getChildFile (juce::SystemStats::getEnvironmentVariable ("PARAGON_SNAPSHOT", "powerhand.png")));
+    file.deleteFile();
+    juce::FileOutputStream stream (file);
+    REQUIRE (stream.openedOk());
+    REQUIRE (juce::PNGImageFormat().writeImageToStream (image, stream));
 }

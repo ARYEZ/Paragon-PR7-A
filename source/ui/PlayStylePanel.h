@@ -89,7 +89,10 @@ private:
     int pieceAt (juce::Point<int>) const;                       // the instrument under a point in this panel (-1)
     std::optional<juce::Point<int>> tagPointFor (int slot) const;
     juce::Rectangle<int> chipOf (int piece) const;              // the small buttons for the instruments not in the picture
-    void showArticulations (bool power, juce::Component* target);   // a flag's arrow
+    void showArticulations (bool power, juce::Component* target);   // a flag's arrow, or a click on it
+public:
+    juce::PopupMenu tagMenu (bool power);   // its list: the instrument it's on and its articulations, then the others A-Z (tests)
+private:
     void dropTag (bool power, juce::Point<int> at);             // a flag let go there
 
     class Tag;   // a flag on the kit: POWER HAND or OPENING HIT

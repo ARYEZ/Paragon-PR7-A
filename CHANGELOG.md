@@ -2,6 +2,21 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.52.0
+
+Two fixes from using EDIT PLAY STYLE and THE GRID EDITOR.
+
+**POWER HAND by its list, not by dragging.** Dragging the POWER HAND flag over the kit picture caught on the wrong pieces, and some drums were hard to reach. Now **click the flag** (or its arrow):
+- First, ticked: the instrument it's on, with its articulations under it (the hi-hat's Closed, Open 1 ... Shoulder; the ride's Bow, Bell, Edge). The pedal is left out: it's a foot.
+- Then every other drum and cymbal your kit has, A to Z.
+  - Left out: the kick (a foot), the clap, tambourine and shaker, and pieces switched off in the kit.
+- Pick one and the power hand moves there: its notes go to that instrument, merged with what it already plays.
+- The OPENING HIT flag has the same list. Dragging still works too, if you like it.
+
+**G and H zoom THE GRID EDITOR**, as in a DAW's MIDI editor: G zooms out, H zooms in, by half again each press, the middle of the view kept where it is. The ZOOM slider and ALT + the wheel still work.
+
+**Tests:** the list's order (the current instrument and its articulations first, the rest A to Z, the left-out ones missing), moving the power hand and the opening hit from it; G / H zoom steps, the middle kept, the limits, CTRL + G not a zoom.
+
 ## 0.51.0
 
 **IMPORT A RENDER**: turns a drum you bounced out of another drum program into a layer, for the kit you reinforce (your Progressive Foundry snare under the Djent Drums snare, say). DRUMS > LOAD... > IMPORT A RENDER as layers.

@@ -2,6 +2,7 @@
 // timing and velocity sliders, the SELECT menu, nudge, stretch, row SOLO / MUTE, the keys; after section 7.3.2 of the
 // manual the owner sent.
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/catch_approx.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
 #include "PluginTestUtils.h"
@@ -573,4 +574,30 @@ TEST_CASE ("GRID EDITOR 0.48.0: OWN WINDOW puts the editor in a window of its ow
     CHECK_FALSE (ed.isVisible());
     view->setGridEditorInOwnWindow (true);
     editor.reset();   // the plugin's window closed with it out: no crash
+}
+
+TEST_CASE ("GRID EDITOR 0.52.0: G zooms out, H zooms in, the middle of the view kept", "[grideditor][ui]")
+{
+    Editor e;
+    auto& ed = e.ed;
+    ed.setZoom (ed.getZoom() * 4.0);
+    ed.setViewStart (1.0);
+    const auto middle = [&ed] { return ed.getViewStart() + ed.getGrid().getWidth() * 0.5 / ed.getZoom(); };
+    const auto before = ed.getZoom(), centre = middle();
+    CHECK (ed.keyPressed (juce::KeyPress ('h', juce::ModifierKeys(), 'h')));
+    CHECK (ed.getZoom() == Catch::Approx (before * 1.5));
+    CHECK (middle() == Catch::Approx (centre).margin (1.0e-6));
+    CHECK (ed.keyPressed (juce::KeyPress ('g', juce::ModifierKeys(), 'g')));
+    CHECK (ed.getZoom() == Catch::Approx (before));
+    CHECK (middle() == Catch::Approx (centre).margin (1.0e-6));
+    // Capitals too (caps lock), and no further out than the whole block.
+    for (int i = 0; i < 20; ++i)
+        ed.keyPressed (juce::KeyPress ('G', juce::ModifierKeys(), 'G'));
+    const auto fit = ed.getZoom();
+    ed.keyPressed (juce::KeyPress ('g', juce::ModifierKeys(), 'g'));
+    CHECK (ed.getZoom() == Catch::Approx (fit));
+    CHECK (fit < before);
+    // CTRL + G is not a zoom.
+    CHECK (! ed.keyPressed (juce::KeyPress ('g', juce::ModifierKeys::commandModifier, 'g')));
+    CHECK (ed.getZoom() == Catch::Approx (fit));
 }

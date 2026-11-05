@@ -15,7 +15,7 @@
 //   QUANTIZE % (MAX), SWING and RANDOMIZE move the chosen notes (all, when none) from where they were when chosen;
 //   VELOCITY, DYNAMICS, RANDOMIZE VELOCITY and SLOPE likewise change their velocities. SELECT: invert, exclude on / off
 //   beats, by note value, jump. OPTIONS: stretch notes, preview sounds. The time bar (right-click): straight or
-//   triplet lines. ZOOM (ALT + wheel), AUTO SCROLL with the song. Each change is one undo step.
+//   triplet lines. ZOOM (ALT + wheel; G out, H in), AUTO SCROLL with the song. Each change is one undo step.
 #pragma once
 
 #include "PluginProcessor.h"
@@ -71,6 +71,7 @@ public:
     static const juce::StringArray resolutionNames;
     void setTriplets (bool);                              // the time bar's lines
     void setZoom (double pixelsPerBeat);
+    void zoomBy (double factor);   // the middle of the view kept (G / H: 1 / 1.5, 1.5)
     double getZoom() const noexcept { return pxPerBeat; }
     void setViewStart (double beat);
     double getViewStart() const noexcept { return viewBeat; }

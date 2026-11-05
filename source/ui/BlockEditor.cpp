@@ -139,7 +139,7 @@ BlockEditor::BlockEditor (ParagonX1AudioProcessor& p) : processor (p)
     autoScrollButton.onClick = [this] { autoScroll = autoScrollButton.getToggleState(); };
     zoom.setRange (0.0, 1.0);
     zoom.setValue (0.0, juce::dontSendNotification);
-    zoom.setTooltip ("ZOOM (ALT + the wheel).");
+    zoom.setTooltip ("ZOOM (ALT + the wheel; the keys G: out, H: in).");
     zoom.onValueChange = [this]
     {
         if (const auto* b = block(); b != nullptr && grid.getWidth() > 0)
@@ -989,6 +989,16 @@ void BlockEditor::setZoom (double pixelsPerBeat)
     repaint();
 }
 
+void BlockEditor::zoomBy (double factor)
+{
+    if (pxPerBeat <= 0.0 || grid.getWidth() <= 0)
+        return;
+    const auto half = grid.getWidth() * 0.5;
+    const auto middle = viewBeat + half / pxPerBeat;
+    setZoom (pxPerBeat * factor);
+    setViewStart (middle - half / pxPerBeat);
+}
+
 void BlockEditor::setViewStart (double beat)
 {
     viewBeat = beat;
@@ -1231,6 +1241,12 @@ bool BlockEditor::keyPressed (const juce::KeyPress& key)
     if (mods.isShiftDown() && ! mods.isCommandDown() && c == 'i')
     {
         invertSelection();
+        return true;
+    }
+    // G / H: zoom out / in (as DAWs' MIDI editors have it), the middle of the view kept where it is.
+    if (! mods.isCommandDown() && ! mods.isAltDown() && ! mods.isShiftDown() && (c == 'g' || c == 'h'))
+    {
+        zoomBy (c == 'h' ? 1.5 : 1.0 / 1.5);
         return true;
     }
     if (mods.isCommandDown())

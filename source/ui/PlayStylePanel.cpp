@@ -34,10 +34,11 @@ public:
     Tag (PlayStylePanel& p, bool power) : panel (p), isPower (power)
     {
         setMouseCursor (juce::MouseCursor::DraggingHandCursor);
-        setTooltip (isPower ? "POWER HAND: the groove's leading instrument. Drag it onto another instrument: its notes move there "
-                              "(merged with what that one plays). The arrow: its articulation."
-                            : "OPENING HIT: one hit at the block's start (OPENING HIT ON / OFF). Drag it onto any instrument; "
-                              "the arrow: its articulation.");
+        setTooltip (isPower ? "POWER HAND: the groove's leading instrument. Click it: the instrument it's on and its articulations, "
+                              "then the kit's other drums and cymbals A to Z; pick one and its notes move there (merged with what "
+                              "that one plays). You can still drag it onto an instrument."
+                            : "OPENING HIT: one hit at the block's start (OPENING HIT ON / OFF). Click it: the instrument it's on "
+                              "and its articulations, then the others A to Z. You can still drag it onto an instrument.");
     }
 
     void setLit (bool on) { if (on != lit) { lit = on; repaint(); } }
@@ -79,10 +80,14 @@ public:
         moved = true;
         dragger.dragComponent (this, e, nullptr);
     }
-    void mouseUp (const juce::MouseEvent&) override
+    void mouseUp (const juce::MouseEvent& e) override
     {
         if (! moved)
+        {
+            if (e.mouseDownPosition.x < (float) getWidth() - 19.0f && ! e.mods.isPopupMenu())
+                panel.showArticulations (isPower, this);   // a click: its list (the arrow's opened it already)
             return;
+        }
         moved = false;
         // Where its pointed end is: the flag's left edge, half way down.
         const auto at = getBounds().getPosition().translated (2, getHeight() / 2);
@@ -650,33 +655,67 @@ juce::PopupMenu PlayStylePanel::instrumentMenu()
     return m;
 }
 
-void PlayStylePanel::showArticulations (bool power, juce::Component* target)
+juce::PopupMenu PlayStylePanel::tagMenu (bool power)
 {
+    // The flag's list (the owner: dragging it over the kit picture caught on the wrong pieces): the instrument it's on
+    // first, ticked, with its articulations; then every other drum and cymbal the kit has (its main articulation On),
+    // A to Z. The kick (a foot), the clap, tambourine and shaker left out.
+    juce::PopupMenu m;
     const auto& s = processor.getSong();
     if (blocks.empty() || blocks.front() >= (int) s.blocks.size())
-        return;
+        return m;
     const auto& b = s.blocks[(size_t) blocks.front()];
     const auto slot = power ? song::playstyle::powerHandSlot (b) : b.openingSlot;
     const auto piece = synth::drums::pieceOfSlot (slot);
-    if (piece < 0)
-        return;
-    juce::PopupMenu m;
-    m.addSectionHeader (pieceTitle (piece));
-    const auto& pc = pieces[(size_t) piece];
-    for (int a = 0; a < pc.count; ++a)
+    m.addSectionHeader (power ? "POWER HAND" : "OPENING HIT");
+    if (piece >= 0)
     {
-        const auto to = pc.articulations[(size_t) a].slot;
-        if (power && to == synth::drums::notemap::PH)
-            continue;   // the pedal is the foot, not a hand
-        m.addItem (pc.articulations[(size_t) a].name, true, to == slot, [this, power, to]
+        m.addItem (pieceTitle (piece), true, true, [] {});
+        const auto& pc = pieces[(size_t) piece];
+        for (int a = 0; a < pc.count && pc.count > 1; ++a)
+        {
+            const auto to = pc.articulations[(size_t) a].slot;
+            if (power && to == synth::drums::notemap::PH)
+                continue;   // the pedal is the foot, not a hand
+            m.addItem (juce::String (juce::CharPointer_UTF8 ("\xc2\xb7  ")) + pc.articulations[(size_t) a].name, true, to == slot, [this, power, to]
+            {
+                if (power)
+                    setPowerHandArticulation (to);
+                else
+                    moveOpeningHit (to);
+                placeTags();
+            });
+        }
+    }
+    m.addSeparator();
+    const auto kit = processor.getKitSettings();
+    std::vector<int> others;
+    for (int p = 0; p < synth::drums::numPieces; ++p)
+    {
+        const juce::String name (pieces[(size_t) p].name);
+        if (p == piece || name == "KICK" || name == "CLAP" || name == "TAMBOURINE" || name == "SHAKER")
+            continue;
+        const auto main = pieces[(size_t) p].articulations[0].slot;
+        if (main < 0 || main >= synth::drums::numSlots || ! kit.slots[(size_t) main].active)
+            continue;
+        others.push_back (p);
+    }
+    std::sort (others.begin(), others.end(), [] (int a, int b2) { return pieceTitle (a).compareNatural (pieceTitle (b2)) < 0; });
+    for (const auto p : others)
+        m.addItem (pieceTitle (p), [this, power, p]
         {
             if (power)
-                setPowerHandArticulation (to);
+                movePowerHand (p, -1);
             else
-                moveOpeningHit (to);
+                moveOpeningHit (pieces[(size_t) p].articulations[0].slot);
+            placeTags();
         });
-    }
-    m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (target));
+    return m;
+}
+
+void PlayStylePanel::showArticulations (bool power, juce::Component* target)
+{
+    tagMenu (power).showMenuAsync (juce::PopupMenu::Options().withTargetComponent (target));
 }
 
 void PlayStylePanel::dropTag (bool power, juce::Point<int> at)
