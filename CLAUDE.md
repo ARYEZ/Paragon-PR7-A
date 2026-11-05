@@ -138,6 +138,8 @@ Seen in 0.1.0, for later (corrected in 0.2.0): a drum voice ends when its level 
 
 **0.53.2: lettering clear of the LEDs.** `ParagonLookAndFeel::ledClearanceProperty` (pixels from a pedal button's left): centred lettering that would reach it is centred in the room right of it (squeezed to 0.8 if it must be); `MachineView::resized` sets it to 19 x scale on every key (the LED 12 in, 3 wide, its glow).
 
+**0.53.3: the MASTER meter's halo.** `drawNeonBar (..., glow = true)`: false draws the tube alone; `MachineView::paintMeter` draws its segments so, with one glow (0.16, the lit column expanded 0.35 x 0.2 a segment) behind the lit ones (each segment's glow piled up into a cloud).
+
 ## Rules (from the owner and the family's CLAUDE.md files)
 
 - **Names:** our own designs, "inspired by"; no Toontrack, Superior Drummer, EZdrummer or Vengeance / Avenger names or branding on the plugin. Toontrack's grooves, sounds and tags are never shipped: the user's own MIDI packs (and, since 0.15.0, their `midiDB` groove databases) are read from their computer when loaded. Never get round copy protection.

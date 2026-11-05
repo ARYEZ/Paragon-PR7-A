@@ -947,10 +947,22 @@ void MachineView::paintMeter (juce::Graphics& g, juce::Rectangle<float> area) co
 {
     constexpr int segments = 14;
     const auto h = area.getHeight() / (float) segments;
+    const auto litAt = [&] (int i) { return (float) i / (float) segments < meterLevel - 1.0e-4f; };
+    // One soft glow behind the lit segments together (0.53.3: each segment's own glow, wider than the gaps between
+    // them, piled up into a red cloud round the whole meter).
+    int lit = 0;
+    while (lit < segments && litAt (lit))
+        ++lit;
+    if (lit > 0)
+    {
+        const auto column = juce::Rectangle<float> (area.getX(), area.getBottom() - (float) lit * h, area.getWidth(), (float) lit * h);
+        g.setColour (juce::Colour (0xffff3a2a).withAlpha (0.16f));
+        g.fillRoundedRectangle (column.expanded (h * 0.35f, h * 0.2f), h * 0.5f);
+    }
     for (int i = 0; i < segments; ++i)
     {
         const auto r = juce::Rectangle<float> (area.getX(), area.getBottom() - (float) (i + 1) * h, area.getWidth(), h).reduced (0.0f, h * 0.18f);
-        ParagonLookAndFeel::drawNeonBar (g, r, (float) i / (float) segments < meterLevel - 1.0e-4f);
+        ParagonLookAndFeel::drawNeonBar (g, r, litAt (i), false);
     }
 }
 

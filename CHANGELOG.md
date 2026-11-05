@@ -2,6 +2,10 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.53.3
+
+**THE DRUM MACHINE's MASTER meter without its halo** (you spotted it after 0.53.2). Each lit segment of the meter drew its own glow, and the glow was wider than the gaps between the segments, so together they piled up into a red cloud round the whole meter. Now the segments are drawn as clean lit tubes, with one soft glow behind the lit part of the column. The meter reads and moves exactly as before.
+
 ## 0.53.2
 
 **THE DRUM MACHINE's PLAY key: its lettering clear of its light** (you asked for it after 0.53.1). The light at the left of each key sat on the "P" of PLAY, the narrowest key. A key's lettering that would reach its light is now centred in the room to the right of it instead. Every other key's lettering already fitted, so they look the same as before.

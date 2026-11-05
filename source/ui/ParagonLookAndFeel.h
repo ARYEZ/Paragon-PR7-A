@@ -127,7 +127,9 @@ public:
 
     // The mockup's LED bars: when lit, a neon tube (white-hot core inside a
     // red-orange outline, with a soft glow); when off, a dimmer solid red.
-    static void drawNeonBar (juce::Graphics&, juce::Rectangle<float> bar, bool lit);
+    // `glow` false: the tube alone, no light round it (bars stacked close, like a meter's segments, whose glows would
+    // pile up into a cloud: the meter draws one glow behind its lit segments instead).
+    static void drawNeonBar (juce::Graphics&, juce::Rectangle<float> bar, bool lit, bool glow = true);
     // A raised chrome bezel on the metal with a dark well inside it, the way a
     // real unit's footswitches and big keys are mounted. Returns the well,
     // for the key to be drawn in.
