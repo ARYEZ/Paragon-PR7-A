@@ -2,6 +2,31 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.54.0
+
+**EDIT PLAY STYLE's AMOUNT learns from your grooves.** The manual says SD3's AMOUNT works out "where a real drummer would add or remove hits", from thousands of real performances. Ours used fixed rules instead (which places in the bar a drummer leans on). Now it learns from the real drummers in your own library: your MIDI packs and groove databases on the GROOVES tab.
+- **How:** every groove in your library is cut into bars. When you turn AMOUNT on a drum, it finds the bars in your library most like this one: the same feel, the same drum's part, and the other drums playing alike. Then it does what their drummers did:
+  - **turning up** adds the hits the busier versions of those bars play;
+  - **turning down** takes out first the hits the sparser versions leave out.
+- **How much** is still the knob's job, and the knob still moves smoothly: each turn only adds to (or takes from) what the turn before chose.
+- **When it can't learn:** with nothing like the groove in your library, AMOUNT uses the old rules for it. That covers an odd meter longer than 5 beats, percussion, and a library with no grooves linked. A line under the knobs says which one AMOUNT is using.
+- **Checked on your two groove packs** (762 grooves). A quarter of each drum's hits were taken out of each groove, to see whether AMOUNT puts back the ones the drummer played. Fake hits were also added, to see whether AMOUNT takes them out. Each groove was learned from the other songs only, so it couldn't copy itself.
+
+| Drum | Adding: learned | Adding: old rules | Removing: learned | Removing: old rules |
+|---|---|---|---|---|
+| Kick | 39% | 34% | 61% | 36% |
+| Snare | 72% | 67% | 66% | 47% |
+| Hi-hat | 74% | 51% | 72% | 58% |
+| Ride | 55% | 44% | 66% | 53% |
+| Toms | 24% | 13% | 44% | 25% |
+| Crash | 37% | 26% | 63% | 38% |
+
+- **To know:**
+  - It's our own design. Toontrack's method and data aren't public, and we don't use them.
+  - It learns your library's style, so metal grooves teach it metal playing.
+  - The first 8 bars of each groove are what it learns from.
+  - New notes' loudness is still worked out as before.
+
 ## 0.53.3
 
 **THE DRUM MACHINE's MASTER meter without its halo** (you spotted it after 0.53.2). Each lit segment of the meter drew its own glow, and the glow was wider than the gaps between the segments, so together they piled up into a red cloud round the whole meter. Now the segments are drawn as clean lit tubes, with one soft glow behind the lit part of the column. The meter reads and moves exactly as before.

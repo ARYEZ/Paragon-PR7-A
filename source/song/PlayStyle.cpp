@@ -1,4 +1,5 @@
 #include "song/PlayStyle.h"
+#include "song/AmountModel.h"
 
 #include "dsp/synth/Drums.h"
 #include "dsp/synth/NoteMap.h"
@@ -239,26 +240,110 @@ namespace song::playstyle
                 moveDrum (b, s, slot);   // (not the hi-hat's pedal: that's the foot, playing on as it did)
     }
 
-    std::vector<Hit> withAmount (const std::vector<Hit>& source, int piece, double amount, const Block& block, double beatsPerBar)
+    namespace
+    {
+        // The learned likelihoods of each bar of the block for the instrument (empty: the rules decide), and which
+        // places the group's other instruments (another tom, another crash) already play.
+        struct Learned
+        {
+            int lane = -1;
+            std::vector<std::vector<double>> bars;     // per bar of the loop, per twelfth (empty: not learned)
+            std::vector<std::uint64_t> othersThere;    // per bar: the group's other instruments' places
+            bool any() const noexcept
+            {
+                return std::any_of (bars.begin(), bars.end(), [] (const auto& b) { return ! b.empty(); });
+            }
+            // -1: not learned there.
+            double at (double beat, double beatsPerBar) const
+            {
+                const auto bar = (int) std::floor (beat / beatsPerBar + 1.0e-9);
+                if (bar < 0 || bar >= (int) bars.size() || bars[(size_t) bar].empty())
+                    return -1.0;
+                const auto step = (int) std::lround ((beat - bar * beatsPerBar) * AmountModel::stepsPerBeat);
+                if (step < 0 || step >= (int) bars[(size_t) bar].size())
+                    return -1.0;
+                auto v = bars[(size_t) bar][(size_t) step];
+                if ((othersThere[(size_t) bar] >> step) & 1u)
+                    v *= 0.3;   // another of the group plays there already (two toms at once is rarer)
+                return v;
+            }
+        };
+
+        Learned learnedFor (const std::vector<Hit>& source, int piece, const Block& block, double beatsPerBar,
+                            const AmountModel* model, bool adding)
+        {
+            Learned out;
+            if (model == nullptr || model->numBars() == 0)
+                return out;
+            out.lane = grooves::laneOf (pieces[(size_t) piece].articulations[0].slot);
+            const auto steps = (int) std::lround (beatsPerBar * AmountModel::stepsPerBeat);
+            if (out.lane < 0 || steps > AmountModel::maxSteps || std::abs (steps - beatsPerBar * AmountModel::stepsPerBeat) > 1.0e-6)
+                return out;
+            const auto mask = slotsOfPiece (piece);
+            const auto numBars = (int) std::ceil (block.loopLength / beatsPerBar - 1.0e-9);
+            const auto swung = gridOf (block) > 0.3;   // (the triplet grid)
+            for (int bar = 0; bar < numBars; ++bar)
+            {
+                AmountModel::Query q;
+                q.lane = out.lane;
+                q.steps = steps;
+                q.swung = swung;
+                q.fill = block.part == grooves::Part::fill;
+                q.adding = adding;
+                q.bar = barOf (source, out.lane, block, mask, bar, beatsPerBar);
+                out.bars.push_back (model->likelihood (q));
+                std::uint64_t others = 0;
+                for (const auto& h : block.hits)
+                    if ((mask & slotBit (h.slot)) == 0 && grooves::laneOf (h.slot) == out.lane)
+                        if (const auto step = (int) std::lround ((h.beat - bar * beatsPerBar) * AmountModel::stepsPerBeat); step >= 0 && step < steps)
+                            others |= std::uint64_t (1) << step;
+                out.othersThere.push_back (others);
+            }
+            return out;
+        }
+    }
+
+    bool isLearned (const std::vector<Hit>& source, int piece, const Block& block, double beatsPerBar, const AmountModel* learned)
+    {
+        return learnedFor (source, piece, block, juce::jmax (1.0, beatsPerBar), learned, true).any();
+    }
+
+    std::vector<Hit> withAmount (const std::vector<Hit>& source, int piece, double amount, const Block& block, double beatsPerBar,
+                                 const AmountModel* learnedModel)
     {
         amount = juce::jlimit (-1.0, 1.0, amount);
         if (std::abs (amount) < 1.0e-6 || block.loopLength <= 0.0)
             return source;
         const auto kind = kindOf (piece);
         beatsPerBar = juce::jmax (1.0, beatsPerBar);
-        const auto weight = [&] (double beat)
+        const auto ruleWeight = [&] (double beat)
         {
             const auto inBar = std::fmod (beat, beatsPerBar);
             return levelAt (inBar, beatsPerBar) * kindPrior (kind, inBar, beatsPerBar) + nudge (beat);
         };
+        const auto learned = learnedFor (source, piece, block, beatsPerBar, learnedModel, amount > 0.0);
+        // Learned (0 to 1) where it was, the rules (scaled under it) elsewhere; the rules break ties. A kick added
+        // keeps the rules' sense of the beat alongside (measured on the owner's two packs, putting back hits taken out
+        // of 762 real grooves: kicks 27% right learned alone, 34% by the rules, 39% both; the other drums best learned
+        // alone).
+        const auto ruleShare = kind == Kind::kick ? 1.0 : 1.0e-3;
+        const auto weight = [&] (double beat)
+        {
+            const auto rule = ruleWeight (beat);
+            const auto l = learned.at (beat, beatsPerBar);
+            return l >= 0.0 ? l + rule * ruleShare : rule * 0.5;
+        };
         if (amount < 0.0)
         {
-            // The least leaned-on, softest notes go first.
+            // The notes drummers leave out most (the rules: the least leaned-on), softest first.
             auto ranked = source;
-            std::stable_sort (ranked.begin(), ranked.end(), [&weight] (const Hit& x, const Hit& y)
+            const auto keep = [&] (const Hit& h)
             {
-                return weight (x.beat) * 0.6 + x.velocity * 0.4 > weight (y.beat) * 0.6 + y.velocity * 0.4;
-            });
+                const auto l = grooves::laneOf (h.slot) == learned.lane ? learned.at (h.beat, beatsPerBar) : -1.0;
+                return l >= 0.0 ? l * 0.85 + h.velocity * 0.15 + ruleWeight (h.beat) * 1.0e-3
+                                : ruleWeight (h.beat) * 0.6 + h.velocity * 0.4;
+            };
+            std::stable_sort (ranked.begin(), ranked.end(), [&keep] (const Hit& x, const Hit& y) { return keep (x) > keep (y); });
             ranked.resize ((size_t) std::llround ((double) ranked.size() * (1.0 + amount)));
             std::stable_sort (ranked.begin(), ranked.end(), [] (const Hit& x, const Hit& y) { return x.beat < y.beat; });
             return ranked;

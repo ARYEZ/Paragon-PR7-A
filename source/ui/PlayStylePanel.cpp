@@ -1,4 +1,5 @@
 #include "ui/PlayStylePanel.h"
+#include "song/AmountModel.h"
 
 #include "ui/DockPanels.h"
 #include "ui/ParagonLookAndFeel.h"
@@ -179,6 +180,10 @@ PlayStylePanel::PlayStylePanel (ParagonX1AudioProcessor& p) : processor (p), kit
         l->setColour (juce::Label::textColourId, ParagonColours::textDim);
         l->setJustificationType (juce::Justification::centred);
     }
+    learnedLabel.setFont (juce::FontOptions (10.5f));
+    learnedLabel.setColour (juce::Label::textColourId, ParagonColours::textDim);
+    learnedLabel.setJustificationType (juce::Justification::centredLeft);
+    addAndMakeVisible (learnedLabel);
     for (auto* l : { &totalLabel, &velocityValue })
     {
         l->setFont (juce::FontOptions (12.0f, juce::Font::bold));
@@ -374,7 +379,7 @@ PlayStylePanel::Item& PlayStylePanel::itemFor (const song::Song& s, int block, i
 std::vector<song::Hit> PlayStylePanel::notesFor (const song::Song& s, const Item& it) const
 {
     const auto& b = s.blocks[(size_t) it.block];
-    auto notes = song::playstyle::withAmount (it.source, it.piece, it.amount, b, s.beatsPerBarAt (b.start));
+    auto notes = song::playstyle::withAmount (it.source, it.piece, it.amount, b, s.beatsPerBarAt (b.start), &processor.getAmountModel());
     const auto factor = velocityFactor (it.velocity);
     if (! juce::exactlyEqual (factor, 1.0f))
         for (auto& h : notes)
@@ -845,6 +850,7 @@ void PlayStylePanel::refresh()
         velocity.setValue (v * 100.0, juce::dontSendNotification);
     }
     totalLabel.setText ("TOTAL HITS: " + juce::String (getTotalHits()), juce::dontSendNotification);
+    learnedLabel.setText (learnedText(), juce::dontSendNotification);
     const auto v = velocity.getValue();
     velocityValue.setText ((v >= 0 ? "+" : "") + juce::String (juce::roundToInt (v)) + "%", juce::dontSendNotification);
     chosenLabel.setText (chosenText(), juce::dontSendNotification);
@@ -897,7 +903,8 @@ void PlayStylePanel::resized()
         knob->setBounds (knobRow.reduced (4));
         value->setBounds (col.removeFromTop (22));
     }
-    r.removeFromTop (8);
+    learnedLabel.setBounds (r.removeFromTop (30));
+    r.removeFromTop (4);
     soloButton.setBounds (r.removeFromTop (30));
     r.removeFromTop (8);
     openingButton.setBounds (r.removeFromTop (30));
@@ -944,4 +951,23 @@ void PlayStylePanel::mouseDown (const juce::MouseEvent& e)
         return;
     }
     choose (piece, e.mods.isShiftDown() || e.mods.isCommandDown());
+}
+
+juce::String PlayStylePanel::learnedText() const
+{
+    // 0.54.0: where AMOUNT's choices come from for the chosen instrument in the (first) chosen block.
+    const auto& model = processor.getAmountModel();
+    if (model.numBars() == 0)
+        return "AMOUNT by rules: link groove folders in GROOVES and it learns from them.";
+    const auto s = processor.getSong();
+    if (blocks.empty() || blocks.front() >= (int) s.blocks.size() || chosen.size() != 1)
+        return "AMOUNT learns from your grooves (" + juce::String ((int) model.numBars()) + " bars).";
+    const auto& b = s.blocks[(size_t) blocks.front()];
+    auto source = song::playstyle::notesOf (b, chosen.front());
+    for (const auto& it : items)
+        if (it.block == blocks.front() && it.piece == chosen.front())
+            source = it.source;
+    if (song::playstyle::isLearned (source, chosen.front(), b, s.beatsPerBarAt (b.start), &model))
+        return "AMOUNT learned from your grooves (" + juce::String ((int) model.numBars()) + " bars).";
+    return "AMOUNT by rules here: nothing like it in your grooves.";
 }

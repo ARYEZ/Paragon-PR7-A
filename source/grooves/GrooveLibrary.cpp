@@ -155,6 +155,7 @@ namespace grooves
             std::lock_guard<std::mutex> guard (lock);
             entries = std::move (known);
             packsKnown = false;
+            ++generation;
             matchScores.clear();
         }
     }
@@ -470,6 +471,7 @@ namespace grooves
                 std::lock_guard<std::mutex> guard (lock);
                 entries = std::move (known);
                 packsKnown = false;
+                ++generation;
                 matchScores.clear();
             }
             indexLoaded = true;
@@ -508,6 +510,7 @@ namespace grooves
                 std::lock_guard<std::mutex> guard (lock);
                 entries = std::move (listed);
                 packsKnown = false;
+                ++generation;
                 matchScores.clear();
                 indexLoaded = true;
             }
@@ -630,6 +633,7 @@ namespace grooves
             std::lock_guard<std::mutex> guard (lock);
             entries = std::move (found);
             packsKnown = false;
+            ++generation;
             matchScores.clear();
             indexLoaded = true;   // what's listed is newer than the index
         }

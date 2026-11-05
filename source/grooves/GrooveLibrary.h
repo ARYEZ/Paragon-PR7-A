@@ -192,6 +192,8 @@ namespace grooves
         // THE GROOVES (a copy: safe while the scan replaces them).
         std::vector<Entry> getEntries() const;
         int getNumEntries() const;
+        // 0.54.0: goes up each time the list of grooves changes (what's learned from them is learned again).
+        int getGeneration() const noexcept { return generation.load(); }
 
         // THE BROWSER: the grooves in `within` (nothing: everywhere; a folder: its files, and its subfolders' if
         // SUBFOLDERS is on) whose name or folder has every word of `text`, favourites only if asked, sorted.
@@ -249,6 +251,7 @@ namespace grooves
         std::vector<Entry> entries;
         mutable std::vector<juce::File> knownPacks;   // getPacks's, while packsKnown (both under the lock)
         mutable bool packsKnown = false;
+        std::atomic<int> generation { 0 };
         // 0.31.0: each groove's match for the last tap search (filters and folders clicked during one ask again).
         mutable juce::String matchKey;
         mutable std::map<juce::String, float> matchScores;

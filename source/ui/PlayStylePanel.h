@@ -48,6 +48,7 @@ public:
     void resetAmount();
     void setVelocity (double amount);                          // -1 (half as loud) to 1 (twice), as VELOCITY
     void setSolo (bool);
+    juce::String learnedText() const;                          // 0.54.0: AMOUNT learned or by rules, for the label
     int getTotalHits() const;                                  // the chosen instruments' notes in the blocks
     void movePowerHand (int toPiece, int toSlot = -1);
     void setPowerHandArticulation (int slot);
@@ -110,7 +111,7 @@ private:
                      soloButton { "SOLO SELECTED" }, openingButton { "OPENING HIT: OFF" };
     juce::Slider amount { juce::Slider::RotaryHorizontalVerticalDrag, juce::Slider::NoTextBox },
                  velocity { juce::Slider::RotaryHorizontalVerticalDrag, juce::Slider::NoTextBox };
-    juce::Label title, chosenLabel, amountLabel { {}, "AMOUNT" }, velocityLabel { {}, "VELOCITY" }, totalLabel, velocityValue, hint;
+    juce::Label title, chosenLabel, amountLabel { {}, "AMOUNT" }, velocityLabel { {}, "VELOCITY" }, totalLabel, velocityValue, hint, learnedLabel;
     std::unique_ptr<Tag> powerTag, openingTag;
     juce::Rectangle<int> kitArea, chipsArea, side;
     std::vector<int> chipPieces;   // the instruments with no piece in the picture, in the chips' order
