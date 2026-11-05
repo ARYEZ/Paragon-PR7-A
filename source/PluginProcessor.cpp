@@ -1,4 +1,5 @@
 #include "PluginProcessor.h"
+#include "song/AmountModel.h"
 #include "dsp/synth/RenderImport.h"
 #include "dsp/synth/DrumGizmo.h"
 #include "dsp/synth/SamplePack.h"
@@ -4768,4 +4769,18 @@ juce::Array<juce::File> ParagonX1AudioProcessor::SongBouncer::run()
         written.add (file);
     }
     return written;
+}
+
+const song::playstyle::AmountModel& ParagonX1AudioProcessor::getAmountModel()
+{
+    // 0.54.0: learned again when the library's grooves have changed since (a scan, a folder added or removed).
+    const auto generation = grooveFolders->getGeneration();
+    if (amountModel == nullptr || generation != amountModelGeneration)
+    {
+        auto model = std::make_unique<song::playstyle::AmountModel>();
+        model->learn (grooveFolders->getEntries());
+        amountModel = std::move (model);
+        amountModelGeneration = generation;
+    }
+    return *amountModel;
 }

@@ -34,8 +34,14 @@ namespace song::playstyle
     void movePowerHand (Block&, int toPiece, int toSlot = -1);
 
     // AMOUNT (-1 to 1): the instrument's notes in `source` (its notes before), thinned or filled in `block`'s groove.
-    // `beatsPerBar` places the bar's lines. 0 gives `source` back unchanged.
-    std::vector<Hit> withAmount (const std::vector<Hit>& source, int piece, double amount, const Block& block, double beatsPerBar);
+    // `beatsPerBar` places the bar's lines. 0 gives `source` back unchanged. 0.54.0: with `learned` (the user's
+    // grooves, AmountModel), which notes go and which places fill is what the library's drummers do in bars like
+    // each of the block's (the rules only where too little alike was learned); how many is the knob's, as before.
+    class AmountModel;
+    std::vector<Hit> withAmount (const std::vector<Hit>& source, int piece, double amount, const Block& block, double beatsPerBar,
+                                 const AmountModel* learned = nullptr);
+    // 0.54.0: whether `learned` decides for this instrument in this block (else the rules do), for the panel's note.
+    bool isLearned (const std::vector<Hit>& source, int piece, const Block& block, double beatsPerBar, const AmountModel* learned);
     // The instrument's notes in a block (all its articulations), in time order.
     std::vector<Hit> notesOf (const Block&, int piece);
     // The block with the instrument's notes replaced by these.

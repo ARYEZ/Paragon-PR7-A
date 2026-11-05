@@ -37,6 +37,8 @@ struct CurrentRig
     }
 };
 
+namespace song::playstyle { class AmountModel; }
+
 // PR7-D: an instrument. MIDI in (from the DAW and the on-screen keyboard),
 // the drum kit and its sequencer, the effects, the preset's level and OUTPUT, stereo out.
 class ParagonX1AudioProcessor final : public juce::AudioProcessor,
@@ -409,6 +411,9 @@ public:
     //==========================================================================
     // THE GROOVE PLAYER (0.4.0): the player's groove folders, and the preview playing one through the kit.
     grooves::Library& getGrooveLibrary() noexcept { return *grooveFolders; }
+    // 0.54.0: EDIT PLAY STYLE's AMOUNT learned from the library's grooves (song/AmountModel.h), learned again whenever
+    // the list of grooves changes (on the next ask). Message thread.
+    const song::playstyle::AmountModel& getAmountModel();
     // How a groove in linked folder `folder` is played: its notes through that folder's map.
     synth::drums::notemap::Map grooveLayout (int folder) const;
     // Plays it through the kit from its start, looping or once, at the preview's tempo and velocity (the library's
@@ -788,6 +793,8 @@ private:
     bool riffFirstChunk = true;
     void runRiff (juce::AudioBuffer<float>&, int numSamples) noexcept;
     std::unique_ptr<grooves::Library> grooveFolders;
+    std::unique_ptr<song::playstyle::AmountModel> amountModel;   // 0.54.0 (getAmountModel)
+    int amountModelGeneration = -1;
     std::shared_ptr<const GroovePreview> groovePreview;
     std::atomic<const GroovePreview*> grooveForAudio { nullptr };
     std::vector<std::pair<std::shared_ptr<const GroovePreview>, double>> retiredGrooves;
