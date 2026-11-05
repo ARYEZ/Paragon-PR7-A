@@ -248,10 +248,19 @@ void ParagonLookAndFeel::drawButtonText (juce::Graphics& g, juce::TextButton& bu
         return;
     }
 
-    g.setFont (juce::FontOptions (juce::jmin (12.0f, area.getHeight() * 0.7f), juce::Font::bold));
+    const juce::Font font (juce::FontOptions (juce::jmin (12.0f, area.getHeight() * 0.7f), juce::Font::bold));
+    g.setFont (font);
+    // Clear of an LED at the left (0.53.2: on THE DRUM MACHINE's narrow PLAY key the LED sat on the "P"): centred
+    // lettering that would reach it is centred in the room right of it instead (squeezed a little if it must be).
+    if (const auto clearance = (float) (double) button.getProperties()[ledClearanceProperty]; clearance > 0.0f)
+    {
+        const auto width = juce::GlyphArrangement::getStringWidth (font, button.getButtonText());
+        if (area.getCentreX() - width * 0.5f < clearance)
+            area.setLeft (juce::jmin (clearance, area.getRight() - 1.0f));
+    }
     // Light lettering on the black key (lit: the accent orange).
     g.setColour (button.isEnabled() ? (on ? ParagonColours::accent : ParagonColours::text) : ParagonColours::textDim);
-    g.drawFittedText (button.getButtonText(), area.toNearestInt(), juce::Justification::centred, 1);
+    g.drawFittedText (button.getButtonText(), area.toNearestInt(), juce::Justification::centred, 1, 0.8f);
 }
 
 void ParagonLookAndFeel::drawPedalKnob (juce::Graphics& g, juce::Rectangle<float> bounds, float angle)

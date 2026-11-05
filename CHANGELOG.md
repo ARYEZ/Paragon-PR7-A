@@ -2,6 +2,10 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.53.2
+
+**THE DRUM MACHINE's PLAY key: its lettering clear of its light** (you asked for it after 0.53.1). The light at the left of each key sat on the "P" of PLAY, the narrowest key. A key's lettering that would reach its light is now centred in the room to the right of it instead. Every other key's lettering already fitted, so they look the same as before.
+
 ## 0.53.1
 
 **No more halos round THE DRUM MACHINE's lit keys and pads** (you spotted them on 0.53.0):

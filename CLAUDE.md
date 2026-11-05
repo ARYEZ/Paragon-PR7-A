@@ -136,6 +136,8 @@ Seen in 0.1.0, for later (corrected in 0.2.0): a drum voice ends when its level 
 
 **0.53.1: no halos** (the owner: "a weird halo effect around the lit buttons"). `ParagonLookAndFeel::drawNeonBar` sizes its glow and core by the bar's short side (an upright bar glows across its width): THE DRUM MACHINE's key LEDs (3 px wide, upright) had a blob as wide as the key was tall; lying bars draw as before. `MachineView::Pad` no longer draws its 4 glow rings outside the bezel (lit: the key's inner light and the stripe).
 
+**0.53.2: lettering clear of the LEDs.** `ParagonLookAndFeel::ledClearanceProperty` (pixels from a pedal button's left): centred lettering that would reach it is centred in the room right of it (squeezed to 0.8 if it must be); `MachineView::resized` sets it to 19 x scale on every key (the LED 12 in, 3 wide, its glow).
+
 ## Rules (from the owner and the family's CLAUDE.md files)
 
 - **Names:** our own designs, "inspired by"; no Toontrack, Superior Drummer, EZdrummer or Vengeance / Avenger names or branding on the plugin. Toontrack's grooves, sounds and tags are never shipped: the user's own MIDI packs (and, since 0.15.0, their `midiDB` groove databases) are read from their computer when loaded. Never get round copy protection.

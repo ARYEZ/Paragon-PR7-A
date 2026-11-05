@@ -54,6 +54,9 @@ public:
     // buttons with an LED stripe (SAVE, BYPASS...). The stripe lights when
     // the button's toggle state is on.
     static constexpr const char* pedalButtonProperty = "pedalButton";
+    // With pedalButtonProperty: how far from the button's left edge (pixels) its lettering must keep clear of an LED
+    // drawn over it there (THE DRUM MACHINE's keys). Lettering that fits centred stays centred; else it moves right.
+    static constexpr const char* ledClearanceProperty = "ledClearance";
 
     // Set this on a TextButton to draw it as the mockup's light outlined
     // buttons printed on the metal (VOLUME, WAH / FILTER, MORPH / FX). Its

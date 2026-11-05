@@ -816,6 +816,9 @@ void MachineView::resized()
     place (*keys[K::pagePrev], 1654, 866, 94, 38);
     place (*keys[K::pageNext], 1756, 866, 94, 38);
     place (*keys[K::finish], 1654, 768, 196, 32);
+    // The lettering kept clear of each key's LED (paintOverChildren: centred 12 units in, 3 wide, its glow 4 more).
+    for (auto& key : keys)
+        key->getProperties().set (ParagonLookAndFeel::ledClearanceProperty, 19.0 * scale);
 
     screenArea = at (480, 34, 640, 190).toNearestInt();
     meterArea = at (1580, 38, 28, 178).toNearestInt();
