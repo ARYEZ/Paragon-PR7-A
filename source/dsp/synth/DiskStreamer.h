@@ -60,6 +60,10 @@ namespace synth::drums
         void attach (int stream, int output) noexcept;
         void consumed (int stream, int output, juce::int64 frame) noexcept;
         float sample (int stream, int output, int channel, juce::int64 frame, bool waitForDisk) noexcept;
+        // 0.56.0: the frames from `frame` on that are ready and lie in one stretch of the ring (to whichever comes first
+        // of what's been read, the file's end and the ring's wrap), as each channel's pointer to `frame`'s value. Returns
+        // how many (0: none ready: `sample` then counts or waits). What `sample` gives, without a call per frame.
+        int span (int stream, int output, juce::int64 frame, const float*& left, const float*& right) noexcept;
         // Audio thread, once a block: the streams no voice plays any more are freed.
         void release (const std::array<bool, maxStreams>& inUse) noexcept;
 

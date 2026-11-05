@@ -1225,7 +1225,7 @@ namespace synth::drums
         const auto head = (juce::int64) sample->length();
         const auto length = sample->frames();
         const auto channels = juce::jmin (2, (int) sample->channels.size());
-        const auto frameAt = [this, head, length] (int c, juce::int64 f) -> float
+        const auto slowFrameAt = [this, head, length] (int c, juce::int64 f) -> float
         {
             if (f < 0 || f >= length)
                 return 0.0f;
@@ -1233,12 +1233,90 @@ namespace synth::drums
                 return sample->channels[(size_t) c][(size_t) f];
             return streamer->sample (streamId, streamOutput, c, f, waitForDisk);
         };
+        // 0.56.0: the frames read from a stretch known to be ready (the head in memory, or a run of the stream's ring),
+        // so most reads are an index into it rather than a call with its checks for every frame, every channel. The
+        // same values: outside the stretch, or where nothing is ready, the frame is read as before.
+        const float* run[2] { nullptr, nullptr };
+        juce::int64 runFrom = 0, runTo = 0;   // the stretch's frames: [runFrom, runTo)
+        const auto refill = [&] (juce::int64 f) -> bool
+        {
+            if (f < 0 || f >= length)
+                return false;
+            if (f < head)
+            {
+                run[0] = sample->channels[0].data();
+                run[1] = channels > 1 ? sample->channels[1].data() : run[0];
+                runFrom = 0;
+                runTo = head;
+                return true;
+            }
+            const float* l = nullptr;
+            const float* r = nullptr;
+            const auto n = streamer->span (streamId, streamOutput, f, l, r);
+            if (n <= 0)
+                return false;
+            run[0] = l;
+            run[1] = r;
+            runFrom = f;
+            runTo = f + n;
+            return true;
+        };
+        const auto frameAt = [&] (int c, juce::int64 f) -> float
+        {
+            if (f >= runFrom && f < runTo)
+                return run[c][f - runFrom];
+            if (refill (f))
+                return run[c][f - runFrom];
+            return slowFrameAt (c, f);
+        };
         for (int i = 0; i < numSamples; ++i)
         {
             if (waitLeft > 0)
             {
                 --waitLeft;
                 continue;
+            }
+            // 0.56.0: the plain stretch (no drawn shape, attack, filter, gate or fade-out: a sample pack's hit almost
+            // always) in a loop of its own, without the checks for what isn't there: frames read straight from the
+            // stretch the stream has ready. The same arithmetic in the same order, so the same samples; anything it
+            // doesn't cover (an edge, a frame not ready, the end) is left to the full loop below, a sample at a time.
+            if (shape == nullptr && fadeStep <= 0.0f && gateLeft <= 0 && lowPole <= 0.0f && highPole <= 0.0f
+                && ! (attackTime > 0.0f && t < attackTime))
+            {
+                const auto perSample = 1.0 / sampleRate;
+                for (; i < numSamples; ++i)
+                {
+                    const auto index = (juce::int64) position;
+                    if (position >= endPosition || index >= length - 1 || env < 1.0e-4f)
+                        break;
+                    const auto frac = (float) (position - (double) index);
+                    const auto whole = frac <= 0.0f;
+                    const auto lo = whole ? index : index - 1, hi = whole ? index : index + 2;
+                    if (lo < runFrom || hi >= runTo)
+                        if (lo < 0 || ! refill (lo) || hi >= runTo)
+                            break;
+                    auto gain = env * level * fade * shapeGain;
+                    gain *= 1.0f + spike * click;
+                    click *= clickCoef;
+                    env *= envCoef;
+                    const auto at = (size_t) (index - runFrom);
+                    const auto* a = run[0];
+                    const auto y0 = whole ? a[at] : cubic (a[at - 1], a[at], a[at + 1], a[at + 2], frac);
+                    const auto o0 = y0 * gain;
+                    left[i] += o0 * panLeft;
+                    if (channels > 1)
+                    {
+                        const auto* b = run[1];
+                        const auto y1 = whole ? b[at] : cubic (b[at - 1], b[at], b[at + 1], b[at + 2], frac);
+                        right[i] += (y1 * gain) * panRight;
+                    }
+                    else
+                        right[i] += o0 * panRight;
+                    position += step;
+                    t += perSample;
+                }
+                if (i >= numSamples)
+                    break;
             }
             if (! advanceShape())
             {
@@ -1309,6 +1387,33 @@ namespace synth::drums
                 {
                     --waitLeft;
                     continue;
+                }
+                // 0.56.0: the plain stretch in a loop of its own, as the streamed one (the same samples; edges and the
+                // rest left to the full loop below).
+                if (shape == nullptr && fadeStep <= 0.0f && gateLeft <= 0 && lowPole <= 0.0f && highPole <= 0.0f
+                    && ! reversed && endFade <= 0.0 && ! (attackTime > 0.0f && t < attackTime))
+                {
+                    const auto perSample = 1.0 / sampleRate;
+                    const auto* a = sample->channels[0].data();
+                    const auto* b = channels > 1 ? sample->channels[1].data() : a;
+                    for (; i < numSamples; ++i)
+                    {
+                        const auto index = (int) position;
+                        if (position >= endPosition || index >= length - 1 || env < 1.0e-4f || index < 1 || index + 2 > length - 1)
+                            break;
+                        const auto frac = (float) (position - index);
+                        auto gain = env * level * fade * shapeGain;
+                        gain *= 1.0f + spike * click;
+                        click *= clickCoef;
+                        env *= envCoef;
+                        const auto o0 = cubic (a[index - 1], a[index], a[index + 1], a[index + 2], frac) * gain;
+                        left[i] += o0 * panLeft;
+                        right[i] += (channels > 1 ? cubic (b[index - 1], b[index], b[index + 1], b[index + 2], frac) * gain : o0) * panRight;
+                        position += step;
+                        t += perSample;
+                    }
+                    if (i >= numSamples)
+                        return;
                 }
                 if (! advanceShape())
                 {

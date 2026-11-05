@@ -2,6 +2,24 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.56.0
+
+**Sampled kits play with about 35-40% less work** (you asked to make the plugin run smoother and more efficiently). This time measured with the kind of kit you play: a sample pack laid out like your Djent Drums (five mics on the kick, four on the snare, toms, hats, crash, china and ride, streamed from disk), with mixer effects on the kick, snare and toms, playing a 180 BPM beat with 16th-note double kicks.
+
+| That beat | 0.55.0 | 0.56.0 |
+|---|---|---|
+| Files at 48 kHz, session at 48 kHz | 8.4% of a core | 5.4% |
+| Files at 44.1 kHz, session at 48 kHz | 9.8% | 6.5% |
+
+**The sound is the same, sample for sample.** The beat rendered with and without the new code gives the same result at every sample, at both rates.
+
+- **Where the work was:** almost two thirds of it went on playing back each mic of each hit. With a 16th-note double kick that's about 150 mics sounding at once, and for every sample of every one the plugin asked the disk streamer for a value through a full set of checks, for each channel.
+- **What changed:**
+  - **The disk streamer hands over a stretch of ready audio.** The hit reads straight from it until the stretch runs out, instead of asking once per sample per channel.
+  - **A hit with nothing extra on runs in a short loop of its own.** That's a hit with no drawn envelope, attack, filter, gate or fade-out, which is almost every sample-pack hit. The loop skips the checks for those features. A hit with any of them on, or at an edge (the end of what's been read, the end of the file), drops back to the full loop for that sample. This works for hits in memory too, such as layers.
+  - **The mixer compressor works out its release time once per block**, when the release doesn't stretch, instead of once per sample. Same value.
+- **Not changed:** the compressor's level detector still works on every sample, because that's how it sounds (it's the compressor shared with PR7-E). The disk reading itself, on its own thread, is unchanged.
+
 ## 0.55.0
 
 **RIFF MATCH takes a riff dropped anywhere on the GROOVES page** (you asked to drag riffs straight from PR7-S). An audio or MIDI file dropped anywhere on the page is now the riff to fit drums to. Before, a MIDI file dropped outside the RIFF MATCH box was searched as if it were a drum groove (FIND SIMILAR), so a guitar or bass riff gave nonsense. FIND SIMILAR with a drum MIDI file still has its own drop box.
