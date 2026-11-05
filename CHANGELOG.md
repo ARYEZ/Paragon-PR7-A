@@ -2,6 +2,12 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.55.0
+
+**RIFF MATCH takes a riff dropped anywhere on the GROOVES page** (you asked to drag riffs straight from PR7-S). An audio or MIDI file dropped anywhere on the page is now the riff to fit drums to. Before, a MIDI file dropped outside the RIFF MATCH box was searched as if it were a drum groove (FIND SIMILAR), so a guitar or bass riff gave nonsense. FIND SIMILAR with a drum MIDI file still has its own drop box.
+
+**Dragging straight from PR7-S needs a change in PR7-S too.** PR7-S doesn't hand a part out as a file when you drag it from its arrange window yet: its drags stay inside PR7-S. A brief for PR7-S's chat describes how (a MIDI part as a .mid, an audio event as a .wav of its region). Once PR7-S does that, the drop lands here with nothing more to change. Until then, a riff dragged from File Explorer onto the page works.
+
 ## 0.54.0
 
 **EDIT PLAY STYLE's AMOUNT learns from your grooves.** The manual says SD3's AMOUNT works out "where a real drummer would add or remove hits", from thousands of real performances. Ours used fixed rules instead (which places in the bar a drummer leans on). Now it learns from the real drummers in your own library: your MIDI packs and groove databases on the GROOVES tab.

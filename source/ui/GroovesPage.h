@@ -73,6 +73,7 @@ public:
     // RIFF MATCH (0.32.0): a riff (audio or MIDI) read (in the background; `wait`: here and now) and set up in its
     // panel, heard with the previews; a search with it; back to none.
     bool loadRiff (const juce::File&, bool wait = false);
+    bool waitForDroppedRiffs = false;   // tests: a riff dropped on the page read there and then (else on its own thread)
     void openRiffPanel();
     void findByRiff (const grooves::Riff&);
     bool isRiffSearching() const noexcept { return tapSearch.has_value() && tapSearch->riff != nullptr; }
