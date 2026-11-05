@@ -98,6 +98,8 @@ namespace effects
         const auto peakRelease = coefficientFor (sampleRate, 0.01f);
         const auto memoryCoefficient = coefficientFor (sampleRate, 1.5f);
         const auto stretches = settings.autoRelease || character == Character::opto;
+        // (PR7-D 0.56.0) A release that doesn't stretch is the same for every sample: worked out once (the same value).
+        const auto fixedRelease = stretches ? 0.0f : coefficientFor (sampleRate, settings.releaseMs * 0.001f * 1.0f);
         makeUp.setTargetValue (juce::Decibels::decibelsToGain (settings.makeUpDb));
         fetGrit.setTargetValue (character == Character::fet ? 1.0f : 0.0f);
 
@@ -135,7 +137,7 @@ namespace effects
                     // been compressing: 0.35x after a short peak, up to 3x.
                     memory[c] += (juce::jmin (1.0f, reduction[c] / 10.0f) - memory[c]) * memoryCoefficient;
                     const auto releaseSeconds = settings.releaseMs * 0.001f * (stretches ? 0.35f + 2.65f * memory[c] : 1.0f);
-                    const auto release = coefficientFor (sampleRate, releaseSeconds);
+                    const auto release = stretches ? coefficientFor (sampleRate, releaseSeconds) : fixedRelease;
                     reduction[c] += (target - reduction[c]) * (target > reduction[c] ? attack : release);
                     most[c] = juce::jmax (most[c], reduction[c]);
 

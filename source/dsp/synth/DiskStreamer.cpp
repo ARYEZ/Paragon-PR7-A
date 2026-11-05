@@ -1,5 +1,7 @@
 #include "dsp/synth/DiskStreamer.h"
 
+#include <limits>
+
 namespace synth::drums
 {
     class Streamer::Thread final : public juce::Thread
@@ -109,6 +111,24 @@ namespace synth::drums
         }
         const auto index = (size_t) ((frame - source->headFrames) & (ringFrames - 1));
         return s.ring[((size_t) output * 2 + (size_t) juce::jlimit (0, 1, channel)) * ringFrames + index];
+    }
+
+    int Streamer::span (int stream, int output, juce::int64 frame, const float*& left, const float*& right) noexcept
+    {
+        if (stream < 0 || stream >= maxStreams || output < 0 || output >= maxOutputs)
+            return 0;
+        auto& s = *streams[(size_t) stream];
+        const auto* source = s.source;
+        if (source == nullptr || frame < source->headFrames || frame >= source->length)
+            return 0;
+        const auto written = juce::jmin (s.written.load (std::memory_order_acquire), source->length);
+        if (frame >= written)
+            return 0;
+        const auto index = (juce::int64) ((frame - source->headFrames) & (ringFrames - 1));
+        const auto n = juce::jmin (written - frame, (juce::int64) ringFrames - index);
+        left = s.ring.data() + ((size_t) output * 2) * ringFrames + (size_t) index;
+        right = s.ring.data() + ((size_t) output * 2 + 1) * ringFrames + (size_t) index;
+        return (int) juce::jmin (n, (juce::int64) std::numeric_limits<int>::max());
     }
 
     void Streamer::release (const std::array<bool, maxStreams>& inUse) noexcept
