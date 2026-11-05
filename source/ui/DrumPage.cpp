@@ -1088,6 +1088,8 @@ void DrumPage::showLoadMenu()
     menu.addItem ("A LAYER with this drum (your sample, a folder of hits, or of mic folders)...", processor.firstFreeLayer (selected) >= 0, false,
                   [this] { chooseLayer(); });
     menu.addItem ("Its LAYERS...", [this] { showLayers (true); });
+    // 0.51.0: IMPORT A RENDER: another program's drum bounced a mic at a time, with the MIDI that played it.
+    menu.addItem ("IMPORT A RENDER as layers (a folder of mics bounced one per file, and its MIDI)...", [this] { importRender(); });
     menu.addSeparator();
     menu.addItem ("A whole SFZ kit (onto every drum)...", [this] { importSfzKit(); });
     // 0.27.0: DRUMGIZMO KITS: free multi-mic kits recorded in real studios.
@@ -1158,6 +1160,119 @@ void DrumPage::chooseLayer (int layer)
                               processor.loadLayer (slot, f, layer);
                               showLayers (true);
                           });
+}
+
+void DrumPage::importRender()
+{
+    chooser = std::make_unique<juce::FileChooser> ("A render: the folder of its bounced mics (one file per mic, named after it: "
+                                                   "Snare Top, OH, Room...) and the MIDI that played it",
+                                                   juce::File());
+    const auto slot = selected;
+    chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories, [this, slot] (const juce::FileChooser& fc)
+    {
+        const auto folder = fc.getResult();
+        if (! folder.isDirectory())
+            return;
+        juce::Component::SafePointer<DrumPage> self (this);
+        const auto start = [self, folder, slot] (const juce::File& midi, synth::drums::notemap::Layout layout)
+        {
+            if (self == nullptr)
+                return;
+            self->processor.startRenderImport (folder, midi, layout, slot, [self] (ParagonX1AudioProcessor::RenderImport& result)
+            {
+                if (self != nullptr)
+                    self->showRenderImport (result);
+            });
+        };
+        auto midis = folder.findChildFiles (juce::File::findFiles, false, "*.mid;*.midi");
+        midis.sort();
+        const auto withMidi = [self, start] (const juce::File& midi)
+        {
+            if (self == nullptr)
+                return;
+            juce::PopupMenu layouts;
+            layouts.addSectionHeader ("ITS NOTES ARE IN...");
+            layouts.addItem ("The groove library's layout (the drum program's own)", [start, midi] { start (midi, synth::drums::notemap::Layout::grooveLibrary); });
+            layouts.addItem ("General MIDI", [start, midi] { start (midi, synth::drums::notemap::Layout::generalMidi); });
+            layouts.addItem ("The map I'm using now", [start, midi, self] { if (self != nullptr) start (midi, self->processor.getMapLayout()); });
+            layouts.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&self->load));
+        };
+        if (! midis.isEmpty())
+        {
+            withMidi (midis.getFirst());
+            return;
+        }
+        juce::PopupMenu menu;
+        menu.addSectionHeader ("NO MIDI FILE IN THAT FOLDER");
+        menu.addItem ("Choose the MIDI that played it...", [self, withMidi, folder]
+        {
+            if (self == nullptr)
+                return;
+            self->chooser = std::make_unique<juce::FileChooser> ("The MIDI that played the render", folder, "*.mid;*.midi");
+            self->chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles, [withMidi] (const juce::FileChooser& c)
+            {
+                if (c.getResult().existsAsFile())
+                    withMidi (c.getResult());
+            });
+        });
+        menu.addItem ("No MIDI: find the hits by listening, onto " + synth::drums::articulationName (slot)
+                      + " (velocities guessed from how loud each is)", [start] { start ({}, synth::drums::notemap::Layout::grooveLibrary); });
+        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&self->load));
+    });
+}
+
+void DrumPage::showRenderImport (ParagonX1AudioProcessor::RenderImport& result)
+{
+    juce::String text;
+    if (result.stopped)
+        text << "Stopped: nothing loaded.\n";
+    if (! result.mics.isEmpty())
+        text << "MICS: " << result.mics.joinIntoString (", ") << "\n";
+    if (result.midi.existsAsFile())
+    {
+        text << "MIDI: " << result.midi.getFileName();
+        if (std::abs (result.shiftMs) >= 0.5)
+            text << " (the audio was " << juce::String (result.shiftMs, 1) << " ms off its times: followed)";
+        text << "\n";
+    }
+    else if (! result.items.empty())
+        text << "No MIDI: the hits found by listening, their velocities guessed from how loud each is.\n";
+    text << "\n";
+    auto loaded = 0;
+    for (const auto& item : result.items)
+    {
+        if (item.note >= 0)
+            text << "Note " << item.note << ": ";
+        if (item.slot >= 0 && item.layer >= 0)
+        {
+            ++loaded;
+            text << synth::drums::slotDefaults[(size_t) item.slot].key << " " << synth::drums::articulationName (item.slot) << ", LAYER "
+                 << (item.layer + 1) << ": ";
+        }
+        text << item.hits << " hits, " << item.layers << (item.layers == 1 ? " velocity layer" : " velocity layers") << " x up to "
+             << item.rounds << " round robins";
+        if (item.problem.isNotEmpty())
+            text << " (not loaded: " << item.problem << ")";
+        text << "\n";
+    }
+    if (! result.leftOut.isEmpty())
+        text << "\nLeft out: " << result.leftOut.joinIntoString ("; ") << "\n";
+    if (! result.problems.isEmpty())
+        text << "\n" << result.problems.joinIntoString ("\n") << "\n";
+    if (loaded > 0)
+        text << "\nSaved in the presets folder's \"Rendered Layers\". On the drum's LAYERS tab: AUTO-ALIGN, LEVEL and where it plays.";
+    juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Render: " + result.name, text);
+    if (loaded > 0)
+    {
+        for (const auto& item : result.items)
+            if (item.slot >= 0 && item.layer >= 0)
+            {
+                select (item.slot);
+                break;
+            }
+        showView (View::drum);
+        showLayers (true);
+    }
 }
 
 void DrumPage::importSamplePack()

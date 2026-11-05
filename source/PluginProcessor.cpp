@@ -1,4 +1,5 @@
 #include "PluginProcessor.h"
+#include "dsp/synth/RenderImport.h"
 #include "dsp/synth/DrumGizmo.h"
 #include "dsp/synth/SamplePack.h"
 #include "dsp/synth/Instrument.h"
@@ -146,6 +147,10 @@ ParagonX1AudioProcessor::ParagonX1AudioProcessor()
 
 ParagonX1AudioProcessor::~ParagonX1AudioProcessor()
 {
+    // 0.51.0: an IMPORT A RENDER running stops first (it reads this processor's settings).
+    renderCancel = true;
+    if (renderThread != nullptr)
+        renderThread->stopThread (30000);
     // THE SAMPLE ENGINE's loads: none may install after this.
     lifeToken.reset();
     if (instrumentPool != nullptr)
@@ -1284,6 +1289,111 @@ void ParagonX1AudioProcessor::loadInstrumentSfz (int slot, const juce::File& sfz
     startLoading ({ { slot, "sfz|" + juce::String (note) + "|" + sfz.getFullPathName() } });
     markModified();
     requestCheckpoint();
+}
+
+juce::File ParagonX1AudioProcessor::renderedLayersFolder() const { return rigLibrary->getFolder().getChildFile ("Rendered Layers"); }
+
+ParagonX1AudioProcessor::RenderImport ParagonX1AudioProcessor::prepareRenderImport (const juce::File& folder, const juce::File& midiFile,
+                                                                                 synth::drums::notemap::Layout layout, int slot,
+                                                                                 const std::function<bool (double)>& progress) const
+{
+    namespace ri = synth::drums::renderimport;
+    using namespace synth::drums::notemap;
+    RenderImport result;
+    result.name = folder.getFileName();
+    const auto plan = ri::scan (folder, midiFile);
+    result.problems = plan.problems;
+    result.leftOut = plan.leftOut;
+    result.midi = plan.midi;
+    result.shiftMs = 1000.0 * plan.shiftSeconds;
+    for (const auto& m : plan.mics)
+        result.mics.add (m.name + (m.channel >= 0 ? " -> " + synth::mixer::channelNames[m.channel] : juce::String (" (the drum's own)")));
+    if (! plan.ok())
+        return result;
+    // Into the presets folder (kept with the presets: a layer's file must stay where it was).
+    const auto into = renderedLayersFolder().getChildFile (juce::File::createLegalFileName (result.name));
+    auto stopped = false;
+    const auto written = ri::write (plan, into, result.name, [&] (double p)
+    {
+        if (progress && ! progress (p))
+            stopped = true;
+        return ! stopped;
+    });
+    result.stopped = stopped;
+    const auto map = layout == Layout::grooveLibrary ? grooveLibrary() : layout == Layout::generalMidi ? generalMidi()
+                   : layout == Layout::custom ? customMap : rootLayout (juce::roundToInt (param (ParamIDs::drumsRoot)));
+    for (const auto& w : written)
+    {
+        RenderImport::Item item;
+        item.note = w.note;
+        item.layers = w.layers;
+        item.rounds = w.rounds;
+        item.hits = w.hits;
+        item.velocities = w.velocities;
+        item.folder = w.folder;
+        item.slot = w.note < 0 ? juce::jlimit (0, ParamIDs::numDrums - 1, slot) : slotOf (map, w.note);
+        if (item.slot < 0)
+            item.problem = "no drum plays note " + juce::String (w.note) + " in that layout";
+        result.items.push_back (item);
+    }
+    return result;
+}
+
+void ParagonX1AudioProcessor::applyRenderImport (RenderImport& result)
+{
+    if (result.stopped)
+        return;
+    for (auto& item : result.items)
+    {
+        if (item.slot < 0 || item.hits == 0)
+            continue;
+        auto n = firstFreeLayer (item.slot);
+        if (n < 0)
+            n = ParamIDs::numLayers - 1;
+        item.layer = n;
+        loadLayer (item.slot, item.folder, n);
+    }
+}
+
+void ParagonX1AudioProcessor::startRenderImport (const juce::File& folder, const juce::File& midi, synth::drums::notemap::Layout layout, int slot,
+                                                 std::function<void (RenderImport&)> onDone)
+{
+    if (renderThread != nullptr)
+        renderThread->stopThread (10000);
+    renderCancel = false;
+    renderProgress = 0.0;
+    struct Job final : juce::Thread
+    {
+        Job (ParagonX1AudioProcessor& p, juce::File f, juce::File m, synth::drums::notemap::Layout l, int s, std::function<void (RenderImport&)> d)
+            : juce::Thread ("Render import"), processor (p), folder (std::move (f)), midi (std::move (m)), layout (l), slot (s), done (std::move (d)) {}
+        void run() override
+        {
+            auto result = std::make_shared<RenderImport> (processor.prepareRenderImport (folder, midi, layout, slot, [this] (double p)
+            {
+                processor.renderProgress = p;
+                return ! threadShouldExit() && ! processor.renderCancel.load();
+            }));
+            std::weak_ptr<int> alive = processor.lifeToken;
+            auto& p = processor;
+            auto callback = done;
+            juce::MessageManager::callAsync ([alive, &p, result, callback]
+            {
+                if (alive.expired())
+                    return;
+                p.renderProgress = -1.0;
+                p.applyRenderImport (*result);
+                if (callback)
+                    callback (*result);
+            });
+        }
+        ParagonX1AudioProcessor& processor;
+        juce::File folder, midi;
+        synth::drums::notemap::Layout layout;
+        int slot;
+        std::function<void (RenderImport&)> done;
+    };
+    renderThread = std::make_unique<Job> (*this, folder, midi, layout, slot, std::move (onDone));
+    renderThread->startThread();
 }
 
 ParagonX1AudioProcessor::KitImport ParagonX1AudioProcessor::importSfzKit (const juce::File& sfz, synth::drums::notemap::Layout layout)

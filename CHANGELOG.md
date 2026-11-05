@@ -2,6 +2,31 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.51.0
+
+**IMPORT A RENDER**: turns a drum you bounced out of another drum program into a layer, for the kit you reinforce (your Progressive Foundry snare under the Djent Drums snare, say). DRUMS > LOAD... > IMPORT A RENDER as layers.
+
+**What to bounce:**
+1. A MIDI clip with the drum's hits at the velocities you want (e.g. 20, 40 ... 127), each repeated a few times for round robins, spaced so each hit dies away (about 2 s for a snare, more for a cymbal). A snare's centre and its rimshot can share one clip.
+2. Bounced **one file per mic channel**, named after the mic: "Snare Top", "Snare Bottom", "OH", "Room", "Kick In"... Any name the mixer knows works.
+3. The bounced files and the MIDI file in one folder.
+
+**What it does:**
+- Each file goes to the mixer channel its name says. A whole-mix file ("Main", "Master", "Mix") and files with names no channel goes by are left out, and the summary says so.
+- The hits are cut where the MIDI says, **every mic at exactly the same moments**, so the room stays as late after the close mic as it was recorded. 1 ms before each hit is kept.
+- If the bounce started at another bar, or with silence before it, the audio and the MIDI are lined up first.
+- Each hit is kept up to the next one, its silent tail trimmed (70 dB under its loudest, all mics together) and its end faded.
+- Each note becomes its own multi-mic instrument: each velocity played becomes a velocity layer (up to 16), its repeats round robins. **The velocities are kept as played**: each layer covers the velocities halfway to the next.
+- Written into your presets folder's "Rendered Layers", so presets and projects find them again. Each is loaded as a layer on the drum its note plays (in the layout you choose), into the first free layer.
+  - Close mics go to the layer's own USER channel, overheads and room into theirs.
+- **No MIDI?** It finds the hits by listening, and guesses their velocities from how loud each is. It puts them on the drum you have chosen.
+- A summary after: which mics went where, each note's drum and layer, its velocity layers and round robins, anything left out. The drum's LAYERS tab opens on it (AUTO-ALIGN, LEVEL, where it plays).
+- The progress box shows it working; CANCEL stops it and loads nothing.
+
+**Tests:** a render made in the tests (three mics, the room 5 ms after the close mic, a whole mix and an unknown file beside them, two notes, three velocities, three round robins): the mics and hits found, a bounce started a quarter second or a whole bar early followed to the sample, tails trimmed, the layers' velocities, the room still 5 ms after the close mic when played, hits found with no MIDI, CANCEL.
+
+**Not checked here:** real bounces from your drum program (send me the file names of one if anything lands in the wrong channel), and how they sound (your ears).
+
 ## 0.50.0
 
 **THREE LAYERS per drum, built for reinforcing a kit** (the Djent Drums kit with renders bounced out of another drum program, say). Up to three of your own sounds play with each of a drum's hits, each with its own settings, and AUTO-ALIGN lines each one up with the drum.

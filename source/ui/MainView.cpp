@@ -458,6 +458,13 @@ void MainView::checkLongJobs (double nowMs)
         progressBox.show ({ "BOUNCING THE SONG TO AUDIO", [this] { return songTrack.getBounceProgress(); }, [this] { songTrack.cancelBounce(); } });
         return;
     }
+    // 0.51.0: IMPORT A RENDER cutting its hits.
+    if (audioProcessor.getRenderImportProgress() >= 0.0)
+    {
+        progressBox.show ({ "IMPORTING THE RENDER", [this] { return audioProcessor.getRenderImportProgress(); },
+                            [this] { audioProcessor.cancelRenderImport(); } });
+        return;
+    }
     // A kit loading: shown once it's taken half a second (a single sample's load would only flash it up).
     if (audioProcessor.getLoadProgress() < 0.0)
     {

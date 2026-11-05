@@ -170,6 +170,37 @@ public:
     void loadInstrumentSfz (int slot, const juce::File& sfz, int note = -1);   // -1: all of the file's regions
     // A whole SFZ kit: its notes onto the kit's drums through a layout (each drum takes the note that's its home in
     // that layout, else the note with the most regions). What went where, and the notes left over.
+    // IMPORT A RENDER (0.51.0, dsp/synth/RenderImport.h): a drum bounced out of another drum program a mic at a time,
+    // with the MIDI that played it, cut into velocity layers and round robins (written into the presets folder's
+    // "Rendered Layers") and loaded as layers: each note onto the drum it plays in `layout` (no MIDI: onto `slot`),
+    // into its first free layer (none free: its third, replaced). prepare runs on any thread (reads and writes files,
+    // `progress` 0 to 1, false stops it); apply on the message thread.
+    struct RenderImport
+    {
+        struct Item
+        {
+            int note = -1, slot = -1, layer = -1;
+            int layers = 0, rounds = 0, hits = 0;
+            std::vector<int> velocities;
+            juce::File folder;
+            juce::String problem;   // why it wasn't loaded (no drum for its note)
+        };
+        juce::String name;
+        std::vector<Item> items;
+        juce::StringArray mics, problems, leftOut;
+        juce::File midi;
+        double shiftMs = 0.0;
+        bool stopped = false;
+    };
+    RenderImport prepareRenderImport (const juce::File& folder, const juce::File& midi, synth::drums::notemap::Layout, int slot,
+                                      const std::function<bool (double)>& progress = {}) const;
+    void applyRenderImport (RenderImport&);
+    // Both on a background thread, `onDone` on the message thread; its progress for the progress box (-1: none running).
+    void startRenderImport (const juce::File& folder, const juce::File& midi, synth::drums::notemap::Layout, int slot,
+                            std::function<void (RenderImport&)> onDone);
+    double getRenderImportProgress() const noexcept { return renderProgress.load(); }
+    void cancelRenderImport() noexcept { renderCancel = true; }
+    juce::File renderedLayersFolder() const;
     struct KitImport { std::vector<std::pair<int, int>> slotNotes; juce::Array<int> unused; };
     KitImport importSfzKit (const juce::File& sfz, synth::drums::notemap::Layout);
     // DRUMGIZMO KITS (0.27.0): a whole kit onto the slots (each its instrument(s), LIGHT or FULL), remembered by name
@@ -720,6 +751,9 @@ private:
     std::array<std::atomic<int>, ParamIDs::numInstruments> slotLoadGeneration {};
     std::vector<int> loadedGenerations;   // beside loadedInstruments
     std::shared_ptr<int> lifeToken = std::make_shared<int> (0);
+    std::atomic<double> renderProgress { -1.0 };   // 0.51.0: IMPORT A RENDER's
+    std::atomic<bool> renderCancel { false };
+    std::unique_ptr<juce::Thread> renderThread;
     void startLoading (std::vector<std::pair<int, juce::String>> refs);   // the slots' instruments from their refs
     void installLoadedInstruments();
     void forgetLoad (int slot);   // 0.50.0: a slot's instrument taken away (its ref emptied, any load of it dropped)

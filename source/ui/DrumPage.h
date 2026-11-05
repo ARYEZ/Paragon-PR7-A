@@ -133,6 +133,7 @@ public:
     void showVelocity (bool);
     bool isShowingVelocity() const noexcept { return velocityMode; }
     void showLayers (bool);   // 0.50.0: the LAYERS tab
+    void showRenderImport (ParagonX1AudioProcessor::RenderImport&);   // 0.51.0: what IMPORT A RENDER did
     bool isShowingLayers() const noexcept { return layersMode; }
     LayerPanel& getLayerPanel() noexcept { return layerPanel; }
     VelocityCurveEditor& getVelocityEditor() noexcept { return velocityEditor; }
@@ -172,6 +173,7 @@ private:
     void importSfzKit();
     void importDrumGizmoKit();
     void importSamplePack();   // 0.33.0   // 0.27.0
+    void importRender();   // 0.51.0: IMPORT A RENDER
     void chooseLayer (int layer = -1);   // 0.29.0 (0.50.0: which of the three; -1: the first free)
     DrumHitDisplay display;
     MultiPointEditor envelope;
