@@ -1742,17 +1742,11 @@ void GroovesPage::filesDropped (const juce::StringArray& files, int x, int y)
                         return;
                     }
                 }
-    // RIFF MATCH (0.32.0): an audio file is a riff (a MIDI one a groove to search with, unless dropped on RIFF MATCH).
-    if (! files.isEmpty() && grooves::isAudioRiff (juce::File (files[0])))
-    {
-        loadRiff (juce::File (files[0]));
-        return;
-    }
-    if (! files.isEmpty() && juce::File (files[0]).hasFileExtension ("mid;midi") && ! findLikeFile (juce::File (files[0])))
-    {
-        message = "That file has no notes to search with";
-        messageUntil = juce::Time::getMillisecondCounterHiRes() + 5000.0;
-    }
+    // RIFF MATCH: an audio or MIDI file dropped anywhere else on the page is a riff (0.55.0, the owner: "Always a riff":
+    // a part dragged in from the DAW is a guitar or bass riff to fit drums to; before, a MIDI file was searched as a
+    // drum groove). FIND SIMILAR with a MIDI file: its own drop box.
+    if (! files.isEmpty() && grooves::isRiffFile (juce::File (files[0])))
+        loadRiff (juce::File (files[0]), waitForDroppedRiffs);
 }
 
 void GroovesPage::changeListenerCallback (juce::ChangeBroadcaster*)

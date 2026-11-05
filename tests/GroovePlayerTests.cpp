@@ -935,7 +935,7 @@ TEST_CASE ("TAP TO FIND page: open taps with a loop; FIND sorts by MATCH; FIND S
     CHECK (page.isInterestedInFileDrag ({ dropped.getFullPathName() }));
     CHECK_FALSE (page.isInterestedInFileDrag ({ t.folder.getChildFile ("x.txt").getFullPathName() }));
     CHECK (page.isInterestedInFileDrag ({ t.folder.getChildFile ("x.wav").getFullPathName() }));   // 0.32.0: a riff
-    page.filesDropped ({ dropped.getFullPathName() }, 0, 0);
+    REQUIRE (page.findLikeFile (dropped));   // (FIND SIMILAR's drop box; 0.55.0: dropped on the page, it's a riff)
     CHECK (page.getResults()[0].name == "C Half");
 
     page.clearTap();
@@ -1210,4 +1210,15 @@ TEST_CASE ("RIFF MATCH page: a riff dropped finds the groove whose kick follows 
     CHECK (page.getResults()[0].match < 0.0f);
     // A file that isn't one: refused.
     CHECK_FALSE (page.loadRiff (t.folder.getChildFile ("notes.txt"), true));
+
+    // 0.55.0: the MIDI riff dragged onto the page (as from the DAW), not onto RIFF MATCH's box: a riff, not a groove
+    // to search like (read there and then here: in the plugin, on its own thread).
+    CHECK (page.isInterestedInFileDrag ({ riffFile.getFullPathName() }));
+    page.waitForDroppedRiffs = true;
+    page.filesDropped ({ riffFile.getFullPathName() }, page.getWidth() / 2, page.getHeight() - 40);
+    REQUIRE (page.getRiffPanel().hasRiff());
+    CHECK (page.getRiffPanel().isVisible());
+    CHECK (t.p.hasRiff());
+    CHECK_THAT (page.getRiffPanel().getRiff().bpm, WithinAbs (110.0, 1e-6));
+    CHECK_FALSE (page.isTapSearching());   // not searched as a drum groove
 }
