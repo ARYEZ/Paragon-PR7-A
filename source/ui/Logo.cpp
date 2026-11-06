@@ -127,4 +127,50 @@ namespace Logo
         }
         return bounds;
     }
+
+    void drawIcon (juce::Graphics& g, juce::Rectangle<float> area, const IconStyle& style)
+    {
+        const auto n = juce::jmin (area.getWidth(), area.getHeight());
+        const auto box = area.withSizeKeepingCentre (n, n);
+        const auto lean = juce::AffineTransform (1.0f, -slant, slant, 0.0f, 1.0f, 0.0f);
+
+        // "7D": the 7 at 0, the D 0.9 letters on; 2.02 letter heights wide with the lean.
+        const auto h = 0.40f * n, top = box.getY() + 0.15f * n;
+        const auto left = box.getCentreX() - 2.02f * h * 0.5f;
+        juce::Path seven, d;
+        d.setUsingNonZeroWinding (false);
+        addPolygon (seven, { { 0.0f, 0.0f }, { 0.8f, 0.0f }, { 0.8f, 0.2f }, { 0.44f, 1.0f }, { 0.18f, 1.0f },
+                             { 0.5f, 0.2f }, { 0.0f, 0.2f } }, 0.0f);
+        addPolygon (d, { { 0.0f, 0.0f }, { 0.64f, 0.0f }, { 0.82f, 0.18f }, { 0.82f, 0.82f }, { 0.64f, 1.0f }, { 0.0f, 1.0f } }, 0.9f);
+        addPolygon (d, { { 0.24f, 0.2f }, { 0.58f, 0.2f }, { 0.58f, 0.8f }, { 0.24f, 0.8f } }, 0.9f);
+        const auto place = lean.scaled (h).translated (left, top);
+        seven.applyTransform (place);
+        d.applyTransform (place);
+        {
+            juce::Graphics::ScopedSaveState saved (g);
+            for (const auto& [from, to] : cuts)
+                g.excludeClipRegion (juce::Rectangle<float> (box.getX(), top + h * from, n, h * (to - from)).getSmallestIntegerContainer());
+            g.setColour (style.letters);
+            g.fillPath (d);
+            {
+                juce::Graphics::ScopedSaveState upper (g);
+                g.reduceClipRegion (juce::Rectangle<float> (box.getX(), box.getY(), n, top + h * cuts[0].first - box.getY()).getSmallestIntegerContainer());
+                g.setColour (style.sevenTop);
+                g.fillPath (seven);
+            }
+            g.reduceClipRegion (juce::Rectangle<float> (box.getX(), top + h * cuts[0].first, n, box.getBottom() - (top + h * cuts[0].first)).getSmallestIntegerContainer());
+            g.setColour (style.sevenLow);
+            g.fillPath (seven);
+        }
+
+        // The line, the mark under it, the frame.
+        const auto lineY = top + h + 0.075f * n;
+        g.setColour (style.accent);
+        g.fillRect (juce::Rectangle<float> (box.getX() + 0.2f * n, lineY - 0.006f * n, 0.6f * n, 0.012f * n));
+        const auto markHeight = 0.085f * n;
+        drawMark (g, juce::Rectangle<float> (box.getX(), lineY + 0.05f * n, n, markHeight), juce::Justification::centredTop,
+                  Style { style.letters, style.accent });
+        g.setColour (style.accent);
+        g.drawRoundedRectangle (box.reduced (0.03f * n), 0.17f * n, 0.016f * n);
+    }
 }

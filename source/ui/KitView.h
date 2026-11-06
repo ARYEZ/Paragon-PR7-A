@@ -58,6 +58,18 @@ public:
     std::optional<juce::Point<float>> pieceCentre (int piece) const;   // the middle of a piece's drawn area
     std::optional<juce::Point<float>> slotCentre (int slot) const;     // the middle of a slot's part (EDIT PLAY STYLE's flags)
     void updateLights();                     // each piece's glow from the kit's hits (DrumPage's timer)
+
+    // THE HOLOGRAMS (0.57.0): the PR7-D icon floating over a glowing ring on the floor at each side of the kit (pink on
+    // the hi-hat's side, orange on the ride's), a beam of light from the ring up to it, scanlines drifting slowly up,
+    // all brighter for a moment with each kick. Not drawn in EDIT PLAY STYLE's view; clicks go through them.
+    static constexpr int numHolograms = 2;
+    juce::Rectangle<int> hologramArea (int side) const;   // where one is drawn, its glow included (the view's pixels)
+    juce::Rectangle<int> hologramIconArea (int side) const;   // its icon
+    juce::Rectangle<int> hologramPulseArea (int side) const;  // what a kick brightens: the icon, its beam and ring
+    static constexpr float restLevel = 0.9f;
+    float getHologramLevel() const noexcept { return holoLevel; }   // restLevel, up to 1.35 just after a kick
+    int getScanPhase() const noexcept { return scanPhase; }
+    void setHologramsShown (bool shown) { hologramsShown = shown; repaint(); }   // (tests: the kit alone)
     float getGlow (int piece) const noexcept { return glow[(size_t) piece]; }
 
     void paint (juce::Graphics&) override;
@@ -79,6 +91,21 @@ private:
         std::array<juce::Point<int>, numPieces> litAt {};   // in screen pixels from the picture's corner
     };
     Shown shownAt;
+
+    // Each hologram at the size shown, in screen pixels from the picture's corner: `glow` round it all (always drawn
+    // as bright), `ring` on the floor, `icon` its icon and beam (drawn at 70%, then again at 30% on every third line:
+    // the scanlines); the ring and the icon brighter on a kick.
+    struct Hologram
+    {
+        juce::Image glow, ring, icon;
+        juce::Point<int> glowAt, ringAt, iconAt;
+    };
+    std::array<Hologram, numHolograms> holograms;
+    void prepareHolograms (float toScreen);
+    void paintHolograms (juce::Graphics&, std::function<juce::AffineTransform (juce::Point<int>)> place, float scale);
+    float holoLevel = restLevel;
+    int scanPhase = 0;
+    bool hologramsShown = true;
 
     ParagonX1AudioProcessor& processor;
     Highlight highlight;

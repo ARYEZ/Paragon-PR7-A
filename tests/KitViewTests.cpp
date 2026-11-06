@@ -199,6 +199,7 @@ TEST_CASE ("KIT VIEW: drawn from its pictures shrunk once, it looks as drawn dir
     KitView view (p.processor);
     view.setSize (848, 612);
     view.setSelected (3);   // the clap: no piece glows
+    view.setHologramsShown (false);   // (0.57.0: drawn over the picture; tested on their own)
     CHECK (view.isOpaque());
     const auto& pics = KitView::pictures();
     for (const auto scale : { 1.0f, 1.5f, 2.0f })
@@ -246,4 +247,157 @@ TEST_CASE ("KIT VIEW: drawn from its pictures shrunk once, it looks as drawn dir
         CHECK (ours < 2.5);
         CHECK (ours < oneOff / 3.0);
     }
+}
+
+// THE HOLOGRAMS (0.57.0): the PR7-D icon floating over a ring on the empty floor at each side of the kit.
+TEST_CASE ("KIT VIEW 0.57.0: the holograms stand on the empty floor beside the kit, clicks going through", "[kitview][hologram]")
+{
+    TempFolder temp;
+    Plugin p (temp.folder);
+    DrumPage page (p.processor);
+    page.setSize (1476, 672);
+    auto& view = page.getKitView();
+    const auto picture = view.pictureArea().toNearestInt();
+    for (int side = 0; side < KitView::numHolograms; ++side)
+    {
+        INFO ("side " << side);
+        const auto icon = view.hologramIconArea (side), all = view.hologramArea (side);
+        CHECK (! icon.isEmpty());
+        CHECK (all.contains (icon));
+        CHECK (picture.expanded (2).contains (all));
+        CHECK (icon.getY() > picture.getY() + 30);   // below the picture's faded top edge
+        CHECK (icon.getHeight() > picture.getHeight() / 4);
+        // Nothing to click under the icon or the ring: a click there chooses nothing.
+        for (int y = icon.getY(); y < icon.getBottom(); y += 4)
+            for (int x = icon.getX(); x < icon.getRight(); x += 4)
+                CHECK (view.slotAt ({ (float) x, (float) y }) == -1);
+    }
+    // The first on the hi-hat's side (the picture's left), the other on the ride's.
+    CHECK (view.hologramIconArea (0).getRight() < picture.getCentreX() - picture.getWidth() / 4);
+    CHECK (view.hologramIconArea (1).getX() > picture.getCentreX() + picture.getWidth() / 4);
+    CHECK (! view.hologramArea (0).intersects (view.hologramArea (1)));
+}
+
+TEST_CASE ("KIT VIEW 0.57.0: the holograms light up with each kick and settle again", "[kitview][hologram]")
+{
+    TempFolder temp;
+    Plugin p (temp.folder);
+    DrumPage page (p.processor);
+    page.setSize (1476, 672);
+    auto& view = page.getKitView();
+    page.updateLights();
+    CHECK (view.getHologramLevel() == KitView::restLevel);
+
+    // A snare: no flash.
+    juce::MidiBuffer midi;
+    midi.addEvent (juce::MidiMessage::noteOn (1, 38, 1.0f), 0);
+    p.run ((double) blockSize / sampleRate, midi);
+    page.updateLights();
+    CHECK (view.getHologramLevel() == KitView::restLevel);
+
+    // A kick: half as bright again, fading over a third of a second.
+    midi.clear();
+    midi.addEvent (juce::MidiMessage::noteOn (1, 36, 1.0f), 0);
+    p.run ((double) blockSize / sampleRate, midi);
+    page.updateLights();
+    CHECK (view.getHologramLevel() > KitView::restLevel + 0.4f);
+    p.run (0.15);
+    page.updateLights();
+    const auto fading = view.getHologramLevel();
+    CHECK (fading > KitView::restLevel + 0.02f);
+    CHECK (fading < KitView::restLevel + 0.3f);
+    p.run (0.25);
+    page.updateLights();
+    CHECK (view.getHologramLevel() == KitView::restLevel);
+}
+
+TEST_CASE ("KIT VIEW 0.57.0: the holograms are drawn in the family's colours, brighter on a kick, scanlines moving", "[kitview][hologram][colours]")
+{
+    TempFolder temp;
+    Plugin p (temp.folder);
+    DrumPage page (p.processor);
+    page.setSize (1476, 672);
+    auto& view = page.getKitView();
+    const auto draw = [&view] (bool shown)
+    {
+        view.setHologramsShown (shown);
+        return view.createComponentSnapshot (view.getLocalBounds(), true, 1.0f);
+    };
+    const auto without = draw (false), with = draw (true);
+    const auto brightness = [] (const juce::Image& image, juce::Rectangle<int> area)
+    {
+        double total = 0.0;
+        for (int y = area.getY(); y < area.getBottom(); ++y)
+            for (int x = area.getX(); x < area.getRight(); ++x)
+            {
+                const auto c = image.getPixelAt (x, y);
+                total += c.getRed() + c.getGreen() + c.getBlue();
+            }
+        return total / (3.0 * area.getWidth() * area.getHeight());
+    };
+    for (int side = 0; side < KitView::numHolograms; ++side)
+    {
+        INFO ("side " << side);
+        const auto icon = view.hologramIconArea (side);
+        CHECK (brightness (with, icon) > brightness (without, icon) + 20.0);
+        // Every pixel it colours is the family's (pink on the left, orange on the right: hue 318 through 0 to 42).
+        int counted = 0, outside = 0;
+        for (int y = icon.getY(); y < icon.getBottom(); ++y)
+            for (int x = icon.getX(); x < icon.getRight(); ++x)
+                if (const auto c = with.getPixelAt (x, y); coloured (c))
+                {
+                    ++counted;
+                    if (const auto h = hueOf (c); h > 42.0f && h < 318.0f)
+                        ++outside;
+                }
+        CHECK (counted > 200);
+        CHECK (outside == 0);
+        const auto meanHue = [&]
+        {
+            double hue = 0.0;
+            int n = 0;
+            for (int y = icon.getY(); y < icon.getBottom(); ++y)
+                for (int x = icon.getX(); x < icon.getRight(); ++x)
+                    if (const auto c = with.getPixelAt (x, y); coloured (c))
+                    {
+                        auto h = hueOf (c);
+                        hue += h > 180.0f ? h - 360.0f : h;
+                        ++n;
+                    }
+            return hue / juce::jmax (1, n);
+        };
+        if (side == 0)
+            CHECK (meanHue() < 0.0);   // pinker
+        else
+            CHECK (meanHue() > 5.0);   // oranger
+    }
+
+    // A kick: brighter.
+    juce::MidiBuffer midi;
+    midi.addEvent (juce::MidiMessage::noteOn (1, 36, 1.0f), 0);
+    p.run ((double) blockSize / sampleRate, midi);
+    page.updateLights();
+    const auto kicked = draw (true);
+    // The light it adds over the kit (the glow round it stays as bright; the icon, beam and ring brighten).
+    const auto area = view.hologramIconArea (1);
+    const auto restLight = brightness (with, area) - brightness (without, area);
+    const auto kickLight = brightness (kicked, area) - brightness (without, area);
+    INFO ("light at rest " << restLight << ", on a kick " << kickLight);
+    CHECK (kickLight > restLight * 1.1);   // (less than the level: its brightest parts are near white already)
+
+    // The scanlines move a line every quarter second.
+    p.run (0.5);
+    page.updateLights();
+    const auto phase = view.getScanPhase();
+    const auto before = draw (true);
+    juce::Thread::sleep (300);
+    page.updateLights();
+    CHECK (view.getScanPhase() != phase);
+    const auto after = draw (true);
+    const auto icon = view.hologramIconArea (0);
+    CHECK (std::abs (brightness (before, icon) - brightness (after, icon)) < 2.0);   // as bright, moved
+    int changed = 0;
+    for (int y = icon.getY(); y < icon.getBottom(); ++y)
+        changed += before.getPixelAt (icon.getCentreX(), y) != after.getPixelAt (icon.getCentreX(), y) ? 1 : 0;
+    CHECK (changed > 10);
 }

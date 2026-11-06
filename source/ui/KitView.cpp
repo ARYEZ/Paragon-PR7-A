@@ -3,6 +3,7 @@
 
 #include "KitImages.h"
 #include "dsp/synth/NoteMap.h"
+#include "ui/Logo.h"
 #include "ui/ParagonLookAndFeel.h"
 
 namespace
@@ -243,6 +244,7 @@ void KitView::prepare (float scale)
         g.drawImage (lit, exact.translated ((float) -whole.getX(), (float) -whole.getY()));
         shownAt.litAt[(size_t) k] = whole.getPosition();
     }
+    prepareHolograms (toScreen);
 }
 
 juce::Rectangle<float> KitView::pictureArea() const
@@ -422,6 +424,28 @@ void KitView::updateLights()
             glow[(size_t) k] = now[(size_t) k];
             repaint (areaOf (k));   // only that piece
         }
+
+    // The holograms: brighter for a moment with each kick (half as bright again, fading over a third of a second), the scanlines a line further up
+    // every quarter second. Repainted only when either changes.
+    if (highlight.on)
+        return;
+    auto kick = 0.0f;
+    for (int slot = 0; slot < synth::drums::numSlots; ++slot)
+        if (pieceOf (slot) == 0)
+            if (const auto age = kit.getHitAge (slot); age >= 0.0f && age < 0.35f)
+                kick = juce::jmax (kick, (1.0f - age / 0.35f) * (1.0f - age / 0.35f));
+    const auto level = restLevel + 0.45f * kick;
+    const auto phase = (int) (juce::Time::getMillisecondCounter() / 250u % 3u);
+    // (In steps of 0.06: about seven redraws a kick, not one every frame.)
+    const auto brighter = std::abs (level - holoLevel) > 0.06f || (juce::exactlyEqual (level, restLevel) && ! juce::exactlyEqual (holoLevel, restLevel));
+    if (brighter || phase != scanPhase)
+    {
+        if (brighter)
+            holoLevel = level;
+        scanPhase = phase;
+        for (int side = 0; side < numHolograms; ++side)
+            repaint (brighter ? hologramPulseArea (side) : hologramIconArea (side).expanded (1));
+    }
 }
 
 juce::Rectangle<int> KitView::areaOf (int piece) const
@@ -522,6 +546,8 @@ void KitView::paint (juce::Graphics& g)
         g.drawImageTransformed (lit, place (shownAt.litAt[(size_t) k]));
     }
     g.setOpacity (1.0f);
+    if (! highlight.on && hologramsShown)
+        paintHolograms (g, place, scale);
 
 
     // The picture's edges fade into the panel, so it sits in it without a frame.
@@ -599,4 +625,390 @@ void KitView::mouseExit (const juce::MouseEvent&)
         setMouseCursor (juce::MouseCursor::NormalCursor);
         repaint();
     }
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// THE HOLOGRAMS (0.57.0). Placed in the kit's picture through the camera it was rendered with (kit3d.py's `panel`
+// camera, fitted to the render's floor grid: 0.4 m squares), so the rings lie flat on the floor and the icons stand at
+// the size they would at that distance: each a point on the empty floor left and right of the kit (render pixels
+// (245, 380) and (1655, 385) on the floor), a ring 0.2 m round that, the icon 0.56 m tall with its foot 0.22 m above
+// the floor (its top clear of the picture's faded top edge), facing the seat. Our own design, mock-up B as the owner chose.
+namespace
+{
+    namespace holo
+    {
+        struct V3 { double x, y, z; };
+        V3 operator- (V3 a, V3 b) { return { a.x - b.x, a.y - b.y, a.z - b.z }; }
+        V3 operator+ (V3 a, V3 b) { return { a.x + b.x, a.y + b.y, a.z + b.z }; }
+        V3 operator* (V3 a, double k) { return { a.x * k, a.y * k, a.z * k }; }
+        double dot (V3 a, V3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
+        V3 cross (V3 a, V3 b) { return { a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x }; }
+        V3 unit (V3 a) { return a * (1.0 / std::sqrt (dot (a, a))); }
+
+        constexpr double width = 1896.0, height = 744.0;   // the render's pixels
+        struct Camera
+        {
+            V3 at { 0.0, 12.2, 9.741 };
+            V3 forward, right, up;
+            double focal = width * 134.39 / 36.0;   // lens 134.39 mm on a 36 mm sensor
+            Camera()
+            {
+                forward = unit (V3 { 0.0, 0.2, 0.72 } - at);
+                right = unit (cross (forward, { 0.0, 0.0, 1.0 }));
+                up = cross (right, forward);
+            }
+            // A point -> render pixels, and its depth.
+            juce::Point<double> project (V3 p, double* depth = nullptr) const
+            {
+                const auto d = p - at;
+                const auto z = dot (d, forward);
+                if (depth != nullptr)
+                    *depth = z;
+                return { width / 2 + focal * dot (d, right) / z, height / 2 - focal * dot (d, up) / z };
+            }
+            // A render pixel -> the floor point under it.
+            V3 floorAt (double px, double py) const
+            {
+                const auto d = forward + right * ((px - width / 2) / focal) - up * ((py - height / 2) / focal);
+                return at + d * (-at.z / d.z);
+            }
+        };
+        const Camera& camera() { static const Camera c; return c; }
+
+        constexpr double ringRadius = 0.2, ringWidth = 0.018, iconHeight = 0.56, lift = 0.22, beamBase = 0.4;
+        const juce::Point<double> floorPixel[KitView::numHolograms] = { { 245.0, 380.0 }, { 1655.0, 385.0 } };
+        // Each side's colour: the kit's glow there (pink by the hi-hat, orange by the ride).
+        const juce::Colour tint[KitView::numHolograms] = { juce::Colour (0xffff2d6e), juce::Colour (0xffff6a24) };
+        constexpr double glowNear = 11.8, glowFar = 39.2;   // the glow's two blurs, in render pixels
+
+        struct Place
+        {
+            V3 floor;
+            juce::Point<double> ring, foot;   // render pixels
+            double iconPx, beamTopPx, beamBottomPx;
+            juce::Rectangle<double> icon, beam, ringBox, all;
+        };
+        Place placeOf (int side)
+        {
+            const auto& cam = camera();
+            Place p;
+            p.floor = cam.floorAt (floorPixel[side].x, floorPixel[side].y);
+            double zb = 1.0, zt = 1.0;
+            p.ring = cam.project (p.floor, &zb);
+            p.foot = cam.project (p.floor + V3 { 0.0, 0.0, lift }, &zt);
+            p.iconPx = cam.focal * iconHeight / zt;
+            p.beamTopPx = cam.focal * iconHeight * 0.85 / zt;
+            p.beamBottomPx = cam.focal * beamBase / zb;
+            p.icon = { p.foot.x - p.iconPx / 2, p.foot.y - p.iconPx, p.iconPx, p.iconPx };
+            const auto half = std::max (p.beamTopPx, p.beamBottomPx) / 2;
+            p.beam = juce::Rectangle<double>::leftTopRightBottom (std::min (p.foot.x, p.ring.x) - half, p.foot.y,
+                                                                  std::max (p.foot.x, p.ring.x) + half, p.ring.y);
+            // (Points' corners, not unions of empty rectangles: JUCE's union ignores an empty one.)
+            double left = 1.0e9, top = 1.0e9, right = -1.0e9, bottom = -1.0e9;
+            for (int k = 0; k < 64; ++k)
+            {
+                const auto a = juce::MathConstants<double>::twoPi * k / 64;
+                const auto q = cam.project (p.floor + V3 { std::cos (a), std::sin (a), 0.0 } * (ringRadius + 3 * ringWidth));
+                left = std::min (left, q.x);
+                right = std::max (right, q.x);
+                top = std::min (top, q.y);
+                bottom = std::max (bottom, q.y);
+            }
+            p.ringBox = juce::Rectangle<double>::leftTopRightBottom (left, top, right, bottom);
+            p.all = p.icon.getUnion (p.beam).getUnion (p.ringBox).expanded (2.6 * glowFar)
+                        .getIntersection ({ 0.0, 0.0, width, height });
+            return p;
+        }
+
+        // The beam's light at a render pixel (0 to 1): a cone from the ring up to the icon's foot, brightest low down.
+        double beamAt (const Place& p, double x, double y)
+        {
+            if (y < p.foot.y || y > p.ring.y)
+                return 0.0;
+            const auto frac = (y - p.foot.y) / std::max (1.0, p.ring.y - p.foot.y);   // 0 at the top, 1 at the ring
+            const auto half = 0.5 * (p.beamTopPx * (1 - frac) + p.beamBottomPx * frac);
+            const auto centre = p.foot.x * (1 - frac) + p.ring.x * frac;
+            const auto across = juce::jlimit (0.0, 1.0, 1.0 - std::abs (x - centre) / std::max (1.0, half));
+            // It fades out over its last fifth, into the ring's middle (cut off there it left a straight edge).
+            const auto end = juce::jlimit (0.0, 1.0, (1.0 - frac) / 0.2);
+            return std::pow (across, 0.8) * (0.25 + 0.75 * frac) * end * end * (3.0 - 2.0 * end) * 0.75;
+        }
+
+        // The ring's light at a render pixel: a soft line on the floor 0.2 m round the point, a faint fill inside.
+        double ringAt (const Place& p, double x, double y)
+        {
+            const auto q = camera().floorAt (x, y);
+            const auto d = std::hypot (q.x - p.floor.x, q.y - p.floor.y);
+            const auto off = (d - ringRadius) / ringWidth;
+            return (std::exp (-off * off) + 0.25 * juce::jlimit (0.0, 1.0, 1.0 - d / ringRadius)) * 0.7;
+        }
+
+        // RGB light, a float per channel.
+        struct Light
+        {
+            int w = 0, h = 0;
+            std::vector<float> rgb;
+            Light (int width_, int height_) : w (width_), h (height_), rgb ((size_t) (width_ * height_ * 3), 0.0f) {}
+            float* at (int x, int y) { return rgb.data() + ((size_t) y * (size_t) w + (size_t) x) * 3; }
+        };
+
+        // A gaussian blur (three box blurs each way), outside the area dark.
+        Light blurred (const Light& in, double sigma)
+        {
+            Light out = in;
+            const auto r = std::max (1, (int) std::lround ((std::sqrt (4.0 * sigma * sigma + 1.0) - 1.0) / 2.0));
+            std::vector<float> line, sums;
+            const auto pass = [&] (bool across)
+            {
+                const auto n = across ? out.w : out.h, lines = across ? out.h : out.w;
+                line.resize ((size_t) n * 3);
+                for (int l = 0; l < lines; ++l)
+                {
+                    const auto px = [&] (int i) { return across ? out.at (i, l) : out.at (l, i); };
+                    for (int i = 0; i < n; ++i)
+                        std::copy_n (px (i), 3, line.data() + (size_t) i * 3);
+                    for (int c = 0; c < 3; ++c)
+                    {
+                        double sum = 0.0;
+                        for (int i = 0; i <= std::min (r, n - 1); ++i)
+                            sum += line[(size_t) i * 3 + (size_t) c];
+                        for (int i = 0; i < n; ++i)
+                        {
+                            px (i)[c] = (float) (sum / (2 * r + 1));
+                            if (i + r + 1 < n)
+                                sum += line[(size_t) (i + r + 1) * 3 + (size_t) c];
+                            if (i - r >= 0)
+                                sum -= line[(size_t) (i - r) * 3 + (size_t) c];
+                        }
+                    }
+                }
+            };
+            for (int k = 0; k < 3; ++k)
+            {
+                pass (true);
+                pass (false);
+            }
+            return out;
+        }
+
+        // Light -> a premultiplied image to draw over the kit (its alpha the brightest channel: on the dark floor
+        // almost exactly light added). Too bright, a colour is scaled down whole, so orange stays orange (clipping each
+        // channel would turn it yellow).
+        juce::Image imageOf (Light& light)
+        {
+            juce::Image image (juce::Image::ARGB, std::max (1, light.w), std::max (1, light.h), true);
+            juce::Image::BitmapData data (image, juce::Image::BitmapData::writeOnly);
+            for (int y = 0; y < light.h; ++y)
+                for (int x = 0; x < light.w; ++x)
+                {
+                    const auto* c = light.at (x, y);
+                    auto top = std::max ({ c[0], c[1], c[2] });
+                    const auto k = top > 1.0f ? 1.0f / top : 1.0f;
+                    top = std::min (1.0f, top);
+                    const auto byte = [] (float v) { return (juce::uint8) juce::jlimit (0, 255, (int) std::lround (v * 255.0f)); };
+                    auto* p = reinterpret_cast<juce::PixelARGB*> (data.getPixelPointer (x, y));
+                    p->setARGB (byte (top), byte (c[0] * k), byte (c[1] * k), byte (c[2] * k));
+                }
+            return image;
+        }
+
+        // The part of an image with anything in it.
+        juce::Rectangle<int> visibleArea (const juce::Image& image)
+        {
+            const juce::Image::BitmapData data (image, juce::Image::BitmapData::readOnly);
+            int left = image.getWidth(), top = image.getHeight(), right = 0, bottom = 0;
+            for (int y = 0; y < image.getHeight(); ++y)
+                for (int x = 0; x < image.getWidth(); ++x)
+                    if (reinterpret_cast<const juce::PixelARGB*> (data.getPixelPointer (x, y))->getAlpha() > 0)
+                    {
+                        left = std::min (left, x);
+                        right = std::max (right, x + 1);
+                        top = std::min (top, y);
+                        bottom = std::max (bottom, y + 1);
+                    }
+            return right > left ? juce::Rectangle<int>::leftTopRightBottom (left, top, right, bottom) : juce::Rectangle<int> (1, 1);
+        }
+
+        // The icon's colours pulled towards the side's (mock-up B: 55% its own, 45% the tint at its brightness), and
+        // `gain` (they're drawn into an image and can't be brighter than white there).
+        juce::Colour tinted (juce::Colour c, juce::Colour t, float k, float gain)
+        {
+            const auto r = c.getFloatRed() * k, g = c.getFloatGreen() * k, b = c.getFloatBlue() * k;
+            const auto top = std::max ({ r, g, b });
+            return juce::Colour::fromFloatRGBA ((r * 0.55f + top * t.getFloatRed() * 0.45f) / gain,
+                                                (g * 0.55f + top * t.getFloatGreen() * 0.45f) / gain,
+                                                (b * 0.55f + top * t.getFloatBlue() * 0.45f) / gain, 1.0f);
+        }
+    }
+}
+
+void KitView::prepareHolograms (float toScreen)
+{
+    const auto red = juce::Colour (0xffff2a2e), orange = juce::Colour (0xffff6a24), white = juce::Colour (0xfffff0ec);
+    constexpr float gain = 1.25f;   // the icon drawn at 1 / gain, its light brought back up after
+    constexpr int coarse = 4;       // the glow worked out on a grid of 4 x 4 screen pixels (it's soft), then smoothed up
+    for (int side = 0; side < numHolograms; ++side)
+    {
+        const auto p = holo::placeOf (side);
+        const auto tint = holo::tint[side];
+        const auto toPixels = [toScreen] (juce::Rectangle<double> r) { return (r * (double) toScreen).getSmallestIntegerContainer(); };
+
+        // The icon and the beam, in screen pixels.
+        const auto iconBox = toPixels (p.icon.getUnion (p.beam));
+        juce::Image drawn (juce::Image::ARGB, std::max (1, iconBox.getWidth()), std::max (1, iconBox.getHeight()), true);
+        {
+            juce::Graphics g (drawn);
+            Logo::drawIcon (g, (p.icon * (double) toScreen).toFloat().translated ((float) -iconBox.getX(), (float) -iconBox.getY()),
+                            { holo::tinted (red, tint, 1.1f, gain), holo::tinted (orange, tint, 1.1f, gain),
+                              holo::tinted (white, tint, 0.95f, gain), holo::tinted (red, tint, 1.0f, gain) });
+        }
+        holo::Light icon (drawn.getWidth(), drawn.getHeight());
+        {
+            const juce::Image::BitmapData data (drawn, juce::Image::BitmapData::readOnly);
+            for (int y = 0; y < icon.h; ++y)
+                for (int x = 0; x < icon.w; ++x)
+                {
+                    const auto c = reinterpret_cast<const juce::PixelARGB*> (data.getPixelPointer (x, y));
+                    const auto rx = (iconBox.getX() + x + 0.5) / toScreen, ry = (iconBox.getY() + y + 0.5) / toScreen;
+                    const auto beam = (float) holo::beamAt (p, rx, ry);
+                    auto* out = icon.at (x, y);
+                    out[0] = c->getRed() / 255.0f * gain * 1.05f + beam * tint.getFloatRed();
+                    out[1] = c->getGreen() / 255.0f * gain * 1.05f + beam * tint.getFloatGreen();
+                    out[2] = c->getBlue() / 255.0f * gain * 1.05f + beam * tint.getFloatBlue();
+                }
+        }
+
+        // The ring.
+        const auto ringBox = toPixels (p.ringBox);
+        holo::Light ring (std::max (1, ringBox.getWidth()), std::max (1, ringBox.getHeight()));
+        for (int y = 0; y < ring.h; ++y)
+            for (int x = 0; x < ring.w; ++x)
+            {
+                const auto level = (float) holo::ringAt (p, (ringBox.getX() + x + 0.5) / toScreen, (ringBox.getY() + y + 0.5) / toScreen);
+                auto* r = ring.at (x, y);
+                r[0] = level * tint.getFloatRed();
+                r[1] = level * tint.getFloatGreen();
+                r[2] = level * tint.getFloatBlue();
+            }
+
+        // The glow of both (the icon at its scanlines' mean, 0.8): averaged onto the coarse grid, blurred there, then
+        // smoothed back up to screen pixels.
+        const auto box = toPixels (p.all);
+        const auto cw = (box.getWidth() + coarse - 1) / coarse, ch = (box.getHeight() + coarse - 1) / coarse;
+        holo::Light source (cw, ch);
+        const auto gather = [&] (holo::Light& light, juce::Rectangle<int> at, float k)
+        {
+            for (int y = 0; y < light.h; ++y)
+                for (int x = 0; x < light.w; ++x)
+                {
+                    const auto gx = (at.getX() + x - box.getX()) / coarse, gy = (at.getY() + y - box.getY()) / coarse;
+                    if (gx < 0 || gy < 0 || gx >= cw || gy >= ch)
+                        continue;
+                    for (int c = 0; c < 3; ++c)
+                        source.at (gx, gy)[c] += k * light.at (x, y)[c] / (float) (coarse * coarse);
+                }
+        };
+        gather (icon, iconBox, 0.8f);
+        gather (ring, ringBox, 1.0f);
+        const auto nearGlow = holo::blurred (source, holo::glowNear * toScreen / coarse);
+        const auto farGlow = holo::blurred (source, holo::glowFar * toScreen / coarse);
+        holo::Light glowLight (box.getWidth(), box.getHeight());
+        for (int y = 0; y < glowLight.h; ++y)
+        {
+            const auto fy = juce::jlimit (0.0f, (float) (ch - 1), (y + 0.5f) / coarse - 0.5f);
+            const auto y0 = (int) fy, y1 = std::min (y0 + 1, ch - 1);
+            const auto ty = fy - (float) y0;
+            for (int x = 0; x < glowLight.w; ++x)
+            {
+                const auto fx = juce::jlimit (0.0f, (float) (cw - 1), (x + 0.5f) / coarse - 0.5f);
+                const auto x0 = (int) fx, x1 = std::min (x0 + 1, cw - 1);
+                const auto tx = fx - (float) x0;
+                for (int c = 0; c < 3; ++c)
+                {
+                    const auto at = [&] (int gx, int gy)
+                    {
+                        return 0.9f * nearGlow.rgb[((size_t) gy * (size_t) cw + (size_t) gx) * 3 + (size_t) c]
+                               + 0.5f * farGlow.rgb[((size_t) gy * (size_t) cw + (size_t) gx) * 3 + (size_t) c];
+                    };
+                    glowLight.at (x, y)[c] = (at (x0, y0) * (1 - tx) + at (x1, y0) * tx) * (1 - ty)
+                                        + (at (x0, y1) * (1 - tx) + at (x1, y1) * tx) * ty;
+                }
+            }
+        }
+
+        auto& h = holograms[(size_t) side];
+        h.glow = holo::imageOf (glowLight);
+        // Only as big as it shows (its far edges are darker than a step of 255: no need to draw them).
+        const auto shows = holo::visibleArea (h.glow);
+        h.glow = h.glow.getClippedImage (shows);
+        h.glowAt = box.getPosition() + shows.getPosition();
+        h.ring = holo::imageOf (ring);
+        h.ringAt = ringBox.getPosition();
+        h.icon = holo::imageOf (icon);
+        h.iconAt = iconBox.getPosition();
+    }
+}
+
+juce::Rectangle<int> KitView::hologramArea (int side) const
+{
+    const auto area = pictureArea();
+    if (area.isEmpty() || side < 0 || side >= numHolograms)
+        return {};
+    const auto k = area.getWidth() / holo::width;
+    return (holo::placeOf (side).all * (double) k).toFloat().translated (area.getX(), area.getY()).getSmallestIntegerContainer().expanded (1);
+}
+
+juce::Rectangle<int> KitView::hologramPulseArea (int side) const
+{
+    const auto area = pictureArea();
+    if (area.isEmpty() || side < 0 || side >= numHolograms)
+        return {};
+    const auto p = holo::placeOf (side);
+    const auto k = area.getWidth() / holo::width;
+    return (p.icon.getUnion (p.beam).getUnion (p.ringBox) * (double) k).toFloat().translated (area.getX(), area.getY())
+        .getSmallestIntegerContainer().expanded (2);
+}
+
+juce::Rectangle<int> KitView::hologramIconArea (int side) const
+{
+    const auto area = pictureArea();
+    if (area.isEmpty() || side < 0 || side >= numHolograms)
+        return {};
+    const auto k = area.getWidth() / holo::width;
+    return (holo::placeOf (side).icon * (double) k).toFloat().translated (area.getX(), area.getY()).getSmallestIntegerContainer();
+}
+
+void KitView::paintHolograms (juce::Graphics& g, std::function<juce::AffineTransform (juce::Point<int>)> place, float scale)
+{
+    for (const auto& h : holograms)
+    {
+        if (! h.glow.isValid() || ! h.ring.isValid() || ! h.icon.isValid())
+            continue;
+        // Brighter than the pictures hold on a kick: drawn once more at what's over 1.
+        const auto draw = [&] (const juce::Image& image, juce::Point<int> at, float level)
+        {
+            for (auto left = level; left > 0.005f; left -= 1.0f)
+            {
+                g.setOpacity (juce::jmin (1.0f, left));
+                g.drawImageTransformed (image, place (at));
+            }
+        };
+        draw (h.glow, h.glowAt, restLevel);   // (always as bright: a kick redraws only what it brightens)
+        draw (h.ring, h.ringAt, holoLevel);
+        draw (h.icon, h.iconAt, holoLevel * 0.7f);
+
+        // The scanlines: every third line of the view again at 30%, moving up a line every quarter second.
+        const auto top = (int) std::floor ((float) (shownAt.area.getY() + (float) h.iconAt.y / scale));
+        const auto bottom = (int) std::ceil ((float) (shownAt.area.getY() + (float) (h.iconAt.y + h.icon.getHeight()) / scale));
+        const auto left = (int) std::floor (shownAt.area.getX() + (float) h.iconAt.x / scale);
+        const auto right = (int) std::ceil (shownAt.area.getX() + (float) (h.iconAt.x + h.icon.getWidth()) / scale);
+        juce::RectangleList<int> lines;
+        for (int y = top; y < bottom; ++y)
+            if ((((y + scanPhase) % 3) + 3) % 3 == 0)
+                lines.addWithoutMerging ({ left, y, right - left, 1 });
+        juce::Graphics::ScopedSaveState saved (g);
+        if (g.reduceClipRegion (lines))
+            draw (h.icon, h.iconAt, holoLevel * 0.3f);
+    }
+    g.setOpacity (1.0f);
 }

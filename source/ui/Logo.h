@@ -24,4 +24,13 @@ namespace Logo
     // Draws the mark as large as fits in `area`, placed by `justification`.
     // Returns where it was drawn.
     juce::Rectangle<float> drawMark (juce::Graphics&, juce::Rectangle<float> area, juce::Justification justification, const Style&);
+
+    // The PR7-D icon (0.57.0, the KIT VIEW's holograms; in the style of PR7-S's "7S" icon): a big slanted "7D" (the 7
+    // `sevenTop` above its first speed cut, `sevenLow` below, the D `letters`), a line under it, the "PR7-D" mark
+    // smaller under that (its 7 `accent`), all in a rounded frame (`accent`). Drawn in the square `area`.
+    struct IconStyle
+    {
+        juce::Colour sevenTop, sevenLow, letters, accent;
+    };
+    void drawIcon (juce::Graphics&, juce::Rectangle<float> area, const IconStyle&);
 }

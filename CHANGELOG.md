@@ -2,6 +2,18 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.57.0
+
+**The PR7-D hologram on the KIT VIEW's floor** (the mock-up you chose, B, with the scanlines drifting and a pulse on the kick). On each side of the kit, where the floor was empty, the PR7-D icon now floats over a glowing ring on the grid, with a beam of light running from the ring up to it. The left one is pink, the hi-hat side's glow colour. The right one is orange, the ride side's.
+
+- **The icon** is new, made in the style of PR7-S's "7S" icon: a big slanted "7D" (the 7 red above its first speed cut and orange below), a line, the "PR7-D" mark under it, all in a rounded frame. It's drawn from the logo's own letter shapes, not a picture.
+- **It sits in the 3D scene.** The rings and icons are placed through the same camera the kit was rendered with, fitted to the floor grid. So the rings lie flat on the floor at the right perspective, and the icons are the size a 56 cm sign would be at that distance, standing 22 cm off the floor and facing you.
+- **Scanlines** run across the icon and beam, and drift up a line every quarter second.
+- **Each kick makes it flash.** The icon, beam and ring get about half as bright again and settle over a third of a second. The soft glow around them stays as it is, so a kick only redraws the part that changes.
+- **Clicks go through it.** It's on empty floor, so there's nothing there to click anyway, and it doesn't change what the kit's pieces do. EDIT PLAY STYLE's kit (which dims everything but the block's drums) doesn't show it.
+- **What it costs:** a kick's flash redraws in about 0.4 ms per side at 100% display scaling, and about 1.7 ms at 200%. It redraws in steps, about seven times per kick, not every frame. The scanlines' move redraws only the icon, four times a second. The pictures are made once when the page is first shown at a size.
+- **Known:** with the hi-hat chosen, its articulation list (the tallest one) covers the left ring. The icon stays clear.
+
 ## 0.56.0
 
 **Sampled kits play with about 35-40% less work** (you asked to make the plugin run smoother and more efficiently). This time measured with the kind of kit you play: a sample pack laid out like your Djent Drums (five mics on the kick, four on the snare, toms, hats, crash, china and ride, streamed from disk), with mixer effects on the kick, snare and toms, playing a 180 BPM beat with 16th-note double kicks.
