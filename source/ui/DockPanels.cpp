@@ -189,7 +189,7 @@ SettingsPage::SettingsPage (ParagonX1AudioProcessor& p)
     mapList.onSelect = [this] (int n) { midiInPanel.setNote (n); };
     midiInPanel.onChooseNote = [this] (int n) { chooseNote (n); };
     styleButton (saveMap, true);
-    saveMap.setTooltip ("A new PR7-D (in any project) starts with this CUSTOM map");
+    saveMap.setTooltip ("A new PR7-I (in any project) starts with this CUSTOM map");
     saveMap.onClick = [this] { processor.saveNoteMapAsDefault(); };
     addAndMakeVisible (saveMap);
     mapView.setViewedComponent (&mapList, false);
@@ -214,7 +214,7 @@ SettingsPage::SettingsPage (ParagonX1AudioProcessor& p)
         styleButton (*button, button == &saveDefault);
         addAndMakeVisible (*button);
     }
-    saveDefault.setTooltip ("A new PR7-D (in any project) starts with these links");
+    saveDefault.setTooltip ("A new PR7-I (in any project) starts with these links");
     exportLinks.setTooltip ("Save these links to a file, to back them up or use on another computer");
     importLinks.setTooltip ("Load links from a file saved with EXPORT");
     clearLinks.setTooltip ("Forget every link (undo isn't kept for links: EXPORT first if you might want them back)");
@@ -372,11 +372,12 @@ void SettingsPage::paint (juce::Graphics& g)
     section (midiArea, "MIDI LINKS", shownLinks.isEmpty()
                  ? juce::String ("None yet. Right-click a knob and choose MIDI learn, then move a knob or fader on your controller.")
                  : juce::String ("Your controller's knobs and faders, and the knobs they turn. Kept with the project; "
-                                 "SAVE AS DEFAULT for every new PR7-D."));
+                                 "SAVE AS DEFAULT for every new PR7-I."));
     section (aboutArea, "ABOUT",
-             juce::String ("Paragon PR7-D v") + JucePlugin_VersionString
-                 + ". The PR7 family's drum instrument: drum synths and your own samples, a drum sequencer and effects, "
-                   "grown from PR7-K's drum section (our own design and code). "
+             juce::String ("Paragon PR7-I v") + JucePlugin_VersionString
+                 + ". The PR7 family's guitar instrument, played from MIDI: your own recordings, with effects. Seeded from "
+                   "PR7-D 0.60.0, the drum instrument; until the guitar engine arrives it still plays PR7-D's kit "
+                   "(our own design and code). Put PR7-G after it for amps and cabinets. "
                    "Free and open source under the GNU AGPLv3.\n"
                    "Built with JUCE (AGPLv3) and the Inter typeface (SIL OFL).\n"
                    "Loads DrumGizmo kits (drumgizmo.org) from your computer; none ship with it. The Crocell Metal preset uses the "

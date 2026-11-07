@@ -74,7 +74,7 @@ namespace
     }
 }
 
-TEST_CASE ("PR7-D is an instrument: no audio in, MIDI in, mono or stereo out; 15 more stereo outputs, off at first", "[processor]")
+TEST_CASE ("PR7-I is an instrument: no audio in, MIDI in, mono or stereo out; 15 more stereo outputs, off at first", "[processor]")
 {
     ParagonX1AudioProcessor processor;
     CHECK (processor.acceptsMidi());

@@ -2777,7 +2777,7 @@ bool ParagonX1AudioProcessor::exportDrumMidi (int pattern, const juce::File& fil
 
 juce::File ParagonX1AudioProcessor::drumMidiDragFile (int pattern) const
 {
-    auto file = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("Paragon PR7-D")
+    auto file = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("Paragon PR7-I")
                     .getChildFile ("Drums " + synth::drumseq::patternNames[juce::jlimit (0, 3, pattern)] + ".mid");
     exportDrumMidi (pattern, file);
     return file;

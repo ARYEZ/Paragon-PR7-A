@@ -5,7 +5,7 @@ cmake_minimum_required(VERSION 3.24)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS version")
 set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "macOS architectures")
 
-project(ParagonX1 VERSION 0.60.0 LANGUAGES C CXX)
+project(ParagonX1 VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -20,17 +20,17 @@ option(PARAGON_BUILD_TESTS "Build the unit tests" ON)
 include(cmake/Dependencies.cmake)
 
 juce_add_plugin(ParagonX1
-    PRODUCT_NAME             "Paragon PR7-D" # the drum instrument of the PR7 family: its own name, bundle ID and plugin code, so it installs beside the others
+    PRODUCT_NAME             "Paragon PR7-I" # the guitar instrument of the PR7 family (seeded from PR7-D 0.60.0): its own name, bundle ID and plugin code, so it installs beside the others
     COMPANY_NAME             "Paragon"
-    BUNDLE_ID                "com.paragon.paragonpr7d"
+    BUNDLE_ID                "com.paragon.paragonpr7i"
     PLUGIN_MANUFACTURER_CODE Prgn     # four characters, at least one upper case
-    PLUGIN_CODE              Pr7d     # four characters, exactly one upper case; never PR7-G's Px1a, PR7-B's Pr7b, PR7-V's Pr7v, PR7-C's Pr7c, PR7-E's Pr7e or PR7-K's Pr7k
+    PLUGIN_CODE              Pr7i     # four characters, exactly one upper case; never PR7-G's Px1a, PR7-B's Pr7b, PR7-V's Pr7v, PR7-C's Pr7c, PR7-X's (was PR7-E) Pr7e, PR7-K's Pr7k, PR7-D's Pr7d or PR7-M's Pr7m
     FORMATS                  VST3
     IS_SYNTH                 TRUE     # an instrument: MIDI in, sound out
     NEEDS_MIDI_INPUT         TRUE
     NEEDS_MIDI_OUTPUT        FALSE
     IS_MIDI_EFFECT           FALSE
-    VST3_CATEGORIES          Instrument Drum
+    VST3_CATEGORIES          Instrument Sampler
     COPY_PLUGIN_AFTER_BUILD  FALSE)
 
 # Inter (SIL Open Font License, see resources/fonts/OFL-LICENSE.txt), built

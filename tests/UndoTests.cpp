@@ -132,7 +132,7 @@ TEST_CASE ("Undoing a preset change brings back the previous sound", "[undo][rig
     CHECK_FALSE (rig.processor.isRigModified());
 }
 
-TEST_CASE ("A new PR7-D starts on the Init preset", "[undo][rigs]")
+TEST_CASE ("A new PR7-I starts on the Init preset", "[undo][rigs]")
 {
     ParagonX1AudioProcessor processor;
     CHECK (processor.getCurrentRig().name == "Init");
