@@ -2,6 +2,22 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.60.0
+
+**The KIT VIEW's holograms: smaller bases, a glitched look** (you asked for the rings 2/3 the size, and scanlines "more dramatic so it really sells the idea of a glitched hologram").
+
+- **Smaller rings.** The rings on the floor are 2/3 the size they were, and the beam's foot is narrower to match.
+- **Harder scanlines.** The icon is much dimmer between its lines and bright on them, two lines on and two off, still drifting slowly up.
+- **Glitches.** About every two seconds, each hologram breaks up for a split second:
+  - one to three strips of it jump sideways;
+  - a faint ghost copy shows beside it;
+  - it flickers.
+
+  The two sides glitch on their own timing, so they rarely break up together.
+- **A rolling band.** Every four seconds a brighter band sweeps down through each icon.
+- **The kick flash is still there.** It reads a little less strongly than before (about 10% brighter instead of 14%), because the bright lines are already near white.
+- **What it costs:** the extra drawing runs only while a glitch or sweep is happening, and only over the icon, not the whole kit view.
+
 ## 0.59.0
 
 **A new PR7-D starts on GROOVE LIBRARY** (your map, from 0.58.0), since it's the map you'll use for everything. Before, a new instance started on ROOT.
