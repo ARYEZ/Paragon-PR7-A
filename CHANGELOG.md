@@ -2,6 +2,17 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.2.1
+
+**Ready for your renders: more variety from the two takes per stroke, and imports that leave out copies.** Your guitar instrument turned out to have two different sustain takes per stroke (the round-robin check you rendered), so PR7-I now makes the most of them.
+
+- **No pattern on repeated notes.** Each stroke picks one of its takes at random, never the one that just played on that string. In 0.2.0 they went round in a fixed order.
+- **Borrowing.** A note can also use its neighbouring dynamic's takes, turned to its own level, and the neighbouring frets' takes, shifted a semitone to its pitch. This is the same idea as your instrument's own "anti-repetition". A chugged note now draws on up to ten recordings per stroke instead of two, with its own takes still the most likely.
+- **VARIATION** (new, on SOUND, 50% by default): each note comes out a touch different, as no two picks are. Up to 3 ms later into its take, up to half a dB louder or quieter, a few cents sharp or flat. Fully down gives you the takes exactly as recorded, with no borrowing.
+- **Re-picking a string stops it completely.** In 0.2.0, a note released and picked again straight away could overlap its own fade-out, which a single string can't do.
+- **Imports leave out copies.** When two takes of the same note, dynamic and stroke are the same recording (an instrument with fewer takes than the list asks for), the copy isn't saved, and the row says how many were left out.
+- **What can't be checked here:** how the borrowed takes blend in by ear. If anything sounds off, turn VARIATION down.
+
 ## 0.2.0
 
 **PR7-I plays a guitar now: your renders from your guitar instrument, on the strings and frets a player would use.** The drums are gone. This is the first half of the playing engine (sustain); palm mute and the Tron-look guitar page come in 0.3.0.
