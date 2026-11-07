@@ -36,10 +36,15 @@
 //     PALM MUTE plays the guitar's Mute takes (velocity choosing the degree of muting); a guitar with none yet plays its
 //     softest sustain takes instead. POWER CHORDS (not rendered yet) play the root, the fifth and the octave as three
 //     notes, fretted together (our stand-in, as a player would: drop A's D5 a barre).
-//   - THE HAND (AUTO): follows the notes; back to the bottom of the neck after a second with nothing held.
+//   - THE HAND (AUTO): follows the notes; back to the bottom of the neck after HAND RESET (a second) with nothing held.
+//   - 0.4.0: CAPO and HAND SPAN (Fretting.h); ECONOMY picking (alternate, but a note crossing to the next string in the
+//     way the pick is already moving takes the same stroke again: a down stroke going on to a higher string stays down,
+//     an up stroke going on to a lower one stays up); MONO (one note at a time: a new one stops the others); ATTACK (each
+//     note's first milliseconds louder, by velocity: our stand-in for the reference's pick noise, which isn't rendered).
+//     The page's NOW PLAYING reads what the last note did (getNowPlaying).
 namespace guitar
 {
-    enum class PickMode { alternate, down, up };   // append only
+    enum class PickMode { alternate, down, up, economy };   // append only
     enum class KeyMap { split, factory };           // append only
 
     struct Settings
@@ -53,6 +58,11 @@ namespace guitar
         float variation = 0.0f;        // 0 to 1
         KeyMap keyMap = KeyMap::split;
         int transpose = 0;
+        int capo = 0;                  // 0.4.0: 0 none, else its fret
+        int handSpan = 0;              // 0.4.0: 0 the mode's own
+        float handResetSeconds = 1.0f; // 0.4.0: an AUTO hand goes home after this long with nothing held
+        bool mono = false;             // 0.4.0: one note at a time
+        float attack = 0.0f;           // 0.4.0: 0 to 1, each note's first milliseconds louder
         const Library* library = nullptr;
         Streamer* streamer = nullptr;
         bool waitForDisk = false;      // bouncing: wait for the disk rather than play silence
@@ -95,6 +105,17 @@ namespace guitar
         int getHand() const noexcept { return shownHand.load(); }
         int getActiveVoices() const noexcept { return activeVoices.load(); }
         int getForcedString (const Settings&) const noexcept;   // as a keyswitch or the setting leaves it
+
+        // What the last note (or chord) played, for the page's NOW PLAYING (any thread; -1 fields: nothing yet).
+        struct NowPlaying
+        {
+            int note = -1, inputVelocity = 0, velocity = 0, layer = 0, layers = 1, roundRobin = 0, roundRobins = 1, string = -1, fret = -1, notes = 0;
+            Articulation articulation = Articulation::sustain;
+            Stroke stroke = Stroke::down;
+            bool powerChord = false;
+            juce::uint32 count = 0;   // how many notes or chords so far (to tell a new one)
+        };
+        NowPlaying getNowPlaying() const noexcept;
         Position lastPosition() const noexcept { return last; }  // tests: the last note's string and fret
         Stroke lastStroke() const noexcept { return lastStrokePlayed; }
         const Take* lastTake() const noexcept { return lastTakePlayed; }
@@ -108,6 +129,7 @@ namespace guitar
             const Take* take = nullptr;
             double position = 0.0, step = 1.0;
             float gain = 1.0f, fade = 1.0f, fadeStep = 0.0f;
+            float attack = 0.0f, attackDecay = 1.0f;   // ATTACK: an extra gain at the start, decaying
             int stream = -1;
             juce::uint32 age = 0;
         };
@@ -135,10 +157,13 @@ namespace guitar
         std::array<std::atomic<float>, numStrings> soundingLevel {};
         std::array<std::atomic<bool>, numStrings> soundingMuted {};
         std::atomic<int> shownHand { 1 }, activeVoices { 0 };
+        std::array<std::atomic<int>, 12> nowPlaying {};   // NowPlaying's fields, written by the audio thread
+        std::atomic<juce::uint32> nowCount { 0 };
 
         struct Chord
         {
-            std::array<int, maxChord> notes {}, velocities {}, sources {};
+            std::array<int, maxChord> notes {}, velocities {}, sources {}, inputVelocities {};
+            std::array<bool, maxChord> power {};
             std::array<Articulation, maxChord> articulations {};
             int count = 0;
         };

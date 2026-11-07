@@ -32,6 +32,13 @@ ParagonX1AudioProcessor::ParagonX1AudioProcessor()
     patchLevelValue = find (ParamIDs::patchLevel);
     outputValue = find (ParamIDs::outputGain);
     bypassValue = find (ParamIDs::bypass);
+    capoValue = find (ParamIDs::capo);
+    handSpanValue = find (ParamIDs::handSpan);
+    handResetValue = find (ParamIDs::handReset);
+    monoValue = find (ParamIDs::mono);
+    polyWindowValue = find (ParamIDs::polyWindow);
+    biteValue = find (ParamIDs::bite);
+    attackValue = find (ParamIDs::attack);
 
     rigLibrary = std::make_unique<RigLibrary>();
     if (midiLinksDefaultFile().existsAsFile())
@@ -64,6 +71,7 @@ ParagonX1AudioProcessor::ParagonX1AudioProcessor()
 ParagonX1AudioProcessor::~ParagonX1AudioProcessor()
 {
     stopTimer();
+    cancelPendingUpdate();
     loadCancel = importCancel = true;
     jobs.removeAllJobs (true, 10000);
     for (auto* parameter : AudioProcessor::getParameters())
@@ -82,6 +90,68 @@ void ParagonX1AudioProcessor::prepareToPlay (double sampleRate, int samplesPerBl
     gain.setCurrentAndTargetValue (juce::Decibels::decibelsToGain (patchLevelValue->load() + outputValue->load()));
     toneState = {};
     scratch.assign ((size_t) juce::jmax (1, samplesPerBlock), 0.0f);
+    polyWindow.prepare();
+    windowedMidi.ensureSize (8192);
+    windowSamples = windowSamplesFor();
+    setLatencySamples (windowSamples.load());
+    biteSetFor = -1.0f;
+    biteMid = {};
+    biteHigh = {};
+}
+
+int ParagonX1AudioProcessor::windowSamplesFor() const noexcept
+{
+    return juce::roundToInt (polyWindowValue->load() * 0.001 * getSampleRate());
+}
+
+void ParagonX1AudioProcessor::handleAsyncUpdate()
+{
+    setLatencySamples (windowSamples.load());
+}
+
+void ParagonX1AudioProcessor::updateBite (float amount) noexcept
+{
+    biteSetFor = amount;
+    const auto fs = getSampleRate() > 0.0 ? getSampleRate() : 48000.0;
+    const auto twoPi = juce::MathConstants<double>::twoPi;
+    {
+        // A peak at 400 Hz, Q 0.9, down 6 dB at full BITE.
+        const auto A = std::pow (10.0, -6.0 * amount / 40.0), w = twoPi * 400.0 / fs, alpha = std::sin (w) / (2.0 * 0.9);
+        const auto a0 = 1.0 + alpha / A;
+        biteMid.b0 = (float) ((1.0 + alpha * A) / a0); biteMid.b1 = (float) (-2.0 * std::cos (w) / a0); biteMid.b2 = (float) ((1.0 - alpha * A) / a0);
+        biteMid.a1 = biteMid.b1; biteMid.a2 = (float) ((1.0 - alpha / A) / a0);
+    }
+    {
+        // A high shelf at 3 kHz, up 6 dB at full BITE.
+        const auto A = std::pow (10.0, 6.0 * amount / 40.0), w = twoPi * 3000.0 / fs, cw = std::cos (w);
+        const auto alpha = std::sin (w) / 2.0 * std::sqrt (2.0), sa = 2.0 * std::sqrt (A) * alpha;
+        const auto a0 = (A + 1.0) - (A - 1.0) * cw + sa;
+        biteHigh.b0 = (float) (A * ((A + 1.0) + (A - 1.0) * cw + sa) / a0);
+        biteHigh.b1 = (float) (-2.0 * A * ((A - 1.0) + (A + 1.0) * cw) / a0);
+        biteHigh.b2 = (float) (A * ((A + 1.0) + (A - 1.0) * cw - sa) / a0);
+        biteHigh.a1 = (float) (2.0 * ((A - 1.0) - (A + 1.0) * cw) / a0);
+        biteHigh.a2 = (float) (((A + 1.0) - (A - 1.0) * cw - sa) / a0);
+    }
+}
+
+void ParagonX1AudioProcessor::applyPerformance (Performance p)
+{
+    if (p == Performance::custom)
+        return;
+    setParameterNow (ParamIDs::fretMode, p == Performance::chords ? (float) guitar::FretMode::polyphonic : (float) guitar::FretMode::natural);
+    setParameterNow (ParamIDs::mono, p == Performance::lead ? 1.0f : 0.0f);
+    setParameterNow (ParamIDs::handSpan, 0.0f);
+    setParameterNow (ParamIDs::handPosition, 0.0f);
+}
+
+ParagonX1AudioProcessor::Performance ParagonX1AudioProcessor::currentPerformance() const
+{
+    const auto s = getGuitarSettings();
+    if (s.handSpan != 0 || s.hand != 0)
+        return Performance::custom;
+    if (s.fretMode == guitar::FretMode::polyphonic)
+        return s.mono ? Performance::custom : Performance::chords;
+    return s.mono ? Performance::lead : Performance::rhythm;
 }
 
 bool ParagonX1AudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -110,6 +180,12 @@ guitar::Settings ParagonX1AudioProcessor::getGuitarSettings() const noexcept
     s.transpose = juce::roundToInt (transposeValue->load());
     s.variation = variationValue->load();
     s.keyMap = (guitar::KeyMap) juce::jlimit (0, ParamIDs::keyMapNames.size() - 1, juce::roundToInt (keyMapValue->load()));
+    s.capo = juce::roundToInt (capoValue->load());
+    const auto span = juce::roundToInt (handSpanValue->load());
+    s.handSpan = span <= 0 ? 0 : span + 1;   // handSpanNames: Auto, 2, 3...
+    s.handResetSeconds = handResetValue->load();
+    s.mono = monoValue->load() > 0.5f;
+    s.attack = attackValue->load();
     return s;
 }
 
@@ -141,6 +217,13 @@ void ParagonX1AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
     keyboardMidi.clear();
     keyboardMidi.addEvents (midi, 0, numSamples, 0);
     keyboardState.processNextMidiBuffer (keyboardMidi, 0, numSamples, true);
+    // POLY WINDOW: everything a window late (reported as latency), notes within it made one chord.
+    if (const auto w = windowSamplesFor(); w != windowSamples.load())
+    {
+        windowSamples = w;
+        triggerAsyncUpdate();
+    }
+    polyWindow.process (keyboardMidi, windowedMidi, numSamples, windowSamples.load());
 
     buffer.clear();
     auto settings = getGuitarSettings();
@@ -153,7 +236,7 @@ void ParagonX1AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
     auto* right = buffer.getNumChannels() > 1 ? buffer.getWritePointer (1) : scratch.data();
     if (buffer.getNumChannels() == 1)
         std::fill (scratch.begin(), scratch.begin() + numSamples, 0.0f);
-    guitar.process (left, right, numSamples, keyboardMidi, 0, settings);
+    guitar.process (left, right, numSamples, windowedMidi, 0, settings);
     if (buffer.getNumChannels() == 1)
         for (int i = 0; i < numSamples; ++i)
             left[i] = 0.5f * (left[i] + right[i]);
@@ -170,6 +253,25 @@ void ParagonX1AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
                 x[i] = y = x[i] + a * (y - x[i]);
             toneState[(size_t) c] = y;
         }
+    }
+
+    // BITE: less low-mid, more top.
+    if (const auto b = biteValue->load(); b > 0.001f)
+    {
+        if (std::abs (b - biteSetFor) > 0.0005f)
+            updateBite (b);
+        for (int c = 0; c < juce::jmin (2, buffer.getNumChannels()); ++c)
+        {
+            auto* x = buffer.getWritePointer (c);
+            for (int i = 0; i < numSamples; ++i)
+                x[i] = biteHigh.run (biteMid.run (x[i], c), c);
+        }
+    }
+    else if (biteSetFor != 0.0f)
+    {
+        biteMid = {};
+        biteHigh = {};
+        biteSetFor = 0.0f;
     }
 
     // The preset's level and OUTPUT (smoothed), BYPASS (silence: an instrument has nothing to pass through).

@@ -55,6 +55,21 @@ namespace guitar
         activeVoices = 0;
     }
 
+    Guitar::NowPlaying Guitar::getNowPlaying() const noexcept
+    {
+        NowPlaying n;
+        const auto at = [this] (int i) { return nowPlaying[(size_t) i].load(); };
+        n.note = at (0); n.inputVelocity = at (1); n.velocity = at (2); n.layer = at (3); n.layers = at (4);
+        n.roundRobin = at (5); n.roundRobins = at (6); n.string = at (7); n.fret = at (8); n.notes = at (9);
+        n.articulation = (Articulation) at (10);
+        n.stroke = (Stroke) (at (11) & 1);
+        n.powerChord = (at (11) & 2) != 0;
+        n.count = nowCount.load();
+        if (n.count == 0)
+            n.note = -1;
+        return n;
+    }
+
     int Guitar::getForcedString (const Settings& s) const noexcept
     {
         return ksForce >= -1 ? ksForce : s.forceString;
@@ -127,6 +142,8 @@ namespace guitar
                     chord.notes[(size_t) chord.count] = each;
                     chord.velocities[(size_t) chord.count] = played.velocity;
                     chord.sources[(size_t) chord.count] = note;
+                    chord.inputVelocities[(size_t) chord.count] = velocity;
+                    chord.power[(size_t) chord.count] = played.powerChord;
                     chord.articulations[(size_t) chord.count++] = played.articulation;
                 }
             }
@@ -145,20 +162,51 @@ namespace guitar
         }
     }
 
-    void Guitar::strike (const Chord& chord, const Settings& s) noexcept
+    void Guitar::strike (const Chord& input, const Settings& s) noexcept
     {
-        if (chord.count == 0)
+        if (input.count == 0)
             return;
+        // MONO: only the newest note (the highest of notes struck together; a power chord's three stay together), and
+        // every other string stopped.
+        const Chord* chordToPlay = &input;
+        Chord monoChord;
+        if (s.mono)
+        {
+            auto top = input.sources[0];
+            for (int i = 1; i < input.count; ++i)
+                top = juce::jmax (top, input.sources[(size_t) i]);
+            for (int i = 0; i < input.count; ++i)
+                if (input.sources[(size_t) i] == top)
+                {
+                    const auto k = (size_t) monoChord.count++;
+                    monoChord.notes[k] = input.notes[(size_t) i]; monoChord.velocities[k] = input.velocities[(size_t) i];
+                    monoChord.sources[k] = input.sources[(size_t) i]; monoChord.inputVelocities[k] = input.inputVelocities[(size_t) i];
+                    monoChord.power[k] = input.power[(size_t) i]; monoChord.articulations[k] = input.articulations[(size_t) i];
+                }
+            for (auto& v : voices)
+                if (v.active && v.held)
+                    stopVoice (v, stopSeconds);
+            chordToPlay = &monoChord;
+        }
+        const auto& chord = *chordToPlay;
         std::array<bool, numStrings> busy {};
         for (int st = 0; st < numStrings; ++st)
             busy[(size_t) st] = onString[(size_t) st] >= 0;
-        FretSettings fs { s.fretMode, getForcedString (s) };
+        FretSettings fs { s.fretMode, getForcedString (s), s.capo, s.handSpan };
         std::array<Position, maxChord> places {};
         const auto handIsAuto = (ksHand >= 0 ? ksHand : s.hand) == 0;
         chooseChord (chord.notes.data(), chord.count, busy, handNow (s), fs, places.data(), handIsAuto);
 
         const auto pick = ksPick >= 0 ? (PickMode) ksPick : s.pick;
-        const auto stroke = pick == PickMode::down ? Stroke::down : pick == PickMode::up ? Stroke::up : nextStroke;
+        auto stroke = pick == PickMode::down ? Stroke::down : pick == PickMode::up ? Stroke::up : nextStroke;
+        if (pick == PickMode::economy && chord.count == 1 && places[0].valid() && last.valid() && places[0].string != last.string)
+        {
+            // ECONOMY: crossing to the next string the way the pick already moves (down: toward the high E, a higher
+            // string number here) is the same stroke again.
+            const auto towardHigh = places[0].string > last.string;
+            if ((lastStrokePlayed == Stroke::down) == towardHigh)
+                stroke = lastStrokePlayed;
+        }
         nextStroke = stroke == Stroke::down ? Stroke::up : Stroke::down;
         lastStrokePlayed = stroke;
         // Each articulation's round-robins in turn (as 0.2.0), once per stroke for the whole chord.
@@ -175,6 +223,7 @@ namespace guitar
             return r;
         };
 
+        auto shown = false;
         for (size_t i = 0; i < (size_t) chord.count; ++i)
         {
             const auto p = places[i];
@@ -245,13 +294,32 @@ namespace guitar
                 v.gain *= juce::Decibels::decibelsToGain (s.variation * (random.nextFloat() - 0.5f));
                 v.step *= std::pow (2.0, (double) s.variation * (random.nextDouble() * 6.0 - 3.0) / 1200.0);
             }
+            if (s.attack > 0.0f)
+            {
+                // ATTACK: up to +8 dB at the very start (by velocity), gone after about 30 ms.
+                v.attack = 1.5f * s.attack * (float) chord.inputVelocities[i] / 127.0f;
+                v.attackDecay = (float) std::exp (-1.0 / (0.010 * rate));
+            }
             v.age = ++clock;
             if (found.take->stream != nullptr && s.streamer != nullptr)
                 if ((v.stream = s.streamer->claim (*found.take->stream)) >= 0)
                     s.streamer->attach (v.stream, 0);
             onString[(size_t) p.string] = (int) (&v - voices.data());
             if (handIsAuto)
-                autoHand = followHand (autoHand, p.fret, s.fretMode);
+                autoHand = followHand (autoHand, p.fret, s.fretMode, s.handSpan, s.capo);
+            if (! shown)
+            {
+                // NOW PLAYING: the chord's first note placed (its lowest: chords are given lowest first by the DAW...
+                // whichever came first in the event list).
+                shown = true;
+                const auto& spec = renders::spec (articulation);
+                const auto r = roundRobins[(size_t) articulation] >= 0 ? roundRobins[(size_t) articulation] : 0;
+                const int values[] = { chord.sources[i], chord.inputVelocities[i], velocity, layer, spec.layers, r, spec.roundRobins,
+                                       p.string, p.fret, chord.count, (int) articulation, (stroke == Stroke::up ? 1 : 0) | (chord.power[i] ? 2 : 0) };
+                for (size_t k = 0; k < nowPlaying.size(); ++k)
+                    nowPlaying[k] = values[k];
+                ++nowCount;
+            }
         }
     }
 
@@ -278,7 +346,8 @@ namespace guitar
             }
             const auto frac = (float) (v.position - (double) f);
             const auto a = frameAt (f), b = frameAt (f + 1);
-            const auto out = (a + (b - a) * frac) * v.gain * v.fade;
+            const auto out = (a + (b - a) * frac) * v.gain * v.fade * (1.0f + v.attack);
+            v.attack *= v.attackDecay;
             left[i] += out;
             right[i] += out;
             v.position += v.step;
@@ -356,7 +425,7 @@ namespace guitar
         if (s.streamer != nullptr)
             s.streamer->release (inUse);
         idleSamples = held ? 0.0 : idleSamples + numSamples;
-        if (idleSamples > rate)
+        if (idleSamples > rate * (double) juce::jmax (0.05f, s.handResetSeconds))
             autoHand = 1;
         for (int st = 0; st < numStrings; ++st)
         {

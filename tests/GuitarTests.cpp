@@ -4,6 +4,7 @@
 #include "TestUtils.h"
 
 #include "guitar/Guitar.h"
+#include "guitar/PolyWindow.h"
 #include "guitar/RenderImport.h"
 #include "guitar/RoundRobinCheck.h"
 
@@ -825,4 +826,171 @@ TEST_CASE ("PALM MUTE 0.3.0: its eight takes a stroke in turn; power chords as t
     CHECK_THAT (levelAt (q.left, 110.0, 4800, 4800), WithinAbs (0.25, 0.01));
     CHECK_FALSE (q.guitar.getSounding (2).muted);
     CHECK (q.guitar.getSounding (2).fret == 0);
+}
+
+TEST_CASE ("FRETTING 0.4.0: CAPO (nothing below it, its fret as open) and HAND SPAN", "[guitar][fretting]")
+{
+    FretSettings capo5 { FretMode::natural, -1, 5, 0 };
+    CHECK (choose (45, none(), 1, {}) == Position { 2, 0 });       // A2: the open A string
+    CHECK (choose (45, none(), 1, capo5) == Position { 1, 5 });    // capo 5: the E string at the capo, as open
+    CHECK (choose (38, none(), 1, capo5) == Position { 0, 5 });    // D2: the low A at the capo
+    CHECK_FALSE (choose (34, none(), 1, capo5).valid());           // A#1: below the capo on the only string that has it
+    FretSettings forced { FretMode::natural, 2, 5, 0 };
+    CHECK (choose (45, none(), 1, forced) == Position { 1, 5 });   // forcing the A string open: under the capo, not allowed
+
+    CHECK (handSpan (FretMode::natural) == 4);
+    CHECK (handSpan (FretMode::natural, 6) == 6);
+    CHECK (followHand (1, 6, FretMode::natural) == 3);             // four frets: 3 to 6
+    CHECK (followHand (1, 6, FretMode::natural, 6) == 1);          // six: 1 to 6 already reaches
+    CHECK (followHand (8, 5, FretMode::natural, 0, 5) == 8);       // the capo's fret is open: the hand stays
+}
+
+TEST_CASE ("THE ENGINE 0.4.0: MONO, ECONOMY picking, ATTACK, HAND RESET, CAPO played, NOW PLAYING", "[guitar][engine]")
+{
+    SECTION ("MONO: a new note stops the others")
+    {
+        Player p;
+        p.play (0.3, { { Player::on (33), 0 }, { Player::on (45), (int) (0.1 * sampleRate) } });
+        CHECK (p.guitar.getActiveVoices() == 2);                   // both ring (two strings)
+        Player m;
+        m.settings.mono = true;
+        m.play (0.3, { { Player::on (33), 0 }, { Player::on (45), (int) (0.1 * sampleRate) } });
+        CHECK (m.guitar.getActiveVoices() == 1);
+        CHECK (levelAt (m.left, 55.0, (size_t) (0.15 * sampleRate), 4800) < 0.01);   // the low A gone
+        CHECK (levelAt (m.left, 110.0, (size_t) (0.15 * sampleRate), 4800) > 0.2);
+        // A chord in MONO: only its highest note
+        Player c;
+        c.settings.mono = true;
+        c.play (0.2, { { Player::on (33), 0 }, { Player::on (45), 0 } });
+        CHECK (c.guitar.getActiveVoices() == 1);
+        CHECK (c.guitar.lastPosition() == Position { 2, 0 });
+    }
+    SECTION ("ECONOMY: crossing strings the way the pick moves, the same stroke again")
+    {
+        const auto strokes = [] (PickMode mode)
+        {
+            Player p;
+            p.settings.pick = mode;
+            std::vector<Stroke> out;
+            for (const auto note : { 33, 40, 45, 40, 33, 33 })   // low A, E, A strings open; back; the low A again
+            {
+                p.play (0.05, { { Player::on (note), 0 } });
+                out.push_back (p.guitar.lastStroke());
+            }
+            return out;
+        };
+        const auto D = Stroke::down, U = Stroke::up;
+        CHECK (strokes (PickMode::alternate) == std::vector<Stroke> { D, U, D, U, D, U });
+        // down on to the next higher string: down again (x2); then up toward the low strings: up again; the same
+        // string: alternate
+        CHECK (strokes (PickMode::economy) == std::vector<Stroke> { D, D, D, U, U, D });
+    }
+    SECTION ("ATTACK: the first milliseconds louder, by velocity; none at 0")
+    {
+        const auto ratio = [] (float attack, int velocity)
+        {
+            Player p;
+            p.library = toneGuitar (48000.0, 1.0);
+            p.settings.library = p.library.get();
+            p.settings.attack = attack;
+            p.play (0.3, { { Player::on (45, velocity), 0 } });
+            return rms (p.left, 0, 240) / rms (p.left, 9600, 14400);   // the first 5 ms against 200-300 ms
+        };
+        CHECK_THAT (ratio (0.0f, 127), WithinAbs (1.0, 0.1));
+        CHECK (ratio (1.0f, 127) > 1.8);
+        CHECK (ratio (1.0f, 40) < ratio (1.0f, 127));
+    }
+    SECTION ("HAND RESET: the AUTO hand home after that long with nothing held")
+    {
+        const auto handAfter = [] (float reset)
+        {
+            Player p;
+            p.settings.handResetSeconds = reset;
+            p.settings.forceString = 0;
+            p.play (0.1, { { Player::on (45), 0 } });              // the low A at the 12th fret: the hand goes up
+            p.settings.forceString = -1;
+            p.play (0.5, { { Player::off (45), 0 } });
+            return p.guitar.getHand();
+        };
+        CHECK (handAfter (0.2f) == 1);
+        CHECK (handAfter (1.0f) > 5);
+    }
+    SECTION ("CAPO: notes played from it")
+    {
+        Player p;
+        p.settings.capo = 5;
+        p.play (0.3, { { Player::on (45), 0 } });
+        CHECK (p.guitar.lastPosition() == Position { 1, 5 });
+        CHECK_THAT (frequencyOf (p.left, 2000, 12000), WithinAbs (110.0, 0.3));
+    }
+    SECTION ("NOW PLAYING: what the last note did")
+    {
+        Player p (true);
+        p.settings.keyMap = KeyMap::split;
+        CHECK (p.guitar.getNowPlaying().note == -1);
+        p.play (0.1, { { Player::on (12, 100), 0 }, { Player::on (33, 30), 10 } });   // C-1 latched; velocity 30: a palm mute
+        auto n = p.guitar.getNowPlaying();
+        CHECK (n.note == 33);
+        CHECK (n.inputVelocity == 30);
+        CHECK (n.articulation == Articulation::mute);
+        CHECK (n.velocity == playedFor (KeyMap::split, 12, 30).velocity);
+        CHECK (n.layer == renders::layerFor (Articulation::mute, n.velocity));
+        CHECK (n.layers == 5);
+        CHECK (n.roundRobins == 8);
+        CHECK (n.stroke == Stroke::down);
+        CHECK (n.string == 0);
+        CHECK (n.fret == 0);
+        const auto count = n.count;
+        p.play (0.1, { { Player::on (45, 90), 0 } });
+        n = p.guitar.getNowPlaying();
+        CHECK (n.count == count + 1);
+        CHECK (n.articulation == Articulation::sustain);
+        CHECK (n.stroke == Stroke::up);
+        CHECK (n.roundRobins == 2);
+    }
+}
+
+TEST_CASE ("POLY WINDOW 0.4.0: everything a window late; notes within it one chord (keyswitches first); 0 passes straight through", "[guitar][engine]")
+{
+    PolyWindow w;
+    w.prepare();
+    const auto run = [&w] (std::vector<std::pair<juce::MidiMessage, int>> events, int windowSamples, int blocks = 8)
+    {
+        std::vector<std::tuple<int, int, bool>> out;   // (absolute sample, note, on)
+        for (int b = 0; b < blocks; ++b)
+        {
+            juce::MidiBuffer in, result;
+            for (const auto& [m, at] : events)
+                if (at >= b * blockSize && at < (b + 1) * blockSize)
+                    in.addEvent (m, at - b * blockSize);
+            w.process (in, result, blockSize, windowSamples);
+            for (const auto metadata : result)
+            {
+                const auto m = metadata.getMessage();
+                out.emplace_back (b * blockSize + metadata.samplePosition, m.getNoteNumber(), m.isNoteOn());
+            }
+        }
+        return out;
+    };
+    using E = std::tuple<int, int, bool>;
+    // Window 0: as it came.
+    w.reset();
+    CHECK (run ({ { Player::on (45), 10 }, { Player::on (52), 100 }, { Player::off (45), 300 } }, 0)
+           == std::vector<E> { { 10, 45, true }, { 100, 52, true }, { 300, 45, false } });
+    // 5 ms (240 samples): the second note, 2 ms after the first, comes with it; the note-off a window late.
+    w.reset();
+    CHECK (run ({ { Player::on (45), 10 }, { Player::on (52), 106 }, { Player::off (45), 600 } }, 240)
+           == std::vector<E> { { 250, 45, true }, { 250, 52, true }, { 840, 45, false } });
+    // A keyswitch a hair after its note: pulled to before it.
+    w.reset();
+    CHECK (run ({ { Player::on (50), 0 }, { Player::on (13, 100), 20 } }, 240)
+           == std::vector<E> { { 240, 13, true }, { 240, 50, true } });
+    // Notes further apart than the window: each in its own place.
+    w.reset();
+    CHECK (run ({ { Player::on (45), 0 }, { Player::on (52), 400 } }, 240)
+           == std::vector<E> { { 240, 45, true }, { 640, 52, true } });
+    // A re-struck note isn't pulled before its own note-off.
+    w.reset();
+    CHECK (run ({ { Player::on (45), 0 }, { Player::off (45), 50 }, { Player::on (45), 100 } }, 240)
+           == std::vector<E> { { 240, 45, true }, { 290, 45, false }, { 340, 45, true } });
 }

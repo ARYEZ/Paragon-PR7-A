@@ -6,6 +6,7 @@
 #include "LevelMeterSource.h"
 #include "Parameters.h"
 #include "guitar/Guitar.h"
+#include "guitar/PolyWindow.h"
 #include "guitar/RenderImport.h"
 #include "rigs/MidiLinks.h"
 #include "rigs/RigLibrary.h"
@@ -32,6 +33,7 @@ struct CurrentRig
 // Presets, undo and MIDI learn are the PR7 family's.
 class ParagonX1AudioProcessor final : public juce::AudioProcessor,
                                       private juce::Timer,
+                                      private juce::AsyncUpdater,
                                       private juce::AudioProcessorValueTreeState::Listener,
                                       private juce::AudioProcessorParameter::Listener
 {
@@ -115,6 +117,14 @@ public:
     float getLoadProgress() const noexcept { return loadProgress.load(); }   // -1: not loading
     const guitar::Guitar& getGuitar() const noexcept { return guitar; }
     guitar::Settings getGuitarSettings() const noexcept;   // the page's settings (no library or streamer)
+
+    // PERFORMANCE (0.4.0): a style sets the fretting controls together (as the reference's performance styles do):
+    // Rhythm (natural fretting, hand AUTO, mono off, span auto), Lead (the same, mono), Chords (polyphonic fretting).
+    // Not a parameter: the page shows the style the controls match, or Custom.
+    enum class Performance { custom, rhythm, lead, chords };
+    static inline const juce::StringArray performanceNames { "Custom", "Rhythm", "Lead", "Chords" };
+    void applyPerformance (Performance);
+    Performance currentPerformance() const;
     int getActiveVoices() const noexcept { return guitar.getActiveVoices(); }
     juce::ChangeBroadcaster guitarBroadcaster;   // the guitar loaded, an import finished
     bool waitUntilIdle (int timeoutMs);          // tests: until loading and importing are done
@@ -162,6 +172,7 @@ private:
     void parameterValueChanged (int, float) override {}
     void parameterGestureChanged (int, bool gestureIsStarting) override;
     void timerCallback() override;
+    void handleAsyncUpdate() override;   // the POLY WINDOW's latency told to the host (off the audio thread)
 
     MidiLinks midiLinks;
     std::array<std::atomic<juce::RangedAudioParameter*>, 128> controllerTargets {};
@@ -204,6 +215,33 @@ private:
     std::atomic<float>* patchLevelValue = nullptr;
     std::atomic<float>* outputValue = nullptr;
     std::atomic<float>* bypassValue = nullptr;
+    std::atomic<float>* capoValue = nullptr;
+    std::atomic<float>* handSpanValue = nullptr;
+    std::atomic<float>* handResetValue = nullptr;
+    std::atomic<float>* monoValue = nullptr;
+    std::atomic<float>* polyWindowValue = nullptr;
+    std::atomic<float>* biteValue = nullptr;
+    std::atomic<float>* attackValue = nullptr;
+    guitar::PolyWindow polyWindow;
+    juce::MidiBuffer windowedMidi;
+    std::atomic<int> windowSamples { 0 };
+    int windowSamplesFor() const noexcept;
+    // BITE: a cut in the low mids (400 Hz) and a lift up top (a 3 kHz shelf), both by BITE (RBJ biquads).
+    struct Biquad
+    {
+        float b0 = 1, b1 = 0, b2 = 0, a1 = 0, a2 = 0;
+        std::array<float, 2> z1 {}, z2 {};
+        float run (float x, int c) noexcept
+        {
+            const auto y = b0 * x + z1[(size_t) c];
+            z1[(size_t) c] = b1 * x - a1 * y + z2[(size_t) c];
+            z2[(size_t) c] = b2 * x - a2 * y;
+            return y;
+        }
+    };
+    Biquad biteMid, biteHigh;
+    float biteSetFor = -1.0f;
+    void updateBite (float amount) noexcept;
     juce::SmoothedValue<float> gain;
     std::array<float, 2> toneState {};
     std::vector<float> scratch;

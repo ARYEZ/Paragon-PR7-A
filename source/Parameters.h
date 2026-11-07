@@ -31,9 +31,18 @@ namespace ParamIDs
     inline constexpr auto release        = "release";         // seconds: a note-off damping its string
     inline constexpr auto transpose      = "transpose";       // semitones
     inline constexpr auto variation      = "variation";       // 0.3.0 (hint 2): each note a little different (guitar::Settings::variation)
+    // 0.4.0 (hint 4), the new GUITAR page's controls:
+    inline constexpr auto capo           = "capo";            // 0 none, else the capo's fret
+    inline constexpr auto handSpan       = "handSpan";        // handSpanNames: Auto (the fretting mode's own), else frets
+    inline constexpr auto handReset      = "handReset";       // seconds before an AUTO hand goes home
+    inline constexpr auto mono           = "mono";            // one note at a time
+    inline constexpr auto polyWindow     = "polyWindow";      // ms: notes this close together make a chord (and the latency)
+    inline constexpr auto bite           = "bite";            // 0..1: an EQ, brighter with less low-mid
+    inline constexpr auto attack         = "attack";          // 0..1: each note's first milliseconds louder
 
     inline const juce::StringArray fretModeNames { "Natural", "Polyphonic" };
-    inline const juce::StringArray pickModeNames { "Alternate", "Down", "Up" };
+    inline const juce::StringArray pickModeNames { "Alternate", "Down", "Up", "Economy" };
+    inline const juce::StringArray handSpanNames { "Auto", "2", "3", "4", "5", "6", "7", "8" };
     inline const juce::StringArray forceStringNames { "Off", "String 7 (low A)", "String 6 (E)", "String 5 (A)", "String 4 (D)",
                                                       "String 3 (G)", "String 2 (B)", "String 1 (high E)" };
 
@@ -48,6 +57,8 @@ namespace ParamRanges
     inline constexpr float outputDefaultDb = -6.0f;   // headroom (the family's default)
     inline constexpr float toneMinHz = 1000.0f, toneMaxHz = 20000.0f;
     inline constexpr int maxHand = 21;                 // the hand's fret (its span then reaches the 24th)
+    inline constexpr int maxCapo = 12;
+    inline constexpr float maxPolyWindowMs = 100.0f;
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();

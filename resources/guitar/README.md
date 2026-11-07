@@ -1,9 +1,9 @@
-# THE GUITAR VIEW's picture (mock-up stage, for 0.4.0)
+# THE GUITAR page's picture (PR7-I 0.4.0)
 
 Our own 3D 7-string, modelled and rendered in the PR7 family's "Tron" look the way PR7-D's kit was
-(`resources/kit/` in PR7-D's history): gloss black body with carved facets and a glowing edge, an ebony neck with
+(`resources/kit/` in PR7-D's history): gloss black body with a glowing edge, an ebony neck with
 glowing frets and inlays, strings lit in the family's string colours, two humbuckers, a fixed bridge, on a gloss floor
-with a red grid. Not built into the plugin yet: the owner is approving the mock-up.
+with a red grid. Built into the plugin as `guitar.jpg` (`process_guitar.py`: the hues kept in the family's range) and `guitar-geometry.json`, drawn by `source/ui/GuitarView.cpp`.
 
 - **Scale:** the owner's reference (their guitar instrument's Main tab, mirrored): the neck about 11-12% of the
   window's width and nearly parallel, frets 0 to 24 across nearly the whole window, the body at its real size beside

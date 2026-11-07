@@ -1,4 +1,4 @@
-#include "GuitarPage.h"
+#include "RendersPage.h"
 
 #include "ui/Fretboard.h"
 #include "ui/ParagonLookAndFeel.h"
@@ -13,33 +13,15 @@ namespace
     }
 }
 
-GuitarPage::GuitarPage (ParagonX1AudioProcessor& p)
+RendersPage::RendersPage (ParagonX1AudioProcessor& p)
     : processor (p),
-      fretMode (p.getParameters(), ParamIDs::fretMode, "FRETTING MODE",
-                "NATURAL: the hand follows the notes, four frets wide. POLYPHONIC: five wide, each note of a chord on its own string."),
-      pickMode (p.getParameters(), ParamIDs::pickMode, "PICKING MODE", "Which stroke each note's take is: alternating down and up, or all down or all up."),
-      forceString (p.getParameters(), ParamIDs::forceString, "FORCE STRING", "Every note on this string, where it can be (keyswitches C-2 to F#-2, G-2: off)."),
-      hand (p.getParameters(), ParamIDs::handPosition, "HAND POSITION", "AUTO: the hand follows the notes. Else the fret it stays at (keyswitch A#-2: its velocity; B-2: AUTO)."),
-      transpose (p.getParameters(), ParamIDs::transpose, "TRANSPOSE", "Moves every note played (not the keyswitches)."),
-      velToVol (p.getParameters(), ParamIDs::velocityToVolume, "VEL > VOL", "How much velocity changes the level within a dynamic (velocity always picks the dynamic)."),
-      release (p.getParameters(), ParamIDs::release, "RELEASE", "How quickly a string stops when its note ends."),
-      variation (p.getParameters(), ParamIDs::variation, "VARIATION",
-                 "An experiment: now and then a neighbouring dynamic's or fret's take instead of the note's own, and each note "
-                 "a touch later into its take, louder or quieter, sharp or flat. Fully down (the default): the takes exactly "
-                 "as recorded, in turn."),
-      tone (p.getParameters(), ParamIDs::tone, "TONE", "A gentle low-pass on the whole guitar; fully up: open."),
-      level (p.getParameters(), ParamIDs::patchLevel, "LEVEL", "The preset's own level."),
       keyMap (p.getParameters(), ParamIDs::keyMap, "KEY MAP",
               "How the articulation keyswitches work. SPLIT (your own map): C-1 plays palm mute at velocities 1-59 and sustain "
               "at 60-119, each zone spread over all its degrees; C#-1 the same as power chords. FACTORY: C-1 sustain, C#-1 "
               "palm mute, D#-1 / E-1 power chords. Not part of a preset.")
 {
-    for (auto* c : std::initializer_list<juce::Component*> { &playing, &sound, &guitarPanel, &renders })
+    for (auto* c : std::initializer_list<juce::Component*> { &guitarPanel, &renders })
         addAndMakeVisible (c);
-    for (auto* c : { &fretMode, &pickMode, &forceString, &hand, &transpose })
-        playing.addAndMakeVisible (c);
-    for (auto* c : { &velToVol, &release, &variation, &tone, &level })
-        sound.addAndMakeVisible (c);
 
     folderLabel.setColour (juce::Label::textColourId, ParagonColours::text);
     folderLabel.setFont (juce::FontOptions (14.0f));
@@ -84,12 +66,12 @@ GuitarPage::GuitarPage (ParagonX1AudioProcessor& p)
     startTimerHz (10);
 }
 
-GuitarPage::~GuitarPage()
+RendersPage::~RendersPage()
 {
     processor.guitarBroadcaster.removeChangeListener (this);
 }
 
-void GuitarPage::refresh()
+void RendersPage::refresh()
 {
     const auto library = processor.getLibrary();
     const auto folder = processor.getGuitarFolder();
@@ -118,14 +100,14 @@ void GuitarPage::refresh()
         row->refresh();
 }
 
-void GuitarPage::timerCallback()
+void RendersPage::timerCallback()
 {
     // While loading or importing, the rows' and status's progress.
     if (processor.getLoadProgress() >= 0.0f || processor.getImportProgress() >= 0.0f)
         refresh();
 }
 
-void GuitarPage::showArticulation (guitar::Articulation a)
+void RendersPage::showArticulation (guitar::Articulation a)
 {
     shown = a;
     (a == guitar::Articulation::mute ? muteTab : sustainTab).setToggleState (true, juce::dontSendNotification);
@@ -140,7 +122,7 @@ void GuitarPage::showArticulation (guitar::Articulation a)
         row->refresh();
 }
 
-void GuitarPage::chooseFolder()
+void RendersPage::chooseFolder()
 {
     chooser = std::make_unique<juce::FileChooser> ("The guitar's folder of takes", processor.getGuitarFolder());
     chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories,
@@ -155,7 +137,7 @@ void GuitarPage::chooseFolder()
                           });
 }
 
-void GuitarPage::saveAllLists()
+void RendersPage::saveAllLists()
 {
     chooser = std::make_unique<juce::FileChooser> ("A folder for the render lists",
                                                    juce::File::getSpecialLocation (juce::File::userDocumentsDirectory));
@@ -167,22 +149,14 @@ void GuitarPage::saveAllLists()
                           });
 }
 
-void GuitarPage::paint (juce::Graphics&) {}
+void RendersPage::paint (juce::Graphics&) {}
 
-void GuitarPage::resized()
+void RendersPage::resized()
 {
     auto area = getLocalBounds();
-    auto left = area.removeFromLeft (560);
-    playing.setBounds (left.removeFromTop (190));
-    left.removeFromTop (8);
-    sound.setBounds (left.removeFromTop (190));
-    left.removeFromTop (8);
-    guitarPanel.setBounds (left);
+    guitarPanel.setBounds (area.removeFromLeft (420));
     area.removeFromLeft (8);
     renders.setBounds (area);
-
-    SynthPanel::layoutRow (playing.getContentArea().withHeight (ParamControl::knobHeight + 20), { &fretMode, &pickMode, &forceString, &hand, &transpose });
-    SynthPanel::layoutRow (sound.getContentArea().withHeight (ParamControl::knobHeight + 20), { &velToVol, &release, &variation, &tone, &level });
     {
         auto c = guitarPanel.getContentArea();
         folderLabel.setBounds (c.removeFromTop (24));
@@ -214,7 +188,7 @@ void GuitarPage::resized()
 }
 
 //==============================================================================
-GuitarPage::StringRow::StringRow (ParagonX1AudioProcessor& p, int s, std::function<guitar::Articulation()> a)
+RendersPage::StringRow::StringRow (ParagonX1AudioProcessor& p, int s, std::function<guitar::Articulation()> a)
     : processor (p), string (s), articulation (std::move (a))
 {
     name.setText (guitar::stringLabel (string), juce::dontSendNotification);
@@ -244,7 +218,7 @@ GuitarPage::StringRow::StringRow (ParagonX1AudioProcessor& p, int s, std::functi
         addAndMakeVisible (c);
 }
 
-void GuitarPage::StringRow::refresh()
+void RendersPage::StringRow::refresh()
 {
     juce::String text;
     const auto a = articulation();
@@ -265,7 +239,7 @@ void GuitarPage::StringRow::refresh()
     importButton.setEnabled (processor.getImportingString() < 0);
 }
 
-void GuitarPage::StringRow::importFile()
+void RendersPage::StringRow::importFile()
 {
     const auto a = articulation();
     chooser = std::make_unique<juce::FileChooser> ("The render of " + guitar::renders::fileName (a, string),
@@ -278,7 +252,7 @@ void GuitarPage::StringRow::importFile()
                           });
 }
 
-void GuitarPage::StringRow::mouseDrag (const juce::MouseEvent& e)
+void RendersPage::StringRow::mouseDrag (const juce::MouseEvent& e)
 {
     if (e.eventComponent != &midiButton || e.getDistanceFromDragStart() < 6)
         return;
@@ -286,12 +260,12 @@ void GuitarPage::StringRow::mouseDrag (const juce::MouseEvent& e)
         container->performExternalDragDropOfFiles ({ processor.renderListFile (articulation(), string).getFullPathName() }, false, this);
 }
 
-bool GuitarPage::StringRow::isInterestedInFileDrag (const juce::StringArray& files)
+bool RendersPage::StringRow::isInterestedInFileDrag (const juce::StringArray& files)
 {
     return files.size() == 1 && isAudio (files[0]);
 }
 
-void GuitarPage::StringRow::filesDropped (const juce::StringArray& files, int, int)
+void RendersPage::StringRow::filesDropped (const juce::StringArray& files, int, int)
 {
     dropping = false;
     repaint();
@@ -299,7 +273,7 @@ void GuitarPage::StringRow::filesDropped (const juce::StringArray& files, int, i
         processor.startImport (juce::File (files[0]), articulation(), string);
 }
 
-void GuitarPage::StringRow::paint (juce::Graphics& g)
+void RendersPage::StringRow::paint (juce::Graphics& g)
 {
     g.setColour (dropping ? ParagonColours::accent.withAlpha (0.18f) : juce::Colour (0xff0f0b0e));
     g.fillRoundedRectangle (getLocalBounds().toFloat(), 4.0f);
@@ -307,7 +281,7 @@ void GuitarPage::StringRow::paint (juce::Graphics& g)
     g.drawRoundedRectangle (getLocalBounds().toFloat().reduced (0.5f), 4.0f, 1.0f);
 }
 
-void GuitarPage::StringRow::resized()
+void RendersPage::StringRow::resized()
 {
     auto area = getLocalBounds().reduced (10, 4);
     name.setBounds (area.removeFromLeft (170));

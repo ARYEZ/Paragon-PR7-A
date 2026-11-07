@@ -2,6 +2,28 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.4.0
+
+**The new GUITAR page.** The guitar fills the window in the same Tron look as PR7-D's drums, laid out the way your guitar instrument's main page works, mirrored: headstock on the right, heaviest string on top. Every note lights up on its string and fret as you play.
+
+- **The guitar:** our own 3D model, rendered the same way as PR7-D's drum kit. The body is traced from your RG photo (no name or logo on it), gloss black with a neon edge that runs pink on top to orange underneath. The fretboard has glowing frets and inlays, and the strings glow in their colours. Only the horns and the top of the body show, as on your guitar instrument's page.
+- **On the neck:** sustained notes are solid dots and palm mutes are rings, and each string lights up from the note to the bridge. The hand's reach is a lit window with a bracket underneath (HAND 1–4 · AUTO). A forced string glows along its length. **Drag the capo** along the neck from the nut, and double-click it to take it off.
+- **New controls** (each is our own version of what your guitar instrument has):
+  - **CAPO:** nothing plays below it, and its fret rings like an open string.
+  - **HAND SPAN:** how many frets the hand reaches. Auto keeps 4, or 5 in polyphonic mode.
+  - **HAND RESET:** how long the hand waits, with nothing held, before going back down the neck. It was a fixed second before.
+  - **MONO:** one note at a time.
+  - **ECONOMY picking:** alternate picking, except that crossing to the next string in the direction the pick is already moving keeps the same stroke.
+  - **PERFORMANCE:** Rhythm, Lead (mono) or Chords (polyphonic) sets the fretting controls in one go. The menu shows Custom once you change them.
+  - **POLY WINDOW:** notes played that close together are fretted as one chord. It delays the guitar by the same amount, and your DAW makes up for that, so notes still land on time.
+  - **BITE:** brighter, with less low-mid.
+  - **ATTACK:** the first few milliseconds of each note louder, more so the harder you play. It boosts the take's own pick sound; it isn't a separate pick noise.
+- **NOW PLAYING:** shows what the last note did: sustain, palm mute or power chord, how muted it was, down or up stroke, which take, the note, its velocity, string and fret.
+- **DOUBLE TRACKING** has its place on the page but comes in a later release.
+- **The render lists and imports** moved to their own **RENDERS** tab.
+- **Presets** saved before 0.4.0 load with the new controls at their defaults, so they sound the same.
+- **What can't be checked here:** how ATTACK and BITE sound on your real renders, and how the page feels in use. Everything was tested with made-up tones, plus a check that every coloured pixel of the page stays in the family's colours.
+
 ## 0.3.0
 
 **Palm mute.** Import your palm-mute renders and play them the way your own map works: C-1 at velocities 1-59 plays palm mute, 60-119 plays sustain.

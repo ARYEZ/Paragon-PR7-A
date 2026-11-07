@@ -3,20 +3,19 @@
 #include "PluginProcessor.h"
 #include "ui/SynthControls.h"
 
-// THE GUITAR page (PR7-I 0.2.0, plain: 0.3.0 gives it the Tron look and the reference instrument's layout):
-//   - PLAYING: FRETTING MODE, PICKING MODE, FORCE STRING, HAND POSITION, TRANSPOSE;
-//   - SOUND: VEL > VOL, RELEASE, TONE, the preset's LEVEL;
+// THE RENDERS page (PR7-I 0.4.0: the 0.2.0 GUITAR page's folder and render lists, the playing controls gone to the new
+// GUITAR page, GuitarView):
 //   - THE GUITAR: the folder of takes it plays, and how much of it there is; KEY MAP (0.3.0: how the articulation
 //     keyswitches work);
 //   - RENDERS: SUSTAIN or PALM MUTE (0.3.0), then a row per string: its render list (click to save the MIDI file; drag
 //     it onto a DAW track), IMPORT... (or drop the rendered audio on the row), and what's been imported for it.
-class GuitarPage final : public juce::Component,
+class RendersPage final : public juce::Component,
                          private juce::ChangeListener,
                          private juce::Timer
 {
 public:
-    explicit GuitarPage (ParagonX1AudioProcessor&);
-    ~GuitarPage() override;
+    explicit RendersPage (ParagonX1AudioProcessor&);
+    ~RendersPage() override;
     void paint (juce::Graphics&) override;
     void resized() override;
 
@@ -34,8 +33,8 @@ private:
     void saveAllLists();
 
     ParagonX1AudioProcessor& processor;
-    SynthPanel playing { "PLAYING" }, sound { "SOUND" }, guitarPanel { "THE GUITAR" }, renders { "RENDERS" };
-    ParamControl fretMode, pickMode, forceString, hand, transpose, velToVol, release, variation, tone, level, keyMap;
+    SynthPanel guitarPanel { "THE GUITAR" }, renders { "RENDERS" };
+    ParamControl keyMap;
     juce::TextButton sustainTab { "SUSTAIN" }, muteTab { "PALM MUTE" };
     guitar::Articulation shown = guitar::Articulation::sustain;
     juce::Label folderLabel, guitarStatus, renderHelp;
@@ -45,7 +44,7 @@ private:
 };
 
 // A string's row in RENDERS.
-class GuitarPage::StringRow final : public juce::Component,
+class RendersPage::StringRow final : public juce::Component,
                                     public juce::FileDragAndDropTarget
 {
 public:

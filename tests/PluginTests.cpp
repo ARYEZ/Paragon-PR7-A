@@ -2,6 +2,7 @@
 // undo, MIDI learn; the window (its tabs, the GUITAR page, the fretboard).
 #include "TestUtils.h"
 
+#include "NoteNames.h"
 #include "Parameters.h"
 #include "PluginEditor.h"
 #include "PluginProcessor.h"
@@ -265,7 +266,7 @@ TEST_CASE ("The window opens as big as fits above the taskbar, up to 1824 x 1026
     CHECK (Editor::openingSize ({ 800, 600 }).x == 960);   // never below the smallest size
 }
 
-TEST_CASE ("THE WINDOW: GUITAR, PRESETS and SETTINGS tabs; the GUITAR page; the fretboard lights the notes played", "[ui]")
+TEST_CASE ("THE WINDOW: GUITAR, RENDERS, PRESETS and SETTINGS tabs; the GUITAR page lights the notes played; the fretboard strip", "[ui]")
 {
     Plugin t;
     // A guitar of short tones in memory, every string and fret.
@@ -288,7 +289,9 @@ TEST_CASE ("THE WINDOW: GUITAR, PRESETS and SETTINGS tabs; the GUITAR page; the 
     auto* view = dynamic_cast<MainView*> (editor->getChildComponent (0));
     REQUIRE (view != nullptr);
     CHECK (view->getPage() == MainView::Page::guitar);
-    CHECK (view->getGuitarPage().isVisible());
+    CHECK (view->getGuitarView().isVisible());
+    CHECK_FALSE (view->getRendersPage().isVisible());
+    CHECK_FALSE (view->getFretboard().isVisible());   // (the GUITAR page has its own neck)
     CHECK (view->findChildWithID ("drumsTab") == nullptr);
     std::vector<juce::MidiKeyboardComponent*> keyboards;
     findAll (*view, keyboards);
@@ -296,7 +299,7 @@ TEST_CASE ("THE WINDOW: GUITAR, PRESETS and SETTINGS tabs; the GUITAR page; the 
     checkLayout (*view, "guitar");
 
     std::vector<juce::Button*> tabs;
-    for (const auto* id : { "guitarTab", "presetsTab", "settingsTab" })
+    for (const auto* id : { "guitarTab", "rendersTab", "presetsTab", "settingsTab" })
     {
         auto* tab = dynamic_cast<juce::Button*> (view->findChildWithID (id));
         INFO (id);
@@ -306,33 +309,53 @@ TEST_CASE ("THE WINDOW: GUITAR, PRESETS and SETTINGS tabs; the GUITAR page; the 
             CHECK (tab->getX() >= tabs.back()->getRight());
         tabs.push_back (tab);
     }
-    view->showPage (MainView::Page::presets);
-    CHECK_FALSE (view->getGuitarPage().isVisible());
+    view->showPage (MainView::Page::renders);
+    CHECK (view->getRendersPage().isVisible());
+    CHECK_FALSE (view->getGuitarView().isVisible());
+    CHECK (view->getFretboard().isVisible());
     CHECK (tabs[1]->getToggleState());
+    checkLayout (*view, "renders");
+    view->showPage (MainView::Page::presets);
+    CHECK_FALSE (view->getRendersPage().isVisible());
+    CHECK (tabs[2]->getToggleState());
     checkLayout (*view, "presets");
     view->showPage (MainView::Page::settings);
     CHECK (view->getSettingsPage().isVisible());
     checkLayout (*view, "settings");
     view->showPage (MainView::Page::guitar);
-    CHECK (view->getFretboard().isVisible());
+    CHECK (view->getGuitarView().isVisible());
 
     // The rows of RENDERS: each string's, what's there for it.
-    CHECK (view->getGuitarPage().getRow (0).getStatus() == "25 of 300 takes");
-    view->getGuitarPage().refresh();
-    CHECK (view->getGuitarPage().getGuitarStatus().contains ("175 takes"));
+    CHECK (view->getRendersPage().getRow (0).getStatus() == "25 of 300 takes");
+    view->getRendersPage().refresh();
+    CHECK (view->getRendersPage().getGuitarStatus().contains ("175 takes"));
 
     // A power chord on the low strings: the fretboard lights the strings and frets it's played on.
     t.play (2, { { 33, 100 }, { 40, 100 }, { 45, 100 } });
     view->getFretboard().refresh();
+    view->getGuitarView().refresh();
     CHECK (view->getFretboard().shownFret (0) == 0);
     CHECK (view->getFretboard().shownFret (1) == 0);
     CHECK (view->getFretboard().shownFret (2) == 0);
     CHECK (view->getFretboard().shownFret (3) == -1);
+    for (int s = 0; s < 4; ++s)
+        CHECK (view->getGuitarView().shownFret (s) == view->getFretboard().shownFret (s));
     t.play (2, { { 33, 0 }, { 40, 0 }, { 45, 0 }, { 38, 100 } });
     t.play (2);
     view->getFretboard().refresh();
+    view->getGuitarView().refresh();
     CHECK (view->getFretboard().shownFret (0) == 5);
     CHECK (view->getFretboard().shownFret (2) == -1);
+    CHECK (view->getGuitarView().shownFret (0) == 5);
+    CHECK (view->getGuitarView().getNowPlayingText().startsWith (notenames::name (38)));
+    // THE GUITAR page's neck: the render's frets as on a real neck (the 12th two-thirds of the way to the 24th), the nut
+    // on the right, the low A's string on top, the notes on their strings.
+    const auto& neck = view->getGuitarView();
+    CHECK_THAT ((neck.fretX (12) - neck.fretX (0)) / (neck.fretX (24) - neck.fretX (0)), WithinAbs (2.0 / 3.0, 0.001));
+    CHECK (neck.fretX (0) > neck.fretX (24));
+    CHECK (neck.noteCentre (0, 5).y < neck.noteCentre (6, 5).y);
+    CHECK (neck.fretAt (neck.noteCentre (0, 7).x) == 7);
+    CHECK (neck.fretAt (neck.fretX (0) - 5.0f) == 0);
     // The fret wires as on a real neck: the 12th halfway to the bridge's end of the neck's span (2/3 of the drawn neck).
     const auto& board = view->getFretboard();
     CHECK_THAT ((board.fretX (12) - board.fretX (0)) / (board.fretX (24) - board.fretX (0)), WithinAbs (2.0 / 3.0, 0.001));
@@ -402,11 +425,131 @@ TEST_CASE ("PALM MUTE 0.3.0: a palm-mute render imported into Mute; played palm-
     std::unique_ptr<juce::AudioProcessorEditor> editor (t.p.createEditor());
     auto* view = dynamic_cast<MainView*> (editor->getChildComponent (0));
     REQUIRE (view != nullptr);
-    auto& page = view->getGuitarPage();
+    auto& page = view->getRendersPage();
     page.showArticulation (Articulation::mute);
     page.refresh();
     CHECK (page.getRow (0).getStatus().startsWith ("2000 notes imported"));
     CHECK (page.getRow (1).getStatus() == "Not imported");
     page.showArticulation (Articulation::sustain);
     CHECK (page.getRow (0).getStatus() == "Not imported");
+}
+
+TEST_CASE ("THE GUITAR PAGE 0.4.0: its controls; the capo dragged on the neck; PERFORMANCE; the family's colours only", "[ui]")
+{
+    Plugin t;
+    std::unique_ptr<juce::AudioProcessorEditor> editor (t.p.createEditor());
+    editor->setSize (1600, 900);
+    auto* view = dynamic_cast<MainView*> (editor->getChildComponent (0));
+    REQUIRE (view != nullptr);
+    auto& page = view->getGuitarView();
+    checkLayout (page, "guitar view");
+    const auto value = [&t] (const char* id) { return t.p.getParameters().getRawParameterValue (id)->load(); };
+
+    // The value boxes: dragged (stepped) up, MONO clicked on.
+    std::vector<GuitarView::ValueBox*> boxes;
+    findAll (page, boxes);
+    REQUIRE (boxes.size() == 4);
+    boxes[0]->step (3);
+    CHECK (value (ParamIDs::capo) == 3.0f);
+    CHECK (boxes[0]->getValueText() == "3");
+    boxes[1]->step (4);
+    CHECK (t.p.getGuitarSettings().handSpan == 5);
+    boxes[2]->step (-5);
+    CHECK_THAT (value (ParamIDs::handReset), WithinAbs (0.5, 0.001));
+    boxes[3]->mouseUp (juce::MouseEvent (juce::Desktop::getInstance().getMainMouseSource(), {}, {}, 1.0f, 0, 0, 0, 0, boxes[3], boxes[3],
+                                         juce::Time::getCurrentTime(), {}, juce::Time::getCurrentTime(), 1, false));
+    CHECK (t.p.getGuitarSettings().mono);
+
+    // PERFORMANCE: a style sets the fretting controls together; the page shows the one they match.
+    t.p.applyPerformance (ParagonX1AudioProcessor::Performance::chords);
+    CHECK (t.p.getGuitarSettings().fretMode == FretMode::polyphonic);
+    CHECK_FALSE (t.p.getGuitarSettings().mono);
+    CHECK (t.p.getGuitarSettings().handSpan == 0);
+    CHECK (t.p.currentPerformance() == ParagonX1AudioProcessor::Performance::chords);
+    t.p.applyPerformance (ParagonX1AudioProcessor::Performance::lead);
+    CHECK (t.p.currentPerformance() == ParagonX1AudioProcessor::Performance::lead);
+    t.p.setParameterNow (ParamIDs::handPosition, 7.0f);
+    CHECK (t.p.currentPerformance() == ParagonX1AudioProcessor::Performance::custom);
+
+    // THE CAPO dragged from its bar along the neck, then double-clicked off.
+    t.p.setParameterNow (ParamIDs::capo, 0.0f);
+    page.refresh();
+    const auto mouse = [&page] (juce::Point<float> at) { return juce::MouseEvent (juce::Desktop::getInstance().getMainMouseSource(), at, {}, 1.0f, 0, 0, 0, 0,
+                                                                                   &page, &page, juce::Time::getCurrentTime(), at, juce::Time::getCurrentTime(), 1, false); };
+    const auto nut = juce::Point<float> (page.fretX (0), page.noteCentre (3, 0).y);
+    page.mouseDown (mouse (nut));
+    page.mouseDrag (mouse (page.noteCentre (3, 5)));
+    page.mouseUp (mouse (page.noteCentre (3, 5)));
+    CHECK (value (ParamIDs::capo) == 5.0f);
+    page.refresh();
+    page.mouseDoubleClick (mouse ({ page.fretX (4) * 0.35f + page.fretX (5) * 0.65f, page.noteCentre (3, 5).y }));
+    CHECK (value (ParamIDs::capo) == 0.0f);
+
+    // The page drawn: every coloured pixel in the family's range (318 to 42 degrees through red), the picture included.
+    const auto image = page.createComponentSnapshot (page.getLocalBounds(), true, 1.0f);
+    auto coloured = 0, outside = 0;
+    for (int y = 0; y < image.getHeight(); y += 3)
+        for (int x = 0; x < image.getWidth(); x += 3)
+        {
+            const auto c = image.getPixelAt (x, y);
+            if (c.getSaturation() < 0.25f || c.getBrightness() < 0.15f)
+                continue;   // (greys and near black: hue doesn't show)
+            ++coloured;
+            const auto hue = c.getHue() * 360.0f;
+            if (hue > 44.0f && hue < 316.0f)
+                ++outside;
+        }
+    INFO (outside << " of " << coloured);
+    CHECK (coloured > 1000);
+    CHECK (outside == 0);
+}
+
+TEST_CASE ("0.4.0: BITE (less low-mid, more top); POLY WINDOW reported as latency; old presets get the new controls' defaults", "[plugin]")
+{
+    Plugin t;
+    auto library = std::make_shared<Library>();
+    for (int s = 0; s < numStrings; ++s)
+        for (int f = 0; f <= numFrets; ++f)
+        {
+            auto take = std::make_shared<Take>();
+            take->sampleRate = 48000.0;
+            // (the high E's 24th fret holds a 5 kHz tone instead: something up where BITE lifts)
+            const auto hz = s == 6 && f == numFrets ? 5000.0 : guitar::frequencyOf (noteOf (s, f));
+            for (int i = 0; i < 48000; ++i)
+                take->head.push_back (0.3f * (float) std::sin (juce::MathConstants<double>::twoPi * hz * i / 48000.0));
+            take->frames = (juce::int64) take->head.size();
+            library->add (Articulation::sustain, s, f, 1, Stroke::down, 0, take);
+        }
+    t.p.setLibraryForTest (library);
+    REQUIRE (t.p.waitUntilIdle (5000));
+    const auto levelOf = [&t] (int note, float bite, double hz = 0.0)
+    {
+        t.p.setParameterNow (ParamIDs::bite, bite);
+        auto out = t.play (40, { { note, 100 } });
+        t.play (40, { { note, 0 } });
+        t.play (20);
+        return levelAt (out, hz > 0.0 ? hz : guitar::frequencyOf (note), 4000, 4800);
+    };
+    const auto midDown = levelOf (64, 1.0f) / levelOf (64, 0.0f);                   // E4, 330 Hz: near the 400 Hz cut
+    const auto topUp = levelOf (88, 1.0f, 5000.0) / levelOf (88, 0.0f, 5000.0);     // 5 kHz: on the shelf
+    CHECK (juce::Decibels::gainToDecibels (midDown) < -3.0f);
+    CHECK (juce::Decibels::gainToDecibels (topUp) > 4.0f);
+
+    CHECK (t.p.getLatencySamples() == 0);
+    t.p.setParameterNow (ParamIDs::polyWindow, 10.0f);
+    t.p.prepareToPlay (sampleRate, blockSize);
+    CHECK (t.p.getLatencySamples() == 480);
+
+    // A preset saved before 0.4.0 (none of the new controls in it): their defaults.
+    Rig old;
+    old.name = "Old";
+    old.parameters[ParamIDs::fretMode] = 1.0f;
+    t.p.setParameterNow (ParamIDs::capo, 4.0f);
+    t.p.setParameterNow (ParamIDs::mono, 1.0f);
+    const auto file = t.p.getRigLibrary().saveAsNew (old);
+    REQUIRE (t.p.getRigLibrary().find (file) != nullptr);
+    t.p.loadRig (*t.p.getRigLibrary().find (file));
+    CHECK (t.p.getGuitarSettings().capo == 0);
+    CHECK_FALSE (t.p.getGuitarSettings().mono);
+    CHECK (t.p.getGuitarSettings().fretMode == FretMode::polyphonic);
 }

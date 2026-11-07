@@ -5,7 +5,7 @@ cmake_minimum_required(VERSION 3.24)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS version")
 set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "macOS architectures")
 
-project(ParagonX1 VERSION 0.3.0 LANGUAGES C CXX)
+project(ParagonX1 VERSION 0.4.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -35,6 +35,13 @@ juce_add_plugin(ParagonX1
 
 # Inter (SIL Open Font License, see resources/fonts/OFL-LICENSE.txt), built
 # into the plugin so it looks the same on every computer, as in the mockup.
+# THE GUITAR page's picture (PR7-I 0.4.0): our own 3D guitar (resources/guitar) and where its strings and frets land.
+juce_add_binary_data(ParagonX1GuitarPicture
+    HEADER_NAME GuitarPicture.h
+    NAMESPACE   GuitarPicture
+    SOURCES     resources/guitar/guitar.jpg
+                resources/guitar/guitar-geometry.json)
+
 juce_add_binary_data(ParagonX1Fonts
     HEADER_NAME ParagonFonts.h
     NAMESPACE   ParagonFonts
@@ -56,6 +63,7 @@ target_sources(ParagonX1
         source/guitar/RoundRobinCheck.cpp
         source/guitar/GuitarLibrary.cpp
         source/guitar/Guitar.cpp
+        source/guitar/PolyWindow.cpp
         source/rigs/Rig.cpp
         source/rigs/FactoryRigs.cpp
         source/rigs/RigLibrary.cpp
@@ -67,7 +75,8 @@ target_sources(ParagonX1
         source/ui/SynthControls.cpp
         source/ui/ProgressBox.cpp
         source/ui/Fretboard.cpp
-        source/ui/GuitarPage.cpp
+        source/ui/RendersPage.cpp
+        source/ui/GuitarView.cpp
         source/ui/MainView.cpp
         source/ui/ParagonLookAndFeel.cpp
         source/ui/Finish.cpp)
@@ -84,6 +93,7 @@ target_compile_definitions(ParagonX1
 target_link_libraries(ParagonX1
     PRIVATE
         ParagonX1Fonts
+        ParagonX1GuitarPicture
         juce::juce_audio_utils
         juce::juce_dsp
         juce::juce_recommended_warning_flags   # strict warnings for our code only

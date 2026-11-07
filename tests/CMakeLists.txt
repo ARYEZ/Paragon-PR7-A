@@ -33,6 +33,7 @@ add_executable(GuitarCoreTests
     ../source/guitar/RoundRobinCheck.cpp
     ../source/guitar/GuitarLibrary.cpp
     ../source/guitar/Guitar.cpp
+    ../source/guitar/PolyWindow.cpp
     ../source/dsp/DiskStreamer.cpp)
 target_include_directories(GuitarCoreTests PRIVATE ../source)
 target_compile_definitions(GuitarCoreTests PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_STANDALONE_APPLICATION=1

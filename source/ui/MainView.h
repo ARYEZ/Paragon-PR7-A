@@ -12,7 +12,8 @@
 #include "ui/RigBrowser.h"
 #include "ui/ProgressBox.h"
 #include "ui/Fretboard.h"
-#include "ui/GuitarPage.h"
+#include "ui/RendersPage.h"
+#include "ui/GuitarView.h"
 
 // A side strip: a title, a gain knob with its value underneath, and a level meter.
 class GainColumn final : public juce::Component
@@ -34,11 +35,9 @@ private:
 // Everything in the plugin window, laid out on a fixed 1600 x 900 canvas
 // (the editor scales it to the window, staying sharp: it's all vectors).
 //
-//   header:   logo | GUITAR PRESETS SETTINGS | < preset > | undo redo save settings
-//   GUITAR:   the playing settings, the guitar's folder, the render lists      | OUTPUT
-//   strip:    THE FRETBOARD: each note on the string and fret it's played on
-//
-// PRESETS and SETTINGS cover the GUITAR page; the fretboard and OUTPUT stay.
+//   header:   logo | GUITAR RENDERS PRESETS SETTINGS | < preset > | undo redo save settings
+//   GUITAR:   (0.4.0) the whole canvas under the header: the rendered guitar, its notes lit, its controls (GuitarView)
+//   the other pages:  the page | OUTPUT, and under them THE FRETBOARD strip: each note on its string and fret
 class MainView final : public juce::Component,
                        public juce::DragAndDropContainer,
                        public ControlHost,
@@ -52,12 +51,13 @@ public:
     static constexpr int width = 1600;
     static constexpr int height = 900;
 
-    enum class Page { guitar, presets, settings };
+    enum class Page { guitar, renders, presets, settings };
     void showPage (Page);
     Page getPage() const noexcept { return page; }
 
     // For snapshots and tests.
-    GuitarPage& getGuitarPage() noexcept { return guitarPage; }
+    RendersPage& getRendersPage() noexcept { return rendersPage; }
+    GuitarView& getGuitarView() noexcept { return guitarView; }
     Fretboard& getFretboard() noexcept { return fretboard; }
     SettingsPage& getSettingsPage() noexcept { return settingsPage; }
     // A long job's progress (IMPORT A RENDER, the guitar loading for more than half a second), PR7-S's box over the window.
@@ -84,7 +84,8 @@ private:
 
     ParagonX1AudioProcessor& audioProcessor;
 
-    IconButton guitarTab { "The guitar: how it plays, its folder of takes, the render lists", Icons::Type::guitar, "GUITAR" },
+    IconButton guitarTab { "The guitar: how it plays, the notes as they're played", Icons::Type::guitar, "GUITAR" },
+               rendersTab { "The guitar's folder of takes, the render lists, importing renders", Icons::Type::speaker, "RENDERS" },
                presetsTab { "Browse, save and organise presets", Icons::Type::presets, "PRESETS" },
                settingsTab { "The presets folder, MIDI links, note names and more", Icons::Type::settings, "SETTINGS" };
     IconButton previousRig { "Previous preset", Icons::Type::chevronLeft }, nextRig { "Next preset", Icons::Type::chevronRight };
@@ -98,7 +99,8 @@ private:
     MidiLinks shownLinks;
     juce::String shownLearning;
 
-    GuitarPage guitarPage;
+    RendersPage rendersPage;
+    GuitarView guitarView;
     RigBrowser rigBrowser;
     SettingsPage settingsPage;
     ProgressBox progressBox;   // over everything while a long job runs

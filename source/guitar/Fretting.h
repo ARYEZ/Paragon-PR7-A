@@ -15,6 +15,8 @@
 //   - NATURAL: the hand follows the notes (AUTO), four frets wide. POLYPHONIC: five wide, and chords spread over as
 //     many strings as they have notes.
 //   - FORCE STRING: that string if it can play the note at all.
+//   - CAPO (0.4.0): no fret below it; its fret plays as an open string does (free while the hand is near it). HAND SPAN
+//     (0.4.0): how many frets the hand covers, instead of the mode's own 4 or 5.
 namespace guitar
 {
     enum class FretMode { natural, polyphonic };   // append only
@@ -30,9 +32,11 @@ namespace guitar
     {
         FretMode mode = FretMode::natural;
         int forceString = -1;   // -1: none
+        int capo = 0;           // 0.4.0: 0 none, else the capo's fret
+        int span = 0;           // 0.4.0: the hand's span in frets (0: the mode's own)
     };
 
-    int handSpan (FretMode) noexcept;
+    int handSpan (FretMode, int span = 0) noexcept;
 
     // The cheapest place for `note` (invalid: no string reaches it). `busy`: strings sounding now (or already given to
     // a note of the same chord); `hand`: the hand's fret (1 to 21).
@@ -49,5 +53,5 @@ namespace guitar
                                        bool handFollows = true);
 
     // AUTO hand: where the hand goes after playing at `fret` (it moves just enough to reach it; open strings don't move it).
-    int followHand (int hand, int fret, FretMode) noexcept;
+    int followHand (int hand, int fret, FretMode, int span = 0, int capo = 0) noexcept;
 }

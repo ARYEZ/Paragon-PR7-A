@@ -23,20 +23,20 @@ PR7-I is built in stages, each one released:
 | **0** | Its own plugin, from PR7-D's code | **Done (0.1.0)** |
 | **1a** | The playing engine with sustain: strings and frets as a player chooses, one note per string, alternate picking with round-robins, velocity layers; render lists and importing renders; the drums and effects removed | **Done (0.2.0)** |
 | **1b** | Palm mute (by velocity, as the reference does), your own key map (C-1 palm mute / sustain by velocity), power chords | **Done (0.3.0)** |
-| **1c** | The GUITAR page in PR7-D's Tron look, laid out like the reference's main page | Next (mock-up first) |
+| **1c** | The GUITAR page in PR7-D's Tron look (our own 3D guitar), laid out like the reference's main page; capo, hand span and reset, mono, economy picking, poly window, bite, attack | **Done (0.4.0)** |
 | **2** | The other articulations: staccato and chugs, pinch and natural harmonics, slides, legato, tremolo picking, fret and pick noises | Planned |
 | **3** | Realism: automatic double-tracking, a little timing and tuning variation | Planned |
 | **4** | The editor and tools: strumming and chords, keyswitch maps | Planned |
 
 ## Using it
 
-1. **Render the lists.** On the GUITAR page, each string has a MIDI file (click MIDI to save it, drag it onto a DAW track,
+1. **Render the lists.** On the RENDERS page, each string has a MIDI file (click MIDI to save it, drag it onto a DAW track,
    or SAVE ALL LISTS). Load it on a track with your guitar instrument as a clean DI (its effects off, one guitar, no
    anti-repetition, ringing or release noises) and bounce it to a WAV from bar 1 to the end. Each string is 300 notes:
    every fret 0-24, three dynamics, two takes each of a down and an up stroke, about 28 minutes.
 2. **Import.** Drop each WAV on its string's row. PR7-I finds the notes, cuts them, checks their pitch and saves them in
    the guitar's folder (CHOOSE FOLDER... to put it elsewhere). A wrong file is refused and the row says why.
-3. **Play.** Notes go where a player would put them; the fretboard along the bottom shows each one's string and fret.
+3. **Play.** Notes go where a player would put them; the GUITAR page lights each one on its string and fret.
    Put PR7-G after PR7-I for the amp, cabinet and effects.
 
 **Keyswitches** (the reference instrument's defaults, so parts written for it play the same): force string C-2 (low A)

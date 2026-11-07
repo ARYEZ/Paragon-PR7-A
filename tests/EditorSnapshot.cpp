@@ -2,7 +2,7 @@
 //   PARAGON_SNAPSHOT=editor.png ./ParagonX1Tests "[snapshot]"
 // Options (environment variables):
 //   PARAGON_SNAPSHOT_WIDTH=n         the window's width (default 1600; 3200 for a sharp 2x look)
-//   PARAGON_SNAPSHOT_PAGE=guitar|presets|settings   (guitar, the default)
+//   PARAGON_SNAPSHOT_PAGE=guitar|renders|presets|settings   (guitar, the default)
 //   PARAGON_SNAPSHOT_PRESET=name     that factory preset loaded
 //   PARAGON_SNAPSHOT_PARAMS=id=value,...   parameters set (real units)
 //   PARAGON_SNAPSHOT_NOTES=1         a guitar of made-up takes (every string, frets 0-24; the low A, E and B strings
@@ -115,12 +115,15 @@ TEST_CASE ("Render the editor to a PNG", "[.][snapshot]")
     auto* view = dynamic_cast<MainView*> (editor->getChildComponent (0));
     REQUIRE (view != nullptr);
     if (env ("PARAGON_SNAPSHOT_RENDERS") == "mute")
-        view->getGuitarPage().showArticulation (guitar::Articulation::mute);
+        view->getRendersPage().showArticulation (guitar::Articulation::mute);
     if (page == "presets")
         view->showPage (MainView::Page::presets);
     else if (page == "settings")
         view->showPage (MainView::Page::settings);
-    view->getGuitarPage().refresh();
+    else if (page == "renders")
+        view->showPage (MainView::Page::renders);
+    view->getRendersPage().refresh();
+    view->getGuitarView().refresh();
     view->getFretboard().refresh();
     if (env ("PARAGON_SNAPSHOT_PROGRESS") == "1")
         view->getProgressBox().show ({ "IMPORTING STRING 7 (LOW A)", [] { return 0.62; }, [] {} });
@@ -129,6 +132,7 @@ TEST_CASE ("Render the editor to a PNG", "[.][snapshot]")
     editor->setSize (width, width * 9 / 16);
     editor->resized();
     view->getFretboard().refresh();
+    view->getGuitarView().refresh();
 
     const auto image = editor->createComponentSnapshot (editor->getLocalBounds());
     juce::File file (juce::File::getCurrentWorkingDirectory().getChildFile (path));

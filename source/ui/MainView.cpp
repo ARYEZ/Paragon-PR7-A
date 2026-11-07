@@ -22,8 +22,8 @@ namespace
 
     const auto tabsGroup = mockF (336, 10, 1087, 55);
     const auto rigGroup = mockF (1102, 10, 1399, 55);
-    // The tabs' edges in the group, in the mockup's pixels: GUITAR | PRESETS | SETTINGS, three alike (PR7-I 0.2.0).
-    constexpr float tabEdges[] = { 338.0f, 587.0f, 836.0f, 1085.0f };
+    // The tabs' edges in the group, in the mockup's pixels: GUITAR | RENDERS | PRESETS | SETTINGS, four alike (PR7-I 0.4.0).
+    constexpr float tabEdges[] = { 338.0f, 524.75f, 711.5f, 898.25f, 1085.0f };
 
     // In canvas pixels.
     const juce::Rectangle<int> outputArea { 1496, 68, 92, 672 };
@@ -72,12 +72,13 @@ MainView::MainView (ParagonX1AudioProcessor& processorToShow)
     : audioProcessor (processorToShow),
       outputColumn ("OUTPUT", processorToShow.getParameters(), ParamIDs::outputGain, processorToShow.getOutputMeter()),
       fretboard (processorToShow),
-      guitarPage (processorToShow),
+      rendersPage (processorToShow),
+      guitarView (processorToShow),
       rigBrowser (processorToShow),
       settingsPage (processorToShow)
 {
     setOpaque (true);   // it fills itself: nothing behind it needs drawing
-    for (auto* tab : { &guitarTab, &presetsTab, &settingsTab })
+    for (auto* tab : { &guitarTab, &rendersTab, &presetsTab, &settingsTab })
     {
         tab->setClickingTogglesState (true);
         tab->setRadioGroupId (100);
@@ -85,6 +86,8 @@ MainView::MainView (ParagonX1AudioProcessor& processorToShow)
     }
     guitarTab.setToggleState (true, juce::dontSendNotification);
     guitarTab.setComponentID ("guitarTab");
+    rendersTab.setComponentID ("rendersTab");
+    rendersTab.onClick = [this] { showPage (Page::renders); };
     presetsTab.setComponentID ("presetsTab");
     settingsTab.setComponentID ("settingsTab");
     guitarTab.onClick = [this] { showPage (Page::guitar); };
@@ -105,8 +108,11 @@ MainView::MainView (ParagonX1AudioProcessor& processorToShow)
 
     for (auto* component : std::initializer_list<juce::Component*> { &previousRig, &nextRig, &rigNameButton,
                                                                       &undoButton, &redoButton, &saveButton, &settingsButton,
-                                                                      &outputColumn, &fretboard, &guitarPage })
+                                                                      &outputColumn, &fretboard, &guitarView })
         addAndMakeVisible (component);
+    addChildComponent (rendersPage);
+    outputColumn.setVisible (false);
+    fretboard.setVisible (false);
     addChildComponent (rigBrowser);
     addChildComponent (settingsPage);
     addChildComponent (progressBox);
@@ -125,9 +131,14 @@ MainView::~MainView()
 void MainView::showPage (Page newPage)
 {
     page = newPage;
-    auto& tab = newPage == Page::presets ? presetsTab : newPage == Page::settings ? settingsTab : guitarTab;
+    auto& tab = newPage == Page::presets ? presetsTab : newPage == Page::settings ? settingsTab : newPage == Page::renders ? rendersTab : guitarTab;
     tab.setToggleState (true, juce::dontSendNotification);
-    guitarPage.setVisible (newPage == Page::guitar);
+    guitarView.setVisible (newPage == Page::guitar);
+    rendersPage.setVisible (newPage == Page::renders);
+    outputColumn.setVisible (newPage != Page::guitar);
+    fretboard.setVisible (newPage != Page::guitar);
+    backgroundCache.invalidate();
+    repaint();
     rigBrowser.setVisible (newPage == Page::presets);
     settingsPage.setVisible (newPage == Page::settings);
     if (progressBox.isVisible())
@@ -292,21 +303,23 @@ void MainView::paintBackground (juce::Graphics& g)
         g.setColour (ParagonColours::panelEdge);
         g.drawRoundedRectangle (group.reduced (0.5f), 5.0f, 1.0f);
     }
-    for (auto x : { tabEdges[1], tabEdges[2] })
+    for (auto x : { tabEdges[1], tabEdges[2], tabEdges[3] })
         g.drawVerticalLine (juce::roundToInt (x * mockScale), tabsGroup.getY() + 8.0f, tabsGroup.getBottom() - 8.0f);
 
     g.setColour (ParagonColours::panelEdge);
     g.drawHorizontalLine (juce::roundToInt (64.0f * mockScale), 0.0f, (float) getWidth());
 
-    // The strip's frame: the fretboard's (the keyboard's until PR7-D 0.41.0, the song track's until PR7-I 0.1.0).
-    DockStyle::drawPanel (g, stripArea.toFloat().expanded (0.0f, 0.0f));
+    // The strip's frame: the fretboard's (the keyboard's until PR7-D 0.41.0, the song track's until PR7-I 0.1.0); the
+    // GUITAR page (0.4.0) covers it.
+    if (page != Page::guitar)
+        DockStyle::drawPanel (g, stripArea.toFloat().expanded (0.0f, 0.0f));
 }
 
 void MainView::resized()
 {
     backgroundCache.invalidate();
     {
-        IconButton* tabs[] = { &guitarTab, &presetsTab, &settingsTab };
+        IconButton* tabs[] = { &guitarTab, &rendersTab, &presetsTab, &settingsTab };
         for (size_t i = 0; i < std::size (tabs); ++i)
             tabs[i]->setBounds (mock (tabEdges[i] + (i > 0 ? 1.0f : 0.0f), 12, tabEdges[i + 1] - (i + 1 < std::size (tabs) ? 1.0f : 0.0f), 53));
     }
@@ -320,7 +333,8 @@ void MainView::resized()
 
     outputColumn.setBounds (outputArea);
     fretboard.setBounds (stripArea.reduced (4, 2));
-    guitarPage.setBounds (pageArea);
+    rendersPage.setBounds (pageArea);
+    guitarView.setBounds (0, GuitarView::top, width, height - GuitarView::top);
     rigBrowser.setBounds (pageArea);
     settingsPage.setBounds (pageArea);
     progressBox.setCentrePosition (getLocalBounds().getCentre());

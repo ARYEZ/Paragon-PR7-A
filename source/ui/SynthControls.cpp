@@ -151,6 +151,14 @@ void ParamControl::setCompact (bool shouldBeCompact)
     resized();
 }
 
+void ParamControl::setLabelBelow (bool below)
+{
+    labelBelow = below;
+    label.setColour (juce::Label::textColourId, below ? ParagonColours::text.withAlpha (0.85f) : ParagonColours::textDim);
+    label.setFont (juce::FontOptions (below ? 11.5f : 10.5f, juce::Font::bold));
+    resized();
+}
+
 void ParamControl::resized()
 {
     auto area = getLocalBounds();
@@ -162,6 +170,13 @@ void ParamControl::resized()
             box->setBounds (area.withSizeKeepingCentre (area.getWidth(), juce::jmin (24, area.getHeight())));
         else if (toggle != nullptr)
             toggle->setBounds (area);
+        return;
+    }
+    if (labelBelow)
+    {
+        label.setBounds (area.removeFromBottom (14));
+        if (slider != nullptr)
+            slider->setBounds (area);
         return;
     }
     label.setBounds (area.removeFromTop (14));

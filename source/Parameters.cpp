@@ -9,6 +9,7 @@ namespace
     constexpr int firstVersion = 1;   // PR7-I 0.2.0
     constexpr int v030 = 2;           // PR7-I 0.2.1: VARIATION
     constexpr int v030b = 3;          // PR7-I 0.3.0: KEY MAP
+    constexpr int v040 = 4;           // PR7-I 0.4.0: the new GUITAR page's controls
 
     const ToText asDb = [] (float value, int) { return juce::String (value, 1) + " dB"; };
     const ToText asPercent = [] (float value, int) { return juce::String (juce::roundToInt (value * 100.0f)) + "%"; };
@@ -72,5 +73,14 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
     add (layout, transpose, "Transpose", { -12.0f, 12.0f, 1.0f }, 0.0f,
          [] (float v, int) { const auto st = juce::roundToInt (v); return (st > 0 ? "+" : "") + juce::String (st) + " st"; });
     add (layout, variation, "Variation", { 0.0f, 1.0f, 0.01f }, 0.0f, asPercent, v030);   // 0.2.2: off by default (0.2.0's sound)
+    add (layout, capo, "Capo", { 0.0f, (float) ParamRanges::maxCapo, 1.0f }, 0.0f,
+         [] (float v, int) { const auto f = juce::roundToInt (v); return f == 0 ? juce::String ("Off") : "Fret " + juce::String (f); }, v040);
+    addChoice (layout, handSpan, "Hand Span", handSpanNames, 0, v040);
+    add (layout, handReset, "Hand Reset", { 0.1f, 5.0f, 0.01f, 0.5f }, 1.0f, [] (float s, int) { return juce::String (s, 1) + " s"; }, v040);
+    addSwitch (layout, mono, "Mono", false, v040);
+    add (layout, polyWindow, "Poly Window", { 0.0f, ParamRanges::maxPolyWindowMs, 0.1f, 0.5f }, 0.0f,
+         [] (float ms, int) { return juce::String (ms, ms < 10.0f ? 1 : 0) + " ms"; }, v040);
+    add (layout, bite, "Bite", { 0.0f, 1.0f, 0.01f }, 0.0f, asPercent, v040);
+    add (layout, attack, "Attack", { 0.0f, 1.0f, 0.01f }, 0.0f, asPercent, v040);
     return layout;
 }
