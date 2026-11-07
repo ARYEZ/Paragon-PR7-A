@@ -1055,3 +1055,146 @@ TEST_CASE ("0.4.2: a note whose copies were left out plays the takes it has even
         CHECK (a[i] == (i % 2 == 0 ? downs[(i / 2) % 3] : ups[(i / 2) % 2]));
     }
 }
+
+// THE A/B COMPARISON (after 0.4.2): the same riff rendered by the owner's guitar instrument (A) and by PR7-I (B),
+// both dry, against the MIDI that played them, measured note by note: when each note's pick lands after its note-on,
+// how loud, how far it has fallen 30 ms after its note-off (how it ends), and how often consecutive hits of the same
+// note are the very same take (a machine gun). Run by hand:
+//   PARAGON_AB_A=a.wav PARAGON_AB_B=b.wav PARAGON_AB_MIDI=riff.mid build/tests/GuitarCoreTests "[ab-compare]"
+TEST_CASE ("Compare two renders of a riff", "[.][ab-compare]")
+{
+    const auto env = [] (const char* n) { return juce::SystemStats::getEnvironmentVariable (n, {}); };
+    juce::MidiFile midi;
+    {
+        juce::FileInputStream in (juce::File (env ("PARAGON_AB_MIDI")));
+        REQUIRE (in.openedOk());
+        REQUIRE (midi.readFrom (in));
+    }
+    midi.convertTimestampTicksToSeconds();
+    struct Note { double on = 0.0, off = -1.0; int key = 0, velocity = 0; };
+    std::vector<Note> notes;
+    for (int t = 0; t < midi.getNumTracks(); ++t)
+        for (const auto* e : *midi.getTrack (t))
+        {
+            const auto& m = e->message;
+            if (m.isNoteOn() && m.getNoteNumber() >= lowestNote && m.getNoteNumber() < keyswitch::pickUp)
+                notes.push_back ({ m.getTimeStamp(), -1.0, m.getNoteNumber(), m.getVelocity() });
+            else if (m.isNoteOff())
+                for (auto it = notes.rbegin(); it != notes.rend(); ++it)
+                    if (it->key == m.getNoteNumber() && it->off < 0.0)
+                    {
+                        it->off = m.getTimeStamp();
+                        break;
+                    }
+        }
+    std::sort (notes.begin(), notes.end(), [] (const Note& a, const Note& b) { return a.on < b.on; });
+    REQUIRE (! notes.empty());
+
+    juce::AudioFormatManager formats;
+    formats.registerBasicFormats();
+    struct Measured { double latencyMs = 0, peakDb = -100, endDb = 0; std::vector<float> signature; };
+    const auto measure = [&] (const juce::String& path)
+    {
+        std::unique_ptr<juce::AudioFormatReader> reader (formats.createReaderFor (juce::File (path)));
+        REQUIRE (reader != nullptr);
+        juce::AudioBuffer<float> audio ((int) reader->numChannels, (int) reader->lengthInSamples);
+        reader->read (&audio, 0, (int) reader->lengthInSamples, 0, true, true);
+        const auto rate = reader->sampleRate;
+        std::vector<float> mono ((size_t) audio.getNumSamples());
+        for (int c = 0; c < audio.getNumChannels(); ++c)
+            for (int i = 0; i < audio.getNumSamples(); ++i)
+                mono[(size_t) i] += audio.getSample (c, i) / (float) audio.getNumChannels();
+        const auto at = [&] (double s) { return juce::jlimit (0, (int) mono.size() - 1, (int) std::round (s * rate)); };
+        const auto rmsDb = [&] (int from, int length)
+        {
+            double sum = 0.0;
+            for (int i = from; i < juce::jmin ((int) mono.size(), from + length); ++i)
+                sum += (double) mono[(size_t) i] * mono[(size_t) i];
+            return juce::Decibels::gainToDecibels (std::sqrt (sum / juce::jmax (1, length)), -120.0);
+        };
+        std::vector<Measured> out;
+        for (size_t n = 0; n < notes.size(); ++n)
+        {
+            const auto next = n + 1 < notes.size() ? notes[n + 1].on : notes[n].on + 2.0;
+            const auto from = at (notes[n].on - 0.02), to = at (juce::jmin (next, notes[n].on + 1.5));
+            auto peak = 0.0f;
+            for (int i = from; i < to; ++i)
+                peak = juce::jmax (peak, std::abs (mono[(size_t) i]));
+            Measured m;
+            if (peak <= 1.0e-4f)
+            {
+                out.push_back (m);
+                continue;
+            }
+            auto onset = from;
+            while (onset < to && std::abs (mono[(size_t) onset]) < 0.1f * peak)
+                ++onset;
+            m.latencyMs = (onset / rate - notes[n].on) * 1000.0;
+            m.peakDb = rmsDb (onset, at (0.03) + 1);   // the first 30 ms
+            if (notes[n].off > notes[n].on)
+                m.endDb = rmsDb (at (notes[n].off + 0.03), at (0.02) + 1) - m.peakDb;   // 30-50 ms after the note-off, against the pick
+            for (int i = onset - at (0.002); i < onset + at (0.04); ++i)
+                m.signature.push_back (i >= 0 && i < (int) mono.size() ? mono[(size_t) i] : 0.0f);
+            out.push_back (std::move (m));
+        }
+        return out;
+    };
+    const auto a = measure (env ("PARAGON_AB_A")), b = measure (env ("PARAGON_AB_B"));
+    const auto same = [] (const std::vector<float>& x, const std::vector<float>& y)
+    {
+        // the same recording: normalised correlation 0.99 or more within a millisecond's shift (48 samples at 48 kHz)
+        if (x.empty() || y.empty())
+            return 0.0;
+        auto best = -1.0;
+        for (int shift = -48; shift <= 48; ++shift)
+        {
+            double xy = 0, xx = 0, yy = 0;
+            for (size_t i = 64; i + 64 < x.size(); ++i)
+            {
+                const auto j = (int) i + shift;
+                if (j < 0 || j >= (int) y.size())
+                    continue;
+                xy += x[i] * y[(size_t) j]; xx += x[i] * x[i]; yy += y[(size_t) j] * y[(size_t) j];
+            }
+            if (xx > 0 && yy > 0)
+                best = juce::jmax (best, xy / std::sqrt (xx * yy));
+        }
+        return best;
+    };
+    juce::String table = "note  key vel | A: late ms  level dB  end dB | B: late ms  level dB  end dB | same take as the last hit (A / B)\n";
+    std::array<int, 2> repeats {}, pairs {};
+    std::array<std::vector<double>, 2> lates, ends;
+    for (size_t n = 0; n < notes.size(); ++n)
+    {
+        juce::String sameText;
+        for (int w = 0; w < 2; ++w)
+        {
+            const auto& r = w == 0 ? a : b;
+            lates[(size_t) w].push_back (r[n].latencyMs);
+            if (notes[n].off > notes[n].on)
+                ends[(size_t) w].push_back (r[n].endDb);
+            // the last hit of the same key before it
+            for (int p = (int) n - 1; p >= 0; --p)
+                if (notes[(size_t) p].key == notes[n].key)
+                {
+                    ++pairs[(size_t) w];
+                    const auto c = same (r[(size_t) p].signature, r[n].signature);
+                    repeats[(size_t) w] += c >= 0.99 ? 1 : 0;
+                    sameText << (w == 0 ? "" : " / ") << (c >= 0.99 ? "SAME" : "diff") << " (" << juce::String (c, 3) << ")";
+                    break;
+                }
+        }
+        table << juce::String ((int) n + 1).paddedLeft (' ', 4) << "  " << juce::String (notes[n].key).paddedLeft (' ', 3) << " "
+              << juce::String (notes[n].velocity).paddedLeft (' ', 3) << " | " << juce::String (a[n].latencyMs, 1).paddedLeft (' ', 9) << " "
+              << juce::String (a[n].peakDb, 1).paddedLeft (' ', 9) << " " << juce::String (a[n].endDb, 1).paddedLeft (' ', 7) << " | "
+              << juce::String (b[n].latencyMs, 1).paddedLeft (' ', 9) << " " << juce::String (b[n].peakDb, 1).paddedLeft (' ', 9) << " "
+              << juce::String (b[n].endDb, 1).paddedLeft (' ', 7) << " | " << sameText << "\n";
+    }
+    const auto median = [] (std::vector<double> v) { if (v.empty()) return 0.0; std::sort (v.begin(), v.end()); return v[v.size() / 2]; };
+    table << "\nmedian lateness: A " << juce::String (median (lates[0]), 1) << " ms, B " << juce::String (median (lates[1]), 1) << " ms\n"
+          << "median end (30-50 ms after note-off, against the pick): A " << juce::String (median (ends[0]), 1) << " dB, B "
+          << juce::String (median (ends[1]), 1) << " dB\n"
+          << "the same take as the last hit of that note: A " << repeats[0] << " of " << pairs[0] << ", B " << repeats[1] << " of " << pairs[1] << "\n";
+    std::cout << table << std::endl;
+    SUCCEED();
+}
