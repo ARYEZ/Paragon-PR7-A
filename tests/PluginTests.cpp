@@ -62,7 +62,7 @@ namespace
             const auto hz = guitar::frequencyOf (take.note());
             const auto start = (int) ((take.noteSeconds + 0.015) * rate);
             const auto overtone = hz * (2.0 + take.roundRobin);   // each round-robin its own recording
-            for (int i = 0; i < (int) (renders::holdSeconds * rate); ++i)
+            for (int i = 0; i < (int) (renders::spec (Articulation::sustain).holdSeconds * rate); ++i)
                 audio[(size_t) (start + i)] += (0.2f + 0.3f * (float) take.layer) * std::exp (-0.6f * (float) i / (float) rate)
                                              * (float) (std::sin (juce::MathConstants<double>::twoPi * hz * i / rate)
                                                         + (overtone < 3600.0 ? 0.3 * std::sin (juce::MathConstants<double>::twoPi * overtone * i / rate) : 0.0));

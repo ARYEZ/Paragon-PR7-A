@@ -5,7 +5,7 @@
 
 namespace
 {
-    constexpr int perString = guitar::Library::takesPerString;   // a string's takes (300)
+    const int perString = guitar::Library::takesPerString (guitar::Articulation::sustain);   // a string's sustain takes (300)
 
     bool isAudio (const juce::String& path)
     {

@@ -24,17 +24,30 @@
 // (its C-2 is note 0): 0-6, 27, 12 / 13, 108 / 109.
 namespace guitar::renders
 {
-    inline constexpr int numLayers = 3;
-    // Takes of each stroke (4 per note and dynamic): what the reference instrument really has (its round-robin check, the
-    // owner's render, November 2026: two different recordings per stroke, played in turn; more would render copies).
-    inline constexpr int numRoundRobins = 2;
-    // The dynamics' velocities: sustain stays at 119 or below (above it the reference plays its rake and pinch harmonic).
-    inline constexpr std::array<int, numLayers> layerVelocities { 45, 85, 118 };
     inline constexpr double bpm = 120.0;
     inline constexpr double leadInSeconds = 2.0;
     inline constexpr double noteDelaySeconds = 0.25;   // keyswitches first, then the note
-    inline constexpr double holdSeconds = 4.0;          // how long a take's note is held (the longest a note can ring)
-    inline constexpr double slotSeconds = 5.5;          // from one take's keyswitches to the next's
+
+    // EACH ARTICULATION'S LIST (0.3.0: per articulation; 0.2.0 had sustain's alone):
+    //   - SUSTAIN (fixed: the owner renders these lists): 3 dynamics at velocities 45 / 85 / 118 (below the reference's
+    //     rake, 120-126, and pinch harmonic, 127); 2 round-robins of each stroke (what the reference has: its round-robin
+    //     check, November 2026); each note held 4 s in a 5.5 s slot.
+    //   - MUTE (palm mute, 0.3.0, not yet sent): velocity sets how muted (the reference's way), one velocity per degree of
+    //     muting it has (from its Mute Layer table: to be confirmed by the owner); 8 round-robins of each stroke (Jupiter
+    //     has 6 up strokes and 10 down strokes; the import leaves copies out); a palm mute is gone within a second, so
+    //     each held 1 s in a 1.6 s slot.
+    inline constexpr int maxLayers = 6, maxRoundRobins = 8;
+    struct Spec
+    {
+        int layers = 1;
+        std::array<int, maxLayers> velocities {};
+        int roundRobins = 1;
+        double holdSeconds = 1.0;   // how long a take's note is held (the longest it can ring)
+        double slotSeconds = 2.0;   // from one take's keyswitches to the next's
+        int key = 12;               // the articulation's keyswitch (the reference's factory map)
+    };
+    const Spec& spec (Articulation);
+    int layerFor (Articulation, int velocity) noexcept;   // halfway between the list's velocities
 
     namespace keys
     {
@@ -50,8 +63,9 @@ namespace guitar::renders
         Stroke stroke = Stroke::down;
         int roundRobin = 0;
         double noteSeconds = 0.0;   // when its note starts in the file
+        Articulation articulation = Articulation::sustain;
         int note() const noexcept { return noteOf (string, fret); }
-        int velocity() const noexcept { return layerVelocities[(size_t) layer]; }
+        int velocity() const noexcept { return spec (articulation).velocities[(size_t) layer]; }
     };
 
     std::vector<Take> takes (Articulation, int string);

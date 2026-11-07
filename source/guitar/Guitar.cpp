@@ -4,8 +4,8 @@ namespace guitar
 {
     int layerFor (int velocity) noexcept
     {
-        // Halfway between the render list's velocities (45, 85, 118).
-        return velocity < 65 ? 0 : velocity < 102 ? 1 : 2;
+        // Halfway between the sustain list's velocities (45, 85, 118): below 65, below 102, then hard.
+        return renders::layerFor (Articulation::sustain, velocity);
     }
 
     void Guitar::prepare (double sampleRate)
@@ -124,7 +124,7 @@ namespace guitar
         lastStrokePlayed = stroke;
         auto& rrCounter = nextRoundRobin[stroke == Stroke::down ? 0u : 1u];
         const auto roundRobin = rrCounter;
-        rrCounter = (rrCounter + 1) % renders::numRoundRobins;
+        rrCounter = (rrCounter + 1) % renders::spec (Articulation::sustain).roundRobins;
 
         for (size_t i = 0; i < (size_t) chord.count; ++i)
         {
@@ -149,7 +149,7 @@ namespace guitar
                 const auto own = found.take->loudness;
                 const auto borrow = [&] (int fret, int fromLayer)
                 {
-                    for (int rr = 0; rr < renders::numRoundRobins && count < (int) candidates.size(); ++rr)
+                    for (int rr = 0; rr < renders::spec (Articulation::sustain).roundRobins && count < (int) candidates.size(); ++rr)
                         if (const auto* t = library->exact (Articulation::sustain, p.string, fret, fromLayer, stroke, rr);
                             t != nullptr && t != lastTake && t->loudness > 0.0f && own > 0.0f)
                             candidates[(size_t) count++] = { t, std::pow (2.0, (p.fret - fret) / 12.0), juce::jlimit (0.25f, 4.0f, own / t->loudness) };
@@ -176,7 +176,7 @@ namespace guitar
             v.note = chord.notes[i];
             v.take = found.take;
             v.step = found.take->sampleRate / rate * found.pitchRatio;
-            const auto ratio = (double) velocity / (double) renders::layerVelocities[(size_t) layer];
+            const auto ratio = (double) velocity / (double) renders::spec (Articulation::sustain).velocities[(size_t) layer];
             v.gain = (float) juce::jlimit (0.05, 2.0, std::pow (ratio, 1.5 * (double) s.velocityToVolume)) * borrowedGain;
             if (s.variation > 0.0f)
             {

@@ -53,16 +53,19 @@ namespace guitar
         const Take* exact (Articulation, int string, int fret, int layer, Stroke, int roundRobin) const noexcept;
 
         int count (Articulation, int string) const noexcept;   // takes imported for a string (of takesPerString)
-        static constexpr int takesPerString = (numFrets + 1) * renders::numLayers * 2 * renders::numRoundRobins;   // 300
+        static int takesPerString (Articulation a) noexcept   // sustain 300
+        {
+            return (numFrets + 1) * renders::spec (a).layers * 2 * renders::spec (a).roundRobins;
+        }
         int total() const noexcept;
         bool isEmpty() const noexcept { return total() == 0; }
         const juce::File& getFolder() const noexcept { return folder; }
 
     private:
         juce::File folder;
-        using RoundRobins = std::array<std::shared_ptr<const Take>, renders::numRoundRobins>;
+        using RoundRobins = std::array<std::shared_ptr<const Take>, renders::maxRoundRobins>;
         using Strokes = std::array<RoundRobins, 2>;
-        using Layers = std::array<Strokes, renders::numLayers>;
+        using Layers = std::array<Strokes, renders::maxLayers>;
         using Frets = std::array<Layers, numFrets + 1>;
         std::array<std::array<Frets, numStrings>, numArticulations> takes;
         const Take* at (int a, int s, int f, int l, int k, int rr) const noexcept;

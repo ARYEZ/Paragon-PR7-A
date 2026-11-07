@@ -68,7 +68,7 @@ namespace guitar
 
     const Take* Library::exact (Articulation a, int s, int f, int l, Stroke stroke, int rr) const noexcept
     {
-        if (s < 0 || s >= numStrings || f < 0 || f > numFrets || l < 0 || l >= renders::numLayers || rr < 0 || rr >= renders::numRoundRobins)
+        if (s < 0 || s >= numStrings || f < 0 || f > numFrets || l < 0 || l >= renders::spec (a).layers || rr < 0 || rr >= renders::spec (a).roundRobins)
             return nullptr;
         return takes[(size_t) a][(size_t) s][(size_t) f][(size_t) l][stroke == Stroke::down ? 0u : 1u][(size_t) rr].get();
     }
@@ -82,15 +82,16 @@ namespace guitar
             take = measured;
         }
         takes[(size_t) a][(size_t) string][(size_t) fret][(size_t) layer][stroke == Stroke::down ? 0u : 1u]
-             [(size_t) juce::jlimit (0, renders::numRoundRobins - 1, roundRobin)] = std::move (take);
+             [(size_t) juce::jlimit (0, renders::maxRoundRobins - 1, roundRobin)] = std::move (take);
     }
 
     const Take* Library::at (int a, int s, int f, int l, int k, int rr) const noexcept
     {
         // The round-robin asked for, else another of the same stroke.
         const auto& rrs = takes[(size_t) a][(size_t) s][(size_t) f][(size_t) l][(size_t) k];
-        for (int i = 0; i < renders::numRoundRobins; ++i)
-            if (const auto* t = rrs[(size_t) ((rr + i) % renders::numRoundRobins)].get())
+        const auto n = renders::spec ((Articulation) a).roundRobins;
+        for (int i = 0; i < n; ++i)
+            if (const auto* t = rrs[(size_t) ((rr + i) % n)].get())
                 return t;
         return nullptr;
     }
@@ -98,9 +99,10 @@ namespace guitar
     const Take* Library::anyLayer (int a, int s, int f, int layer, int stroke, int rr) const noexcept
     {
         // This dynamic, then nearer ones; each the stroke asked for first.
-        for (int d = 0; d < renders::numLayers; ++d)
+        const auto layers = renders::spec ((Articulation) a).layers;
+        for (int d = 0; d < layers; ++d)
             for (const auto l : { layer - d, layer + d })
-                if (l >= 0 && l < renders::numLayers)
+                if (l >= 0 && l < layers)
                 {
                     if (const auto* t = at (a, s, f, l, stroke, rr)) return t;
                     if (const auto* t = at (a, s, f, l, 1 - stroke, rr)) return t;
@@ -111,7 +113,7 @@ namespace guitar
     Library::Found Library::find (Articulation articulation, int string, int fret, int layer, Stroke stroke, int rr) const noexcept
     {
         const auto a = (int) articulation, k = stroke == Stroke::down ? 0 : 1;
-        layer = juce::jlimit (0, renders::numLayers - 1, layer);
+        layer = juce::jlimit (0, renders::spec (articulation).layers - 1, layer);
         if (string < 0 || string >= numStrings || fret < 0 || fret > numFrets)
             return {};
         if (const auto* t = at (a, string, fret, layer, k, rr))

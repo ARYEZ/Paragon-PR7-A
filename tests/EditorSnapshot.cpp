@@ -50,9 +50,9 @@ TEST_CASE ("Render the editor to a PNG", "[.][snapshot]")
         auto library = std::make_shared<Library>();
         for (int s = 0; s < numStrings; ++s)
             for (int f = 0; f <= numFrets; ++f)
-                for (int l = 0; l < renders::numLayers; ++l)
+                for (int l = 0; l < renders::spec (Articulation::sustain).layers; ++l)
                     for (const auto stroke : { Stroke::down, Stroke::up })
-                        for (int rr = 0; rr < renders::numRoundRobins; ++rr)
+                        for (int rr = 0; rr < renders::spec (Articulation::sustain).roundRobins; ++rr)
                         {
                             if (s != 0 && s != 1 && s != 5 && (l != 1 || stroke != Stroke::down || rr != 0))
                                 continue;   // only the low A, E and B strings complete

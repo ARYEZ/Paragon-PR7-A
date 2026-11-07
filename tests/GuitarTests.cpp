@@ -36,7 +36,7 @@ namespace
             for (int i = -(int) (0.01 * rate); i < 0; ++i)
                 if (start + i >= 0 && start + i < (int) audio.size())
                     audio[(size_t) (start + i)] += 0.004f * (random.nextFloat() - 0.5f);
-            for (int i = 0; i < (int) (renders::holdSeconds * rate); ++i)
+            for (int i = 0; i < (int) (renders::spec (a).holdSeconds * rate); ++i)
                 if (start + i < (int) audio.size())
                     audio[(size_t) (start + i)] += level * std::exp (-0.6f * (float) i / (float) rate)
                                                  * (float) (std::sin (juce::MathConstants<double>::twoPi * hz * i / rate)
@@ -60,9 +60,9 @@ namespace
         auto library = std::make_shared<Library>();
         for (int s = 0; s < numStrings; ++s)
             for (int f = 0; f <= numFrets; ++f)
-                for (int l = 0; l < renders::numLayers; ++l)
+                for (int l = 0; l < renders::spec (Articulation::sustain).layers; ++l)
                     for (const auto stroke : { Stroke::down, Stroke::up })
-                        for (int rr = 0; rr < renders::numRoundRobins; ++rr)
+                        for (int rr = 0; rr < renders::spec (Articulation::sustain).roundRobins; ++rr)
                     {
                         auto take = std::make_shared<Take>();
                         take->sampleRate = rate;
@@ -149,9 +149,9 @@ TEST_CASE ("THE RENDER LIST: every fret, three dynamics, two round-robins of dow
 {
     const auto list = renders::takes (Articulation::sustain, 0);
     REQUIRE (list.size() == 25 * 3 * 2 * 2);
-    REQUIRE ((int) list.size() == Library::takesPerString);
+    REQUIRE ((int) list.size() == Library::takesPerString (Articulation::sustain));
     CHECK_THAT (list.front().noteSeconds, WithinAbs (2.25, 1e-9));
-    CHECK_THAT (list[1].noteSeconds - list[0].noteSeconds, WithinAbs (renders::slotSeconds, 1e-9));
+    CHECK_THAT (list[1].noteSeconds - list[0].noteSeconds, WithinAbs (renders::spec (Articulation::sustain).slotSeconds, 1e-9));
     CHECK (list[0].stroke == Stroke::down);
     CHECK (list[1].stroke == Stroke::up);
     CHECK (list[2].stroke == Stroke::down);   // down, up, down, up: the two round-robins of each stroke
@@ -259,7 +259,7 @@ TEST_CASE ("IMPORT A RENDER: the offset found, every take cut at its pick, in tu
         if (std::abs (take.getSample (0, i)) > 0.05f)
             onset = i;
     CHECK (std::abs (onset - (int) (renders::prerollSeconds * rate)) <= 3);
-    CHECK_THAT ((double) take.getNumSamples() / rate, WithinAbs (renders::prerollSeconds + renders::holdSeconds + renders::tailSeconds, 0.001));
+    CHECK_THAT ((double) take.getNumSamples() / rate, WithinAbs (renders::prerollSeconds + renders::spec (Articulation::sustain).holdSeconds + renders::tailSeconds, 0.001));
 
     // Another string's render dropped on this string: refused, nothing written.
     const auto wrongFolder = tempGuitar ("Wrong");
@@ -645,4 +645,69 @@ TEST_CASE ("THE ENGINE 0.3.0: BORROWING: with VARIATION, the neighbouring dynami
     CHECK (varied.size() >= 4);
     for (const auto l : variedLevels)
         CHECK (std::abs (db (l / 0.5)) < 0.7);
+}
+
+TEST_CASE ("RENDER LISTS 0.3.0: sustain's exactly as the owner rendered them; palm mute's with 8 round-robins and short slots", "[guitar][renders]")
+{
+    // SUSTAIN: unchanged (the owner's renders were made from these): 3 dynamics at 45 / 85 / 118, 2 round-robins of each
+    // stroke, 4 s notes in 5.5 s slots, the C-1 keyswitch.
+    const auto& sustain = renders::spec (Articulation::sustain);
+    CHECK (sustain.layers == 3);
+    CHECK (sustain.velocities[0] == 45);
+    CHECK (sustain.velocities[1] == 85);
+    CHECK (sustain.velocities[2] == 118);
+    CHECK (sustain.roundRobins == 2);
+    CHECK (sustain.holdSeconds == 4.0);
+    CHECK (sustain.slotSeconds == 5.5);
+    CHECK (sustain.key == 12);
+    CHECK (renders::layerFor (Articulation::sustain, 64) == 0);
+    CHECK (renders::layerFor (Articulation::sustain, 65) == 1);
+    CHECK (renders::layerFor (Articulation::sustain, 102) == 2);
+
+    // MUTE: its own file per string, 8 round-robins of each stroke, 1 s notes in 1.6 s slots, the factory C#-1.
+    const auto& mute = renders::spec (Articulation::mute);
+    const auto list = renders::takes (Articulation::mute, 0);
+    CHECK ((int) list.size() == 25 * mute.layers * 2 * 8);
+    CHECK ((int) list.size() == Library::takesPerString (Articulation::mute));
+    CHECK (list[15].roundRobin == 7);
+    CHECK (list[16].layer == 1);
+    CHECK_THAT (list[1].noteSeconds - list[0].noteSeconds, WithinAbs (1.6, 1e-9));
+    CHECK (renders::fileName (Articulation::mute, 0) == "PR7-I Mute - String 7 (low A)");
+    const auto name = renders::takeFileName (Articulation::mute, list[15]);
+    CHECK (name == "Mute/s0_f00_l0_u_r7.wav");
+    const auto id = renders::parseTakeFile (juce::File ("/x").getChildFile (name));
+    REQUIRE (id);
+    CHECK (id->articulation == Articulation::mute);
+    CHECK (id->roundRobin == 7);
+    CHECK_FALSE (renders::parseTakeFile (juce::File ("/x/Sustain/s0_f00_l0_u_r7.wav")));   // sustain has two round-robins
+    const auto midi = renders::toMidi (Articulation::mute, 0);
+    juce::MidiMessageSequence seq (*midi.getTrack (0));
+    seq.updateMatchedPairs();
+    auto mutes = 0, notes = 0;
+    for (int i = 0; i < seq.getNumEvents(); ++i)
+        if (const auto* e = seq.getEventPointer (i); e->message.isNoteOn())
+        {
+            mutes += e->message.getNoteNumber() == renders::keys::mute ? 1 : 0;
+            if (e->message.getNoteNumber() >= lowestNote && e->message.getNoteNumber() <= highestNote)
+            {
+                ++notes;
+                CHECK_THAT ((e->noteOffObject->message.getTimeStamp() - e->message.getTimeStamp()) / (960.0 * 2.0), WithinAbs (1.0, 0.001));
+            }
+        }
+    CHECK (mutes == (int) list.size());
+    CHECK (notes == (int) list.size());
+
+    // A palm-mute render imports into Mute/, its copies left out (here: only 3 of the 8 round-robins differ).
+    constexpr double rate = 8000.0;
+    const auto folder = tempGuitar ("Mute");
+    const auto audio = fakeRender (Articulation::mute, 2, rate, 0.004, 0, 1.0, 3);
+    const auto report = renders::importAudio (audio.data(), (int) audio.size(), rate, Articulation::mute, 2, folder);
+    INFO (report.summary());
+    REQUIRE (report.ok());
+    CHECK (report.written == 25 * mute.layers * 2 * 3);
+    CHECK (report.fewestRoundRobins == 3);
+    const auto library = Library::load (folder);
+    CHECK (library->count (Articulation::mute, 2) == 25 * mute.layers * 2 * 3);
+    CHECK (library->count (Articulation::sustain, 2) == 0);
+    folder.getParentDirectory().deleteRecursively();
 }

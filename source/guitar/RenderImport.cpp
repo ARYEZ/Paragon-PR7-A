@@ -108,6 +108,7 @@ namespace guitar::renders
         std::sort (offsets.begin(), offsets.end());
         report.offsetSeconds = offsets[offsets.size() / 2];
 
+        const auto holdSeconds = spec (articulation).holdSeconds;
         const auto needed = list.back().noteSeconds + report.offsetSeconds + holdSeconds;
         if ((double) numSamples / sampleRate < needed)
         {
@@ -175,7 +176,7 @@ namespace guitar::renders
 
         // COPIES: each note, dynamic and stroke's round-robins compared; a copy of an earlier one isn't saved.
         std::vector<bool> keep (cuts.size(), true);
-        report.fewestRoundRobins = numRoundRobins;
+        report.fewestRoundRobins = spec (articulation).roundRobins;
         {
             std::map<std::tuple<int, int, int>, std::vector<size_t>> sets;
             for (size_t i = 0; i < cuts.size(); ++i)

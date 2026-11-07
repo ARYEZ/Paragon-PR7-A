@@ -2,24 +2,42 @@
 
 namespace guitar::renders
 {
-    std::vector<Take> takes (Articulation, int string)
+    const Spec& spec (Articulation a)
     {
+        static const Spec sustain { 3, { 45, 85, 118 }, 2, 4.0, 5.5, keys::sustain };
+        // MUTE's velocities: placeholders until the owner's Mute Layer table (one per degree, mid-zone).
+        static const Spec mute { 4, { 20, 50, 80, 110 }, 8, 1.0, 1.6, keys::mute };
+        return a == Articulation::mute ? mute : sustain;
+    }
+
+    int layerFor (Articulation a, int velocity) noexcept
+    {
+        const auto& s = spec (a);
+        auto layer = 0;
+        while (layer + 1 < s.layers && velocity >= (s.velocities[(size_t) layer] + s.velocities[(size_t) layer + 1] + 1) / 2)
+            ++layer;
+        return layer;
+    }
+
+    std::vector<Take> takes (Articulation a, int string)
+    {
+        const auto& s = spec (a);
         std::vector<Take> result;
         auto t = leadInSeconds + noteDelaySeconds;
         for (int fret = 0; fret <= numFrets; ++fret)
-            for (int layer = 0; layer < numLayers; ++layer)
-                for (int rr = 0; rr < numRoundRobins; ++rr)
+            for (int layer = 0; layer < s.layers; ++layer)
+                for (int rr = 0; rr < s.roundRobins; ++rr)
                     for (const auto stroke : { Stroke::down, Stroke::up })
                     {
-                        result.push_back ({ string, fret, layer, stroke, rr, t });
-                        t += slotSeconds;
+                        result.push_back ({ string, fret, layer, stroke, rr, t, a });
+                        t += s.slotSeconds;
                     }
         return result;
     }
 
     double lengthSeconds (Articulation a, int string)
     {
-        return leadInSeconds + slotSeconds * (double) takes (a, string).size();
+        return leadInSeconds + spec (a).slotSeconds * (double) takes (a, string).size();
     }
 
     juce::MidiFile toMidi (Articulation a, int string)
@@ -40,12 +58,12 @@ namespace guitar::renders
         for (const auto& take : takes (a, string))
         {
             const auto slot = take.noteSeconds - noteDelaySeconds;
-            key (a == Articulation::mute ? keys::mute : keys::sustain, slot);
+            key (spec (a).key, slot);
             key (take.stroke == Stroke::down ? keys::pickDown : keys::pickUp, slot + 0.05);
             track.addEvent (juce::MidiMessage::textMetaEvent (6, "F" + juce::String (take.fret) + " L" + juce::String (take.layer + 1)
                                                                     + (take.stroke == Stroke::down ? " DOWN " : " UP ") + juce::String (take.roundRobin + 1)).withTimeStamp (ticks (take.noteSeconds)));
             track.addEvent (juce::MidiMessage::noteOn (1, take.note(), (juce::uint8) take.velocity()).withTimeStamp (ticks (take.noteSeconds)));
-            track.addEvent (juce::MidiMessage::noteOff (1, take.note()).withTimeStamp (ticks (take.noteSeconds + holdSeconds)));
+            track.addEvent (juce::MidiMessage::noteOff (1, take.note()).withTimeStamp (ticks (take.noteSeconds + spec (a).holdSeconds)));
         }
         track.addEvent (juce::MidiMessage::endOfTrack().withTimeStamp (ticks (lengthSeconds (a, string))));
         track.sort();
@@ -87,8 +105,8 @@ namespace guitar::renders
         id.fret = parts[1].substring (1).getIntValue();
         id.layer = parts[2].substring (1).getIntValue();
         id.stroke = parts[3] == "d" ? Stroke::down : Stroke::up;
-        if (id.string < 0 || id.string >= numStrings || id.fret < 0 || id.fret > numFrets || id.layer < 0 || id.layer >= numLayers
-            || id.roundRobin < 0 || id.roundRobin >= numRoundRobins)
+        if (id.string < 0 || id.string >= numStrings || id.fret < 0 || id.fret > numFrets || id.layer < 0
+            || id.layer >= spec (id.articulation).layers || id.roundRobin < 0 || id.roundRobin >= spec (id.articulation).roundRobins)
             return std::nullopt;
         return id;
     }
