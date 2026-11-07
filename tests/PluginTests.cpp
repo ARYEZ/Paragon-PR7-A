@@ -134,8 +134,8 @@ TEST_CASE ("THE PLUGIN: a render imported, the guitar folder loaded, notes playe
     const auto render = fakeRenderFile (2, t.folder.getChildFile ("A string.wav"));
     t.p.startImport (render, Articulation::sustain, 2);
     REQUIRE (t.p.waitUntilIdle (60000));
-    CHECK (t.p.getImportReport (2) == "600 notes imported, all in tune");
-    CHECK (t.p.getLibrary()->count (Articulation::sustain, 2) == 600);
+    CHECK (t.p.getImportReport (2) == "300 notes imported, all in tune");
+    CHECK (t.p.getLibrary()->count (Articulation::sustain, 2) == 300);
     CHECK (guitarFolder.getChildFile ("Sustain/s2_f00_l1_d_r0.wav").existsAsFile());
     CHECK (t.p.getImportReport (3).isEmpty());
 
@@ -317,7 +317,7 @@ TEST_CASE ("THE WINDOW: GUITAR, PRESETS and SETTINGS tabs; the GUITAR page; the 
     CHECK (view->getFretboard().isVisible());
 
     // The rows of RENDERS: each string's, what's there for it.
-    CHECK (view->getGuitarPage().getRow (0).getStatus() == "25 of 600 takes");
+    CHECK (view->getGuitarPage().getRow (0).getStatus() == "25 of 300 takes");
     view->getGuitarPage().refresh();
     CHECK (view->getGuitarPage().getGuitarStatus().contains ("175 takes"));
 

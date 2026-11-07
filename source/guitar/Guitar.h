@@ -14,6 +14,10 @@
 //   - PICKING: ALTERNATE (down, up, down... one stroke per chord), DOWN or UP: which stroke's take plays; its ROUND-ROBIN
 //     chosen at random but never the take that played last on that string (0.3.0; 0.2.0 went round them in turn), so
 //     a chugged note has no pattern to hear.
+//   - BORROWING (0.3.0, with VARIATION): the reference instrument has only two takes of each stroke, so a note may also
+//     play the neighbouring dynamic's takes (their level matched to its own: `Take::loudness`) or the neighbouring frets'
+//     on its string (a semitone up or down, played back at its pitch), as the reference's "anti-repetition" uses
+//     neighbouring samples: up to ten recordings per stroke instead of two. Its own takes stay the likeliest.
 //   - VARIATION (0.3.0): each note a little different, as no two picks are alike: up to 3 ms further into its take, up to
 //     half a dB louder or quieter, up to 3 cents sharp or flat, all times VARIATION (0: the takes exactly as recorded).
 //   - VELOCITY picks the dynamic (the render list's three: below 65 soft, below 102 medium, then hard), and within it

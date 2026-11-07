@@ -27,6 +27,8 @@ namespace guitar
         double sampleRate = 48000.0;
         juce::int64 frames = 0;                        // its whole length
         juce::File file;
+        float loudness = 0.0f;                         // 0.3.0: the RMS of its first 100 ms (to match levels when borrowed)
+        static float loudnessOf (const std::vector<float>& head, double sampleRate);
     };
 
     class Library
@@ -47,9 +49,11 @@ namespace guitar
             bool exact = false;
         };
         Found find (Articulation, int string, int fret, int layer, Stroke, int roundRobin = 0) const noexcept;
+        // 0.3.0: that take only (null: not imported, or left out as a copy).
+        const Take* exact (Articulation, int string, int fret, int layer, Stroke, int roundRobin) const noexcept;
 
         int count (Articulation, int string) const noexcept;   // takes imported for a string (of takesPerString)
-        static constexpr int takesPerString = (numFrets + 1) * renders::numLayers * 2 * renders::numRoundRobins;   // 600
+        static constexpr int takesPerString = (numFrets + 1) * renders::numLayers * 2 * renders::numRoundRobins;   // 300
         int total() const noexcept;
         bool isEmpty() const noexcept { return total() == 0; }
         const juce::File& getFolder() const noexcept { return folder; }

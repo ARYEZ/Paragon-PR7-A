@@ -5,7 +5,7 @@
 
 namespace
 {
-    constexpr int perString = guitar::Library::takesPerString;   // a string's takes (600)
+    constexpr int perString = guitar::Library::takesPerString;   // a string's takes (300)
 
     bool isAudio (const juce::String& path)
     {
@@ -50,8 +50,8 @@ GuitarPage::GuitarPage (ParagonX1AudioProcessor& p)
         guitarPanel.addAndMakeVisible (c);
 
     renderHelp.setText ("Render each string's list through your guitar instrument as a DI (its effects off, one guitar, no "
-                        "anti-repetition, ringing or release noises), then import the audio. Each string: 25 frets x 3 dynamics x 4 "
-                        "round-robins of down and up, about 55 minutes.", juce::dontSendNotification);
+                        "anti-repetition, ringing or release noises), then import the audio. Each string: 25 frets x 3 dynamics x 2 "
+                        "round-robins of down and up, about 28 minutes.", juce::dontSendNotification);
     renderHelp.setColour (juce::Label::textColourId, ParagonColours::textDim);
     renderHelp.setFont (juce::FontOptions (13.0f));
     renderHelp.setJustificationType (juce::Justification::topLeft);

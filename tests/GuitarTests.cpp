@@ -148,22 +148,21 @@ TEST_CASE ("FRETTING: open strings low on the neck, the hand's reach, busy strin
 TEST_CASE ("THE RENDER LIST: every fret, three dynamics, two round-robins of down and up; keyswitches first; one file per string", "[guitar][renders]")
 {
     const auto list = renders::takes (Articulation::sustain, 0);
-    REQUIRE (list.size() == 25 * 3 * 2 * 4);
+    REQUIRE (list.size() == 25 * 3 * 2 * 2);
     REQUIRE ((int) list.size() == Library::takesPerString);
     CHECK_THAT (list.front().noteSeconds, WithinAbs (2.25, 1e-9));
     CHECK_THAT (list[1].noteSeconds - list[0].noteSeconds, WithinAbs (renders::slotSeconds, 1e-9));
     CHECK (list[0].stroke == Stroke::down);
     CHECK (list[1].stroke == Stroke::up);
-    CHECK (list[2].stroke == Stroke::down);   // down, up, down, up...: the four round-robins of each stroke
+    CHECK (list[2].stroke == Stroke::down);   // down, up, down, up: the two round-robins of each stroke
     CHECK (list[2].roundRobin == 1);
-    CHECK (list[7].roundRobin == 3);
-    CHECK (list[7].layer == 0);
-    CHECK (list[8].layer == 1);
+    CHECK (list[3].layer == 0);
+    CHECK (list[4].layer == 1);
     CHECK (list.back().fret == 24);
     CHECK (list.back().note() == 33 + 24);
     for (const auto& t : list)
         CHECK (t.velocity() <= 119);   // sustain's velocities (above: the reference's rake and pinch harmonic)
-    CHECK_THAT (renders::lengthSeconds (Articulation::sustain, 0), WithinAbs (2.0 + 600 * 5.5, 1e-9));
+    CHECK_THAT (renders::lengthSeconds (Articulation::sustain, 0), WithinAbs (2.0 + 300 * 5.5, 1e-9));
     CHECK (renders::fileName (Articulation::sustain, 0) == "PR7-I Sustain - String 7 (low A)");
     CHECK (renders::fileName (Articulation::sustain, 3) == "PR7-I Sustain - String 4 (D)");
 
@@ -197,19 +196,19 @@ TEST_CASE ("THE RENDER LIST: every fret, three dynamics, two round-robins of dow
     }
     CHECK (forced);
     CHECK (legatoOff);
-    CHECK (notes == 600);
+    CHECK (notes == 300);
     CHECK_THAT (firstNote, WithinAbs (2.25, 0.001));
     CHECK (firstStrokeKey < firstNote);
 
     // A take's file name, and back.
     const auto name = renders::takeFileName (Articulation::sustain, list[7]);
-    CHECK (name == "Sustain/s0_f00_l0_u_r3.wav");
+    CHECK (name == "Sustain/s0_f00_l1_u_r1.wav");
     const auto id = renders::parseTakeFile (juce::File ("/x").getChildFile (name));
     REQUIRE (id);
     CHECK (id->fret == 0);
-    CHECK (id->layer == 0);
+    CHECK (id->layer == 1);
     CHECK (id->stroke == Stroke::up);
-    CHECK (id->roundRobin == 3);
+    CHECK (id->roundRobin == 1);
     CHECK_FALSE (renders::parseTakeFile (juce::File ("/x/Other/s0_f01_l0_u_r0.wav")));
     CHECK_FALSE (renders::parseTakeFile (juce::File ("/x/Sustain/s0_f01_l0_u.wav")));
 }
@@ -239,12 +238,12 @@ TEST_CASE ("IMPORT A RENDER: the offset found, every take cut at its pick, in tu
     const auto report = renders::importAudio (audio.data(), (int) audio.size(), rate, Articulation::sustain, 0, folder, &progress);
     INFO (report.summary());
     REQUIRE (report.ok());
-    CHECK (report.written == 600);
+    CHECK (report.written == 300);
     CHECK (report.copies == 0);
     CHECK (report.outOfTune.isEmpty());
     CHECK_THAT (report.offsetSeconds, WithinAbs (0.023, 0.001));
     CHECK (progress.load() == 1.0f);
-    CHECK (report.summary() == "600 notes imported, all in tune");
+    CHECK (report.summary() == "300 notes imported, all in tune");
 
     // A take's file: mono, the render's rate, its tone starting `preroll` in (the pick's noise kept before it).
     juce::AudioFormatManager formats;
@@ -280,8 +279,8 @@ TEST_CASE ("IMPORT A RENDER: the offset found, every take cut at its pick, in tu
 
     // THE LIBRARY: the folder loaded; the string's 150 takes; another string's notes played by stand-ins.
     const auto library = Library::load (folder);
-    CHECK (library->count (Articulation::sustain, 0) == 600);
-    CHECK (library->total() == 600);
+    CHECK (library->count (Articulation::sustain, 0) == 300);
+    CHECK (library->total() == 300);
     const auto exact = library->find (Articulation::sustain, 0, 5, 1, Stroke::up);
     REQUIRE (exact.take != nullptr);
     CHECK (exact.exact);
@@ -491,22 +490,22 @@ TEST_CASE ("THE ENGINE: streaming live (not waiting for the disk), the note whol
 
 TEST_CASE ("IMPORT A RENDER 0.3.0: round-robins that are copies of earlier ones left out, and said", "[guitar][renders]")
 {
-    // An instrument with only two takes per stroke, asked for four: round-robins 3 and 4 copy 1 and 2.
+    // An instrument with only one take per stroke, asked for two: round-robin 2 copies 1.
     constexpr double rate = 8000.0;
     const auto folder = tempGuitar ("Copies");
-    const auto audio = fakeRender (Articulation::sustain, 1, rate, 0.01, 0, 1.0, 2);
+    const auto audio = fakeRender (Articulation::sustain, 1, rate, 0.01, 0, 1.0, 1);
     const auto report = renders::importAudio (audio.data(), (int) audio.size(), rate, Articulation::sustain, 1, folder);
     INFO (report.summary());
     REQUIRE (report.ok());
-    CHECK (report.written == 300);
-    CHECK (report.copies == 300);
-    CHECK (report.fewestRoundRobins == 2);
-    CHECK (report.summary() == "300 notes imported, all in tune, 300 copies of other takes left out (as few as 2 different per stroke)");
-    CHECK (folder.getChildFile ("Sustain/s1_f03_l1_d_r1.wav").existsAsFile());
-    CHECK_FALSE (folder.getChildFile ("Sustain/s1_f03_l1_d_r2.wav").exists());
-    // The guitar then cycles the two it has.
+    CHECK (report.written == 150);
+    CHECK (report.copies == 150);
+    CHECK (report.fewestRoundRobins == 1);
+    CHECK (report.summary() == "150 notes imported, all in tune, 150 copies of other takes left out (as few as 1 different per stroke)");
+    CHECK (folder.getChildFile ("Sustain/s1_f03_l1_d_r0.wav").existsAsFile());
+    CHECK_FALSE (folder.getChildFile ("Sustain/s1_f03_l1_d_r1.wav").exists());
+    // The guitar then plays the one it has.
     const auto library = Library::load (folder);
-    CHECK (library->find (Articulation::sustain, 1, 3, 1, Stroke::down, 2).take == library->find (Articulation::sustain, 1, 3, 1, Stroke::down, 0).take);
+    CHECK (library->find (Articulation::sustain, 1, 3, 1, Stroke::down, 1).take == library->find (Articulation::sustain, 1, 3, 1, Stroke::down, 0).take);
     folder.getParentDirectory().deleteRecursively();
 }
 
@@ -597,4 +596,40 @@ TEST_CASE ("THE ENGINE 0.3.0: VARIATION: each note a touch different in level, s
         highest = std::max (highest, l);
     }
     CHECK (db (highest) - db (lowest) > 0.2);
+}
+
+TEST_CASE ("THE ENGINE 0.3.0: BORROWING: with VARIATION, the neighbouring dynamics' and frets' takes too, at its level and pitch", "[guitar][engine]")
+{
+    // A chug of 64 down strokes on the A string's 5th fret (D3), medium.
+    const auto chug = [] (float variation, std::set<const Take*>& used, std::vector<double>& levels)
+    {
+        Player p;
+        p.settings.pick = PickMode::down;
+        p.settings.variation = variation;
+        const Take* previous = nullptr;
+        for (int i = 0; i < 64; ++i)
+        {
+            p.left.clear();
+            p.play (0.12, { { Player::off (50), 0 }, { Player::on (50, 85), 1 } });
+            CHECK (p.guitar.lastTake() != previous);   // never the same take twice running
+            previous = p.guitar.lastTake();
+            used.insert (previous);
+            levels.push_back (levelAt (p.left, guitar::frequencyOf (50), 1200, 4800));
+        }
+    };
+    // VARIATION 0: only its own two takes, at the medium dynamic's level (0.5 here).
+    std::set<const Take*> own;
+    std::vector<double> ownLevels;
+    chug (0.0f, own, ownLevels);
+    CHECK (own.size() == 2);
+    for (const auto l : ownLevels)
+        CHECK_THAT (l, WithinAbs (0.5, 0.01));
+    // Full: the soft and hard dynamics' takes and the 4th and 6th frets' join in, each at the note's own level and pitch
+    // (the borrowed dynamics, made at 0.25 and 1.0, matched to 0.5; within VARIATION's half a dB).
+    std::set<const Take*> varied;
+    std::vector<double> variedLevels;
+    chug (1.0f, varied, variedLevels);
+    CHECK (varied.size() >= 6);
+    for (const auto l : variedLevels)
+        CHECK (std::abs (db (l / 0.5)) < 0.7);
 }

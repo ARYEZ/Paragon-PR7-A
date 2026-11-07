@@ -49,6 +49,7 @@ namespace guitar
                     source->parts.push_back ({ 1, 0, 0, 0.5f, 0 });
                 take->stream = source;
             }
+            take->loudness = Take::loudnessOf (take->head, take->sampleRate);
             library->add (id->articulation, id->string, id->fret, id->layer, id->stroke, id->roundRobin, take);
         }
         if (progress != nullptr)
@@ -56,8 +57,30 @@ namespace guitar
         return library;
     }
 
+    float Take::loudnessOf (const std::vector<float>& head, double sampleRate)
+    {
+        const auto n = std::min (head.size(), (size_t) std::lround (0.1 * sampleRate));
+        double sum = 0.0;
+        for (size_t i = 0; i < n; ++i)
+            sum += (double) head[i] * head[i];
+        return n > 0 ? (float) std::sqrt (sum / (double) n) : 0.0f;
+    }
+
+    const Take* Library::exact (Articulation a, int s, int f, int l, Stroke stroke, int rr) const noexcept
+    {
+        if (s < 0 || s >= numStrings || f < 0 || f > numFrets || l < 0 || l >= renders::numLayers || rr < 0 || rr >= renders::numRoundRobins)
+            return nullptr;
+        return takes[(size_t) a][(size_t) s][(size_t) f][(size_t) l][stroke == Stroke::down ? 0u : 1u][(size_t) rr].get();
+    }
+
     void Library::add (Articulation a, int string, int fret, int layer, Stroke stroke, int roundRobin, std::shared_ptr<const Take> take)
     {
+        if (take != nullptr && take->loudness <= 0.0f)
+        {
+            auto measured = std::make_shared<Take> (*take);   // (takes made in memory: measured here)
+            measured->loudness = Take::loudnessOf (measured->head, measured->sampleRate);
+            take = measured;
+        }
         takes[(size_t) a][(size_t) string][(size_t) fret][(size_t) layer][stroke == Stroke::down ? 0u : 1u]
              [(size_t) juce::jlimit (0, renders::numRoundRobins - 1, roundRobin)] = std::move (take);
     }
