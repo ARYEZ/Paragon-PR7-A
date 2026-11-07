@@ -2,383 +2,47 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
-#include <string_view>
-
-// Parameter IDs are saved in DAW projects and presets, so never rename one
-// once it has shipped. Add new parameters with a new ID instead.
+// Parameter IDs are saved in DAW projects and presets, so never rename one once it has shipped. Add new parameters with
+// a new ID instead. Choices are saved by index: only ever append to a choice list, never reorder it.
 //
-// PR7-D keeps PR7-K 0.24.0's IDs for everything it kept (the drums, the drum sequencer, the effects), so PR7-K's
-// .pr7kit, .pr7seq and effect preset files load here; PR7-K's synth parameters are gone.
+// PR7-I 0.2.0 starts its own set (the guitar's); PR7-D's drum and effect parameters are gone. Version hints count from
+// 1 again (1: 0.2.0).
 namespace ParamIDs
 {
     // Global: not part of a preset.
     inline constexpr auto outputGain = "outputGain";   // the OUTPUT knob
     inline constexpr auto bypass     = "bypass";
+    // NOTE NAMES: how notes are named (notenames::choiceNames: middle C is C3 or C4).
+    inline constexpr auto noteNames  = "noteNames";
 
-    // Saved with each preset: its own level, to balance presets against each other.
-    inline constexpr auto patchLevel = "patchLevel";
+    // In presets.
+    inline constexpr auto patchLevel = "patchLevel";   // the preset's own level
+    // THE GUITAR (0.2.0): how notes are fretted and picked (guitar::Settings).
+    inline constexpr auto tone           = "tone";            // a gentle low-pass on the whole guitar (Hz; the top: open)
+    inline constexpr auto fretMode       = "fretMode";        // guitar::FretMode
+    inline constexpr auto pickMode       = "pickMode";        // guitar::PickMode
+    inline constexpr auto forceString    = "forceString";     // 0 off, then strings 7 (low A) .. 1 (high E)
+    inline constexpr auto handPosition   = "handPosition";    // 0 AUTO, else the hand's fret
+    inline constexpr auto velocityToVolume = "velToVol";
+    inline constexpr auto release        = "release";         // seconds: a note-off damping its string
+    inline constexpr auto transpose      = "transpose";       // semitones
 
-    // THE DRUMS (PR7-K's stage 6a, version hint 20): the kit's own settings, then each slot's, "drum1".."drum12" plus
-    // a setting. (PR7-K's drumsOn is gone: here the kit always plays.)
-    inline constexpr auto drumsRoot     = "drumsRoot";       // the kit's C: a MIDI note
-    inline constexpr auto drumsLevel    = "drumsLevel";      // dB
-    inline constexpr auto drumsVelocity = "drumsVelocity";   // 0 to 1
-    // THE NOTE MAP (PR7-D 0.2.0, version hint 24): which notes play which drum (notemap::layoutNames). Global, like
-    // OUTPUT: it suits the player's controller and grooves, not a sound, so presets leave it alone.
-    inline constexpr auto drumsMap      = "drumsMap";
-    inline constexpr int numDrums = 36;   // 12 until PR7-D 0.2.0 (drum13 to drum20: version hint 24), 20 until 0.17.0
-                                          // (drum21 to drum23, the articulations: hint 26), 23 until 0.33.0 (drum24 to
-                                          // drum29: tom 4, the hat's shoulder, the chokes: hint 35), 29 until 0.36.0 (drum30
-                                          // to drum36: crashes 3 to 6, the FX crash, china 2, tom 5: hint 38)
-    // THE HI-HAT PEDAL (0.17.0, hint 26): the CC 4 values where the hat's openness steps begin (closed, open 1, open 2,
-    // open 3; below the last, open 4). Global, like the note map: they suit the player's pedal, not a sound.
-    // Presets, kits and projects saved before 0.17.0 load with the three drums it added switched off (their notes play
-    // the drums they played before, through the stand-ins), so they sound as they did.
-    inline const juce::StringArray articulationsAddedOff { "drum21On", "drum22On", "drum23On" };
-    // The same for 0.33.0's six (older presets, kits and projects: off, so their notes play the stand-ins).
-    // A drum's layer (0.29.0) is saved as instrument numDrums + slot, so its number moves when drums are added: files
-    // saved with version (a preset's or project's parameterVersion, a kit file's version) 1 or 2 counted 23 drums, 3
-    // (0.33.0 to 0.35.x) 29, 4 (0.36.0) 36.
-    // 0.50.0: up to three LAYERS per drum: instrument numDrums x (1 + n) + slot (layer n = 0, 1, 2).
-    inline constexpr int numLayers = 3;
-    inline constexpr int numInstruments = (1 + numLayers) * numDrums;
-    inline constexpr int drumsSavedBy (int version) noexcept { return version < 3 ? 23 : version < 4 ? 29 : numDrums; }
-    inline constexpr int instrumentIndexFrom (int saved, int version) noexcept
-    {
-        const auto then = drumsSavedBy (version);
-        // 0.50.0: layers 2 and 3 after the first's (block 2, 3), counted the same way.
-        return saved >= then && saved < (1 + numLayers) * then ? (saved / then) * numDrums + saved % then : saved;
-    }
-    // The same for 0.36.0's seven (older presets, kits and projects: off, so their notes play the stand-ins).
-    // 0.39.0: the routes that start on a drum bus (mixer::defaultRouteOf). A preset or project saved before it that doesn't
-    // say has them on the channel's OUTPUT, as it was.
-    inline const juce::StringArray routesOnBuses039 { "mix1Route", "mix2Route", "mix3Route", "mix4Route", "mix6Route", "mix7Route", "mix8Route" };
-    inline const juce::StringArray slotsAdded036Off { "drum30On", "drum31On", "drum32On", "drum33On", "drum34On", "drum35On", "drum36On" };
-    inline const juce::StringArray slotsAdded033Off { "drum24On", "drum25On", "drum26On", "drum27On", "drum28On", "drum29On" };
-    inline const juce::StringArray drumsPedalSteps { "drumsPedal1", "drumsPedal2", "drumsPedal3", "drumsPedal4" };
-    // THE MIXER (0.20.0, hint 29): each mic channel's settings, "mix<n>" plus a setting (n = 1 to 13, mixer::Channel + 1).
-    // OUTPUT is global, like the drums' (notInRigs).
-    inline juce::String mix (int channel, const char* what) { return "mix" + juce::String (channel + 1) + what; }
-    inline constexpr const char* mixSettings[] = { "Level", "Pan", "Mute", "Solo", "Phase", "Bleed", "BleedOn", "Offset", "Release", "Output",
-                                                   "Route" };   // 0.21.0 (hint 30): mixer::routeNames' index, in presets
-    // THE MIXER's BUSES (0.21.0, hint 30): "mixBus<n>" plus a setting (n = 1 to 8). OUTPUT global, ROUTE in presets.
-    // 0.40.0: a mixer setting's place in mixSettings, worked out when compiling (the audio thread looked them up by name).
-    consteval int mixSetting (std::string_view what)
-    {
-        for (int i = 0; i < (int) std::size (mixSettings); ++i)
-            if (std::string_view (mixSettings[i]) == what)
-                return i;
-        throw "not a mixer setting";
-    }
-    inline juce::String mixBus (int bus, const char* what) { return "mixBus" + juce::String (bus + 1) + what; }
-    inline constexpr const char* busSettings[] = { "Level", "Pan", "Mute", "Solo", "Phase", "Output", "Route" };
-    inline constexpr auto mixMuteMode = "mixMuteMode";   // mixer::muteModeNames' index (in presets)
-    // SIMULATED MICS AND ROOM (0.26.0, hint 33): the kit's synth drums through the mixer's mic channels, and the room
-    // the room and ambience mics hear (micsim::roomNames' index; its decay, times its own; its tone). In presets and kits.
-    inline constexpr auto drumsMicSim = "drumsMicSim";
-    // A DRUM'S LAYER (0.29.0, hint 34): a sample (or folder of hits) of the user's played with the drum, "drum<n>LayerLevel"
-    // (dB, -60: off) and "drum<n>LayerOut": where it plays (0: the drum's own way; 1 + n: the mixer's mic channel n, its
-    // own fader). Saved by index: only append.
-    inline const juce::StringArray layerOutNames { "With The Drum", "Kick In", "Kick Out", "Snare Top", "Snare Btm", "Hi-Hat",
-                                                   "Tom 1", "Tom 2", "Tom 3", "Cymbals", "Overheads", "Room", "Ambience", "Other",
-                                                   "User 1", "User 2", "User 3", "User 4", "User 5", "User 6", "User 7", "User 8",
-                                                   "User 9", "User 10", "User 11", "User 12", "User 13", "User 14", "User 15",
-                                                   "User 16" };   // (0.34.0: USER 9-16)
-    inline constexpr auto drumsRoom = "drumsRoom";
-    inline constexpr auto drumsRoomDecay = "drumsRoomDecay";
-    inline constexpr auto drumsRoomTone = "drumsRoomTone";
+    inline const juce::StringArray fretModeNames { "Natural", "Polyphonic" };
+    inline const juce::StringArray pickModeNames { "Alternate", "Down", "Up" };
+    inline const juce::StringArray forceStringNames { "Off", "String 7 (low A)", "String 6 (E)", "String 5 (A)", "String 4 (D)",
+                                                      "String 3 (G)", "String 2 (B)", "String 1 (high E)" };
 
-    // MIDI IN CHANNEL (0.18.0, hint 27): which channel the DAW's or a controller's MIDI plays the kit on ("Any", 1-16).
-    // Global, like the note map.
-    inline constexpr auto drumsMidiChannel = "drumsMidiChannel";
-    // NOTE NAMES (0.35.1, hint 37): how notes are named (notenames::choiceNames: middle C is C3 or C4). Not in presets.
-    inline constexpr auto noteNames = "noteNames";
-    inline const juce::StringArray midiChannelNames { "Any", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16" };
-    inline juce::String drum (int slot, const char* what) { return "drum" + juce::String (slot + 1) + what; }
-    // THE OUTPUTS (PR7-D 0.3.0, version hint 25): the plugin's stereo outputs, MAIN first. Each drum, insert bus and
-    // send return chooses one ("drum<n>Output", "ins<n>Output", delayOutput, reverbOutput), by index: only append.
-    // Global, like the note map: they suit the DAW project's mixer, not a sound, so presets and kits leave them alone.
-    inline constexpr int numOutputs = 16;
-    inline const juce::StringArray outputNames { "Main", "Out 2", "Out 3", "Out 4", "Out 5", "Out 6", "Out 7", "Out 8",
-                                                 "Out 9", "Out 10", "Out 11", "Out 12", "Out 13", "Out 14", "Out 15", "Out 16" };
-    inline constexpr const char* drumSettings[] = { "Model", "Level", "Pan", "Pitch", "Decay", "Tone", "Snap", "Mute", "Solo",
-                                                    "Choke", "Insert", "SendDelay", "SendReverb",
-                                                    "SampleStart", "SampleEnd",     // 0.21.1 (version hint 21): appended
-                                                    "Gain", "Mono", "Delay", "LowPass", "HighPass",     // 6c (hint 23)
-                                                    "Output",     // PR7-D 0.3.0 (hint 25): outputNames' index
-                                                    "On", "MuteTail",     // 0.17.0 (hint 26): the articulation's ON, MUTE TAIL
-                                                    "VelMin", "VelMax",   // 0.18.0 (hint 27): its VELOCITY GATE (0 to 127)
-                                                    // 0.19.0 (hint 28): THE SAMPLE ENGINE's hit variation and limits
-                                                    "Randomize", "Adjacent", "VelToVol", "LayerLimit", "Voices",
-                                                    // 0.24.0 (hint 32): THE ACOUSTIC MODELS' strike POSITION, SHELL, VARIATION
-                                                    "Position", "Shell", "Variation",
-                                                    "Mics",     // 0.26.0 (hint 33): heard through SIMULATED MICS
-                                                    "LayerLevel", "LayerOut",   // 0.29.0 (hint 34): a LAYER of your own
-                                                    // 0.50.0 (hint 40): LAYERS 2 and 3 (the rest of each layer's settings
-                                                    // are preset data: ModMatrix::drumLayers)
-                                                    "Layer2Level", "Layer2Out", "Layer3Level", "Layer3Out" };
-    consteval int drumSetting (std::string_view what)
-    {
-        for (int i = 0; i < (int) std::size (drumSettings); ++i)
-            if (std::string_view (drumSettings[i]) == what)
-                return i;
-        throw "not a drum setting";
-    }
-    // 0.50.0: layer n's (0-2) LEVEL and OUT: "LayerLevel" / "LayerOut", then "Layer2Level"...
-    inline const char* layerLevel (int n) noexcept { return n <= 0 ? "LayerLevel" : n == 1 ? "Layer2Level" : "Layer3Level"; }
-    inline const char* layerOut (int n) noexcept { return n <= 0 ? "LayerOut" : n == 1 ? "Layer2Out" : "Layer3Out"; }
-
-    // THE DRUM SEQUENCER (stage 6b, version hint 22): the kit's beat. Its notes are preset data (ModMatrix::drumPatterns).
-    inline constexpr auto dseqOn       = "dseqOn";
-    inline constexpr auto dseqTrigger  = "dseqTrigger";    // choice: Song, Key (drumseq::triggerNames)
-    inline constexpr auto dseqPattern  = "dseqPattern";    // choice: A-D (SONG plays it; KEY: the key held chooses)
-    inline constexpr auto dseqDivision = "dseqDivision";   // SPEED: seq::divisionNames
-    inline constexpr auto dseqTiming   = "dseqTiming";     // seq::timingNames
-    inline constexpr auto dseqLength   = "dseqLength";     // beats, 1 to 16
-    inline constexpr auto dseqVelocity = "dseqVelocity";   // VELOCITY AMOUNT: how much the key's velocity counts (KEY)
-    inline constexpr auto shuffle      = "shuffle";        // SHUFFLE (PR7-K's, shared there with its synth)
-    inline constexpr auto machineTempo = "machineTempo";   // THE DRUM MACHINE's TEMPO (0.38.0, hint 39): its PLAY without the DAW
-
-    // THE RACK (stage 7a, 0.17.0): PR7-E 0.18.1's four effects, with PR7-E's IDs (so their presets load in either
-    // plugin) and its comments below (its "stomps" are our rack units; "rigs" our presets).
-    // ECHELON, the EQ (inspired by FabFilter Pro-Q 4; see dsp/eq).
-    inline constexpr auto eqOn        = "eqOn";
-    inline constexpr auto eqOutput    = "eqOutput";
-    inline constexpr auto eqGainScale = "eqGainScale";
-    inline constexpr auto eqAutoGain  = "eqAutoGain";
-    inline constexpr int eqNumBands = 24;
-    // Each band's settings: "eqB1Used", "eqB1Freq"... `what` is one of the names below.
-    // From 0.5.0, its dynamics: Dyn (the range), DynAuto, Thresh, Attack, Release.
-    inline juce::String eqBand (int band, const char* what) { return "eqB" + juce::String (band + 1) + what; }
-    inline constexpr const char* eqBandSettings[] = { "Used", "On", "Shape", "Freq", "Gain", "Q", "Slope", "Place",
-                                                      "Dyn", "DynAuto", "Thresh", "Attack", "Release" };
-
-    // Stomp 2, COMP (0.9.0): PR7-C's compressor, ported. After the EQ.
-    inline constexpr auto compOn        = "compOn";
-    inline constexpr auto compThreshold = "compThreshold";   // dBFS
-    inline constexpr auto compRatio     = "compRatio";       // 1 = SOFT, 30 = infinite
-    inline constexpr auto compAttack    = "compAttack";      // ms
-    inline constexpr auto compRelease   = "compRelease";     // ms
-    inline constexpr auto compAuto      = "compAuto";        // AUTO release
-    inline constexpr auto compMakeUp    = "compMakeUp";      // dB
-    inline constexpr auto compCharacter = "compCharacter";   // choice: VCA, OPTO, FET
-    inline constexpr auto compLink      = "compLink";        // both channels together
-    // COMP's bands (0.13.0): multiband compression and expansion, inspired by
-    // FabFilter Pro-MB (our own design, see dsp/effects/MultibandComp.h).
-    // The bands come first, then the full-band compressor above, which
-    // compWide switches (on by default, so older rigs sound as they did).
-    inline constexpr auto compWide    = "compWide";
-    inline constexpr auto mbLookahead = "mbLookahead";   // COMP 20 ms late, the bands hearing ahead
-    inline constexpr auto mbMix       = "mbMix";         // %, 0 to 200
-    inline constexpr int mbNumBands = 6;
-    // "mbB1Used", "mbB1Low"... `what` is one of the names below.
-    inline juce::String mbBand (int band, const char* what) { return "mbB" + juce::String (band + 1) + what; }
-    inline constexpr const char* mbBandSettings[] = { "Used", "On", "Low", "High", "Slope", "Thresh", "Range", "Mode", "Ratio",
-                                                      "Knee", "Attack", "Release", "Char", "Stereo", "Link", "Out", "Look" };
-
-    // Stomp 5, DOMINION (0.10.0): dynamic resonance suppression, inspired by
-    // oeksound soothe 3 (our own design, see dsp/dominion/Dominion.h). After
-    // the EQ, before COMP.
-    inline constexpr auto domOn      = "domOn";
-    inline constexpr auto domMode    = "domMode";      // choice: Soft, Hard
-    inline constexpr auto domDepth   = "domDepth";     // 0 to 20
-    inline constexpr auto domDetail  = "domDetail";    // 0 to 100
-    inline constexpr auto domAttack  = "domAttack";    // 0 to 100
-    inline constexpr auto domRelease = "domRelease";   // 0 to 100
-    inline constexpr auto domStereo  = "domStereo";    // choice: L/R, M/S
-    inline constexpr auto domLink    = "domLink";      // %
-    inline constexpr auto domFocus   = "domFocus";     // -100 to 100
-    inline constexpr auto domDetailLow = "domDetailLow", domDetailHigh = "domDetailHigh",
-                          domAttackLow = "domAttackLow", domAttackHigh = "domAttackHigh",
-                          domReleaseLow = "domReleaseLow", domReleaseHigh = "domReleaseHigh";   // the tilts, -100 to 100
-    inline constexpr auto domMaxCut  = "domMaxCut";    // dB (40: no limit)
-    inline constexpr auto domWetTrim = "domWetTrim";   // dB
-    inline constexpr auto domMix     = "domMix";       // %
-    inline constexpr auto domOut     = "domOut";       // dB
-    inline constexpr auto domDelta   = "domDelta";
-    inline constexpr int domNumBands = 8;
-    // The depth curve's bands: "domB1Used", "domB1Freq"... `what` is one of the names below.
-    inline juce::String domBand (int band, const char* what) { return "domB" + juce::String (band + 1) + what; }
-    inline constexpr const char* domBandSettings[] = { "Used", "On", "Shape", "Freq", "Depth", "Q", "Slope", "Focus" };
-
-    // Stomp 7, the LIMITER (0.8.0): PR7-C's limiter and output trim, ported.
-    // The last thing in the chain, after OUTPUT, RIG LEVEL and the volume pedal.
-    inline constexpr auto limitOn        = "limitOn";
-    inline constexpr auto limitThreshold = "limitThreshold";   // dBFS
-    inline constexpr auto limitMakeUp    = "limitMakeUp";      // dB
-    inline constexpr auto limitMode      = "limitMode";        // choice: Brick, Soft, Auto
-    inline constexpr auto limitMix       = "limitMix";         // %
-    inline constexpr auto limitLink      = "limitLink";        // both channels together
-    inline constexpr auto limitTrim      = "limitTrim";        // OUTPUT TRIM, dB, after the limiter
-    // From 0.16.0, inspired by Pro-L 2 (version hint 36): GAIN drives into the
-    // OUTPUT ceiling. limitThreshold and limitMakeUp became GAIN and OUTPUT
-    // (projects and rigs from before are converted when they load); they're
-    // kept only so old automation and files still find them.
-    inline constexpr auto limitGain          = "limitGain";          // dB
-    inline constexpr auto limitCeiling       = "limitCeiling";       // OUTPUT, dBFS (dBTP with TRUE PEAK)
-    inline constexpr auto limitLookahead     = "limitLookahead";     // ms
-    inline constexpr auto limitAttack        = "limitAttack";        // ms, the release stage
-    inline constexpr auto limitRelease       = "limitRelease";       // ms
-    inline constexpr auto limitLinkTransient = "limitLinkTransient"; // %
-    inline constexpr auto limitLinkRelease   = "limitLinkRelease";   // %
-    inline constexpr auto limitTruePeak      = "limitTruePeak";
-    inline constexpr auto limitOversampling  = "limitOversampling";  // choice: Off, 2x, 4x, 8x
-    inline constexpr auto limitDither        = "limitDither";        // choice: Off, 24 ... 16 bits
-    inline constexpr auto limitShaping       = "limitShaping";       // choice: None, Basic, Optimized, Weighted
-    inline constexpr auto limitUnity         = "limitUnity";         // listening aids: not in rigs
-    inline constexpr auto limitDelta         = "limitDelta";
-    inline constexpr auto limitDcFilter      = "limitDcFilter";
-
-
-    // THE SENDS (stage 7b, 0.18.0): PR7-G 0.52.0's DELAY and REVERB, with PR7-G's IDs, ranges and defaults; each
-    // drum's SendDelay / SendReverb (drumSettings) feeds them, and their MIX is the return's level.
-    inline constexpr auto delayOn        = "delayOn";
-    inline constexpr auto delayTime      = "delayTime";       // ms (SYNC off)
-    inline constexpr auto delaySync      = "delaySync";       // choice: effects::Delay::syncNames
-    inline constexpr auto delayFeedback  = "delayFeedback";   // 0 to 0.95
-    inline constexpr auto delayTone      = "delayTone";       // 0 to 10
-    inline constexpr auto delayMix       = "delayMix";        // 0 to 1: the return's level
-    inline constexpr auto delayPingPong  = "delayPingPong";
-    inline constexpr auto delayType      = "delayType";       // choice: effects::Delay::typeNames
-    inline constexpr auto delayDuck      = "delayDuck";       // 0 to 1
-    inline constexpr auto reverbOn       = "reverbOn";
-    inline constexpr auto reverbSize     = "reverbSize";      // 0 to 1
-    inline constexpr auto reverbTone     = "reverbTone";      // 0 to 10
-    inline constexpr auto reverbMix      = "reverbMix";       // 0 to 1: the return's level
-    inline constexpr auto reverbType     = "reverbType";      // choice: effects::Reverb::typeNames
-    inline constexpr auto reverbPreDelay = "reverbPreDelay";  // ms
-    inline constexpr auto reverbDuck     = "reverbDuck";      // 0 to 1
-    inline constexpr auto delayToReverb  = "delayToReverb";   // PR7-K's own: how much of DELAY's echoes go on into REVERB
-    inline constexpr auto delayOutput    = "delayOutput";     // PR7-D 0.3.0: where the return goes (outputNames)
-    inline constexpr auto reverbOutput   = "reverbOutput";
-
-    // MOD, MOD 2 and LO-FI (stage 7c, version hint 18): PR7-G 0.52.0's IDs, ranges and defaults, so the same names
-    // mean the same knobs across the family. Not PR7-G's MOD POSITION: there's no amp to put them before.
-    inline constexpr auto modOn      = "modOn";
-    inline constexpr auto modType    = "modType";      // choice: effects::Modulation::typeNames
-    inline constexpr auto modRate    = "modRate";      // Hz (SYNC off)
-    inline constexpr auto modDepth   = "modDepth";     // 0 to 1
-    inline constexpr auto modMix     = "modMix";       // 0 to 1 (E.LEVEL for the Vortex)
-    inline constexpr auto modSync    = "modSync";      // choice: effects::Delay::syncNames ("Off" first)
-    inline constexpr auto modEq      = "modEq";        // the Vortex's EQ, -1 to 1
-    inline constexpr auto modStereo  = "modStereo";    // the Vortex's STEREO
-    inline constexpr auto modManual  = "modManual";    // AEON's MANUAL, 0 to 10
-    inline constexpr auto modRes     = "modRes";       // AEON's RES, 0 to 10
-    inline constexpr auto modHadron  = "modHadron";    // Hadron's SCRIPT / BLOCK circuit
-    inline constexpr auto modWave    = "modWave";      // Razor's WAVE, 0 to 10
-    inline constexpr auto mod2On     = "mod2On";
-    inline constexpr auto mod2Type   = "mod2Type";
-    inline constexpr auto mod2Rate   = "mod2Rate";
-    inline constexpr auto mod2Depth  = "mod2Depth";
-    inline constexpr auto mod2Mix    = "mod2Mix";
-    inline constexpr auto mod2Sync   = "mod2Sync";
-    inline constexpr auto mod2Eq     = "mod2Eq";
-    inline constexpr auto mod2Stereo = "mod2Stereo";
-    inline constexpr auto mod2Manual = "mod2Manual";
-    inline constexpr auto mod2Res    = "mod2Res";
-    inline constexpr auto mod2Hadron = "mod2Hadron";
-    inline constexpr auto mod2Wave   = "mod2Wave";
-
-    // A MOD block's controls, so MOD and MOD 2 share their code (as on PR7-G).
-    struct ModIds
-    {
-        const char *on, *type, *rate, *depth, *mix, *sync, *eq, *stereo, *manual, *res, *hadron, *wave;
-    };
-    inline constexpr ModIds modIds { modOn, modType, modRate, modDepth, modMix, modSync, modEq, modStereo, modManual, modRes, modHadron, modWave };
-    inline constexpr ModIds mod2Ids { mod2On, mod2Type, mod2Rate, mod2Depth, mod2Mix, mod2Sync, mod2Eq, mod2Stereo, mod2Manual, mod2Res, mod2Hadron, mod2Wave };
-
-    inline constexpr auto lofiOn     = "lofiOn";
-    inline constexpr auto lofiType   = "lofiType";     // choice: effects::LoFi::typeNames
-    inline constexpr auto lofiAmount = "lofiAmount";   // 0 to 10
-    inline constexpr auto lofiNoise  = "lofiNoise";    // 0 to 10
-    inline constexpr auto lofiMix    = "lofiMix";      // 0 to 1
-    inline constexpr auto lofiLevel  = "lofiLevel";    // dB
-
-    // THE INSERT BUSES (stage 7d, version hint 19): A to D, each "ins1"... "ins4" plus a setting below: PR7-G's
-    // DRIVE and GLITCH (their IDs after the prefix, capitalised), then MOD and LO-FI as above, then the bus's SENDS.
-    inline constexpr int numInsertBuses = 4;
-    inline juce::String ins (int bus, const char* what) { return "ins" + juce::String (bus + 1) + what; }
-    inline const juce::StringArray insertBusNames { "None", "A", "B", "C", "D" };   // drum{k}Insert, by index: only append
-    inline constexpr const char* insDriveSettings[] = { "DriveOn", "DriveModel", "DriveGain", "DriveTone", "DriveLevel", "DriveAttack",
-                                                        "DriveGate", "DriveHigh", "DriveLow", "DriveMiddle", "DriveMidFreq" };
-    inline constexpr const char* insGlitchSettings[] = { "GlitchOn", "GlitchMode", "GlitchSync", "GlitchTime", "GlitchDivision",
-                                                         "GlitchDensity", "GlitchPitch", "GlitchChaos", "GlitchMix" };
-    inline constexpr const char* insModSettings[] = { "ModOn", "ModType", "ModRate", "ModDepth", "ModMix", "ModSync", "ModEq", "ModStereo",
-                                                      "ModManual", "ModRes", "ModHadron", "ModWave" };   // ModIds' order
-    inline constexpr const char* insLofiSettings[] = { "LofiOn", "LofiType", "LofiAmount", "LofiNoise", "LofiMix", "LofiLevel" };
-    // A bus's MOD as ModIds (the strings made once and kept).
-    inline const ModIds& insModIds (int bus)
-    {
-        static const auto table = []
-        {
-            std::array<std::array<juce::String, std::size (insModSettings)>, numInsertBuses> names;
-            for (int b = 0; b < numInsertBuses; ++b)
-                for (size_t k = 0; k < std::size (insModSettings); ++k)
-                    names[(size_t) b][k] = ins (b, insModSettings[k]);
-            return names;
-        }();
-        static const auto ids = []
-        {
-            std::array<ModIds, numInsertBuses> result {};
-            for (size_t b = 0; b < (size_t) numInsertBuses; ++b)
-            {
-                const auto& n = table[b];
-                result[b] = { n[0].toRawUTF8(), n[1].toRawUTF8(), n[2].toRawUTF8(), n[3].toRawUTF8(), n[4].toRawUTF8(), n[5].toRawUTF8(),
-                              n[6].toRawUTF8(), n[7].toRawUTF8(), n[8].toRawUTF8(), n[9].toRawUTF8(), n[10].toRawUTF8(), n[11].toRawUTF8() };
-            }
-            return result;
-        }();
-        return ids[(size_t) juce::jlimit (0, numInsertBuses - 1, bus)];
-    }
-
-    // Global settings: kept when switching presets. Everything else is part of a preset.
-    // The LIMITER's UNITY and DELTA are for listening while you set it, not part of a sound.
-    // THE OUTPUTS too (0.3.0): switching presets mustn't move drums between the DAW's channels.
-    inline const juce::StringArray notInRigs = []
-    {
-        juce::StringArray ids { outputGain, bypass, limitUnity, limitDelta, drumsMap, delayOutput, reverbOutput };
-        ids.addArray (drumsPedalSteps);
-        ids.add (drumsMidiChannel);
-        ids.add (noteNames);
-        for (int c = 0; c < 29; ++c)   // the mic channels (0.23.0: USER 1-8 too; 0.34.0: USER 9-16)
-            ids.add (mix (c, "Output"));
-        for (int b = 0; b < 8; ++b)
-            ids.add (mixBus (b, "Output"));
-        for (int k = 0; k < numDrums; ++k)
-            ids.add (drum (k, "Output"));
-        for (int b = 0; b < numInsertBuses; ++b)
-            ids.add (ins (b, "Output"));
-        return ids;
-    }();
-    inline bool isOutputChoice (const juce::String& id) { return id.endsWith ("Output"); }   // drum<n>, ins<n>, delay, reverb
+    // Not in presets: they belong to the project (or the computer), not the sound.
+    inline const juce::StringArray notInRigs { outputGain, bypass, noteNames };
 }
 
 namespace ParamRanges
 {
-    // COMP's, as on PR7-C.
-    inline constexpr float compThresholdMin = -50.0f, compThresholdMax = 0.0f;
-    inline constexpr float compAttackMin = 0.1f, compAttackMax = 30.0f;          // ms
-    inline constexpr float compReleaseMin = 50.0f, compReleaseMax = 3000.0f;     // ms
-    inline constexpr float compMakeUpMax = 20.0f;
-    inline const juce::StringArray compCharacters { "VCA", "OPTO", "FET" };    // saved by index: only append
-    inline constexpr float compRatioMarks[] = { 1.0f, 1.5f, 2.0f, 4.0f, 10.0f, 30.0f };   // SOFT, then to infinite
-
-    // The LIMITER's, as on PR7-C.
-    inline constexpr float limitThresholdMin = -20.0f, limitMakeUpMax = 12.0f;
-    inline constexpr float limitTrimMin = -12.0f, limitTrimMax = 12.0f;
-    // Its styles: PR7-C's three, then (0.16.0) eight of our own after Pro-L 2's (effects::limiter::Style).
-    inline const juce::StringArray limitModes { "Brick", "Soft", "Auto",   // saved by index: only append
-                                                "Clear", "Punchy", "Dynamic", "All-round", "Aggressive", "Modern", "Glue", "Safe" };
-    inline constexpr int limitDefaultMode = 8;   // Modern
-    inline constexpr float limitGainMax = 30.0f, limitCeilingMin = -30.0f;
-
     inline constexpr float gainMinDb = -24.0f;
     inline constexpr float gainMaxDb = 12.0f;
-    inline constexpr float outputDefaultDb = -6.0f;   // headroom (PR7-K's default, kept)
+    inline constexpr float outputDefaultDb = -6.0f;   // headroom (the family's default)
+    inline constexpr float toneMinHz = 1000.0f, toneMaxHz = 20000.0f;
+    inline constexpr int maxHand = 21;                 // the hand's fret (its span then reaches the 24th)
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
-void addRackParameters (juce::AudioProcessorValueTreeState::ParameterLayout&);   // RackParameters.cpp
-void addSendParameters (juce::AudioProcessorValueTreeState::ParameterLayout&);   // RackParameters.cpp (stage 7b)
-void addModFxParameters (juce::AudioProcessorValueTreeState::ParameterLayout&);   // RackParameters.cpp (stage 7c)
-void addInsertParameters (juce::AudioProcessorValueTreeState::ParameterLayout&);   // RackParameters.cpp (stage 7d)

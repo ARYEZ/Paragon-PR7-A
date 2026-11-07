@@ -11,7 +11,8 @@
 //   - Each note gets a string and fret (Fretting.h): notes struck at the same moment are a chord, fretted together.
 //   - ONE NOTE PER STRING: a new note on a sounding string stops it (5 ms), as picking it again does; a NOTE-OFF damps
 //     the string over RELEASE. Notes on other strings ring on.
-//   - PICKING: ALTERNATE (down, up, down... one stroke per chord), DOWN or UP: which stroke's take plays.
+//   - PICKING: ALTERNATE (down, up, down... one stroke per chord), DOWN or UP: which stroke's take plays; each stroke's
+//     ROUND-ROBINS in turn, so the same take never plays twice running.
 //   - VELOCITY picks the dynamic (the render list's three: below 65 soft, below 102 medium, then hard), and within it
 //     VEL > VOL scales the level (0: the take as recorded; 1: fully by velocity).
 //   - KEYSWITCHES, below the guitar's lowest note (A1) and above its highest: the reference's defaults, so MIDI parts
@@ -65,6 +66,7 @@ namespace guitar
         int getForcedString (const Settings&) const noexcept;   // as a keyswitch or the setting leaves it
         Position lastPosition() const noexcept { return last; }  // tests: the last note's string and fret
         Stroke lastStroke() const noexcept { return lastStrokePlayed; }
+        const Take* lastTake() const noexcept { return lastTakePlayed; }
 
     private:
         struct Voice
@@ -84,6 +86,7 @@ namespace guitar
         int autoHand = 1;
         double idleSamples = 0.0;
         Stroke nextStroke = Stroke::down;
+        std::array<int, 2> nextRoundRobin {};   // by stroke
         int ksForce = -2;           // -2: no keyswitch (the setting), -1: off, else a string
         int ksHand = -1;            // -1: no keyswitch, 0: AUTO, else a fret
         int ksPick = -1;
@@ -92,6 +95,7 @@ namespace guitar
         const Library* library = nullptr;
         Position last;
         Stroke lastStrokePlayed = Stroke::down;
+        const Take* lastTakePlayed = nullptr;
         std::array<std::atomic<int>, numStrings> soundingFret {};
         std::array<std::atomic<float>, numStrings> soundingLevel {};
         std::atomic<int> shownHand { 1 }, activeVoices { 0 };

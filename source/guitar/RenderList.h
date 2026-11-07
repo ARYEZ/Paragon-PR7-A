@@ -13,7 +13,8 @@
 // stroke it is, so the import can cut the render without guessing.
 //
 // Each file, at 120 BPM:
-//   - every take in turn: each fret 0-24, each of `numLayers` dynamics, a down then an up stroke;
+//   - every take in turn: each fret 0-24, each of `numLayers` dynamics, `numRoundRobins` round-robins of a down then an up
+//     stroke (down, up, down, up: the reference instrument's own round-robins give each its own sample);
 //   - each take in its own slot of `slotSeconds`: the keyswitches first (the articulation, the stroke's picking mode),
 //     then `noteDelaySeconds` later the note, held `holdSeconds`, then silence for its tail to die away;
 //   - at the file's start, the keyswitches that force the string and switch legato off, and `leadInSeconds` of
@@ -24,6 +25,7 @@
 namespace guitar::renders
 {
     inline constexpr int numLayers = 3;
+    inline constexpr int numRoundRobins = 2;   // takes of each stroke (so 4 per note and dynamic: down, up, down, up)
     // The dynamics' velocities: sustain stays at 119 or below (above it the reference plays its rake and pinch harmonic).
     inline constexpr std::array<int, numLayers> layerVelocities { 45, 85, 118 };
     inline constexpr double bpm = 120.0;
@@ -44,6 +46,7 @@ namespace guitar::renders
     {
         int string = 0, fret = 0, layer = 0;
         Stroke stroke = Stroke::down;
+        int roundRobin = 0;
         double noteSeconds = 0.0;   // when its note starts in the file
         int note() const noexcept { return noteOf (string, fret); }
         int velocity() const noexcept { return layerVelocities[(size_t) layer]; }
@@ -54,8 +57,8 @@ namespace guitar::renders
     juce::MidiFile toMidi (Articulation, int string);
     juce::String fileName (Articulation, int string);   // "PR7-I Sustain - String 7 (low A)" (no extension)
 
-    // Where an imported take's file goes in a guitar's folder: "<Sustain>/s0_f05_l2_d.wav", and back.
+    // Where an imported take's file goes in a guitar's folder: "<Sustain>/s0_f05_l2_d_r1.wav", and back.
     juce::String takeFileName (Articulation, const Take&);
-    struct TakeId { Articulation articulation = Articulation::sustain; int string = 0, fret = 0, layer = 0; Stroke stroke = Stroke::down; };
+    struct TakeId { Articulation articulation = Articulation::sustain; int string = 0, fret = 0, layer = 0; Stroke stroke = Stroke::down; int roundRobin = 0; };
     std::optional<TakeId> parseTakeFile (const juce::File&);
 }

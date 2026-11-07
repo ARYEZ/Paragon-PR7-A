@@ -20,17 +20,15 @@ namespace
         return mockF (left, top, right, bottom).toNearestInt();
     }
 
-    const auto tabsGroup = mockF (336, 10, 1087, 55);   // PR7-K's group, for four tabs here
+    const auto tabsGroup = mockF (336, 10, 1087, 55);
     const auto rigGroup = mockF (1102, 10, 1399, 55);
-    // The tabs' edges in the group, in the mockup's pixels: DRUMS | MIXER | FX | PRESETS | SETTINGS, five alike
-    // (PR7-I 0.1.0: GROOVES gone; PR7-D 0.20.0's six tabs shared the same group).
-    constexpr float tabEdges[] = { 338.0f, 487.4f, 636.8f, 786.2f, 935.6f, 1085.0f };
+    // The tabs' edges in the group, in the mockup's pixels: GUITAR | PRESETS | SETTINGS, three alike (PR7-I 0.2.0).
+    constexpr float tabEdges[] = { 338.0f, 587.0f, 836.0f, 1085.0f };
 
     // In canvas pixels.
     const juce::Rectangle<int> outputArea { 1496, 68, 92, 672 };
     const juce::Rectangle<int> stripArea { 12, 750, 1576, 138 };
     const juce::Rectangle<int> pageArea { 12, 68, 1476, 672 };   // the pages, beside the OUTPUT strip
-    const juce::Rectangle<int> machineArea { 10, 66, 1580, 826 };   // THE DRUM MACHINE: everything under the header
 }
 
 //==============================================================================
@@ -73,30 +71,23 @@ void GainColumn::resized()
 MainView::MainView (ParagonX1AudioProcessor& processorToShow)
     : audioProcessor (processorToShow),
       outputColumn ("OUTPUT", processorToShow.getParameters(), ParamIDs::outputGain, processorToShow.getOutputMeter()),
-      drumPage (processorToShow),
-      mixerPage (processorToShow),
-      fxPage (processorToShow),
+      fretboard (processorToShow),
+      guitarPage (processorToShow),
       rigBrowser (processorToShow),
-      settingsPage (processorToShow),
-      machine (processorToShow)
+      settingsPage (processorToShow)
 {
     setOpaque (true);   // it fills itself: nothing behind it needs drawing
-    // Header
-    for (auto* tab : { &drumsTab, &mixerTab, &fxTab, &presetsTab, &settingsTab })
+    for (auto* tab : { &guitarTab, &presetsTab, &settingsTab })
     {
         tab->setClickingTogglesState (true);
         tab->setRadioGroupId (100);
         addAndMakeVisible (*tab);
     }
-    drumsTab.setToggleState (true, juce::dontSendNotification);
-    drumsTab.setComponentID ("drumsTab");
+    guitarTab.setToggleState (true, juce::dontSendNotification);
+    guitarTab.setComponentID ("guitarTab");
     presetsTab.setComponentID ("presetsTab");
     settingsTab.setComponentID ("settingsTab");
-    drumsTab.onClick = [this] { showPage (Page::drums); };
-    mixerTab.setComponentID ("mixerTab");
-    mixerTab.onClick = [this] { showPage (Page::mixer); };
-    fxTab.setComponentID ("fxTab");
-    fxTab.onClick = [this] { showPage (Page::fx); };
+    guitarTab.onClick = [this] { showPage (Page::guitar); };
     presetsTab.onClick = [this] { showPage (Page::presets); };
     settingsTab.onClick = [this] { showPage (Page::settings); };
 
@@ -110,40 +101,15 @@ MainView::MainView (ParagonX1AudioProcessor& processorToShow)
     undoButton.onClick = [this] { audioProcessor.undo(); };
     redoButton.onClick = [this] { audioProcessor.redo(); };
     saveButton.onClick = [this] { saveRig(); };
-    settingsButton.onClick = [this] { showPage (page == Page::settings ? Page::drums : Page::settings); };
+    settingsButton.onClick = [this] { showPage (page == Page::settings ? Page::guitar : Page::settings); };
 
     for (auto* component : std::initializer_list<juce::Component*> { &previousRig, &nextRig, &rigNameButton,
                                                                       &undoButton, &redoButton, &saveButton, &settingsButton,
-                                                                      &outputColumn })
+                                                                      &outputColumn, &fretboard, &guitarPage })
         addAndMakeVisible (component);
-
-    // THE DRUM MACHINE (0.38.0): the DRUMS page's MACHINE view; its VIEW keys go back to the page's other views, and the
-    // drum chosen is the page's.
-    addChildComponent (machine);
-    machine.onView = [this] (MachineView::OtherView v)
-    {
-        drumPage.showView (v == MachineView::OtherView::kit ? DrumPage::View::kit
-                           : v == MachineView::OtherView::drum ? DrumPage::View::drum : DrumPage::View::sequencer);
-    };
-    machine.getChosen = [this] { return drumPage.getSelected(); };
-    machine.onChoose = [this] (int slot) { drumPage.clickRow (slot, {}); };
-    drumPage.onViewChanged = [this] (DrumPage::View) { updateMachine(); };
-    addChildComponent (progressBox);
-
-    // PR7-I 0.1.0: the strip under the pages is empty (the song track was PR7-D's); a quiet note says what it's for.
-    // (No on-screen keyboard: PR7-D 0.41.0 took it off every screen at the owner's ask.)
-    stripNote.setText ("THE NOTE VIEW: the strings and frets each note plays on will show here, with the guitar engine",
-                       juce::dontSendNotification);
-    stripNote.setJustificationType (juce::Justification::centred);
-    stripNote.setFont (juce::FontOptions (14.0f));
-    stripNote.setColour (juce::Label::textColourId, ParagonColours::textDim);
-    stripNote.setInterceptsMouseClicks (false, false);
-    addAndMakeVisible (stripNote);
-    addAndMakeVisible (drumPage);
-    addChildComponent (mixerPage);
-    addChildComponent (fxPage);
     addChildComponent (rigBrowser);
     addChildComponent (settingsPage);
+    addChildComponent (progressBox);
 
     audioProcessor.rigBroadcaster.addChangeListener (this);
     refreshRig();
@@ -159,28 +125,13 @@ MainView::~MainView()
 void MainView::showPage (Page newPage)
 {
     page = newPage;
-    auto& tab = newPage == Page::presets ? presetsTab : newPage == Page::settings ? settingsTab : newPage == Page::fx ? fxTab
-              : newPage == Page::mixer ? mixerTab : drumsTab;
+    auto& tab = newPage == Page::presets ? presetsTab : newPage == Page::settings ? settingsTab : guitarTab;
     tab.setToggleState (true, juce::dontSendNotification);
-    fxPage.setVisible (newPage == Page::fx);
-    drumPage.setVisible (newPage == Page::drums);
-    mixerPage.setVisible (newPage == Page::mixer);
+    guitarPage.setVisible (newPage == Page::guitar);
     rigBrowser.setVisible (newPage == Page::presets);
     settingsPage.setVisible (newPage == Page::settings);
-    updateMachine();
-}
-
-void MainView::updateMachine()
-{
-    const auto shown = page == Page::drums && drumPage.getView() == DrumPage::View::machine;
-    machine.setVisible (shown);
-    if (shown)
-        machine.toFront (false);
     if (progressBox.isVisible())
-        progressBox.toFront (false);   // (a long job's box stays over everything)
-    drumPage.setVisible (page == Page::drums && ! shown);
-    outputColumn.setVisible (! shown);
-    stripNote.setVisible (! shown);
+        progressBox.toFront (false);
 }
 
 void MainView::refreshRig()
@@ -195,15 +146,17 @@ void MainView::checkLongJobs (double nowMs)
 {
     if (progressBox.isShowingJob())
         return;
-    // 0.51.0: IMPORT A RENDER cutting its hits.
-    if (audioProcessor.getRenderImportProgress() >= 0.0)
+    // IMPORT A RENDER cutting a string's takes.
+    if (audioProcessor.getImportProgress() >= 0.0f)
     {
-        progressBox.show ({ "IMPORTING THE RENDER", [this] { return audioProcessor.getRenderImportProgress(); },
-                            [this] { audioProcessor.cancelRenderImport(); } });
+        progressBox.show ({ "IMPORTING " + guitar::stringLabel (juce::jmax (0, audioProcessor.getImportingString())),
+                            [this] { return (double) audioProcessor.getImportProgress(); },
+                            [this] { audioProcessor.cancelImport(); } });
+        progressBox.toFront (false);
         return;
     }
-    // A kit loading: shown once it's taken half a second (a single sample's load would only flash it up).
-    if (audioProcessor.getLoadProgress() < 0.0)
+    // The guitar loading: shown once it's taken half a second.
+    if (audioProcessor.getLoadProgress() < 0.0f)
     {
         loadingSince = -1.0;
         return;
@@ -211,13 +164,16 @@ void MainView::checkLongJobs (double nowMs)
     if (loadingSince < 0.0)
         loadingSince = nowMs;
     if (nowMs - loadingSince >= 500.0)
-        progressBox.show ({ "LOADING THE KIT", [this] { return audioProcessor.getLoadProgress(); }, {} });
+    {
+        progressBox.show ({ "LOADING THE GUITAR", [this] { return (double) audioProcessor.getLoadProgress(); }, {} });
+        progressBox.toFront (false);
+    }
 }
 
 void MainView::timerCallback()
 {
     checkLongJobs (juce::Time::getMillisecondCounterHiRes());
-    // NOTE NAMES (0.35.1): every note's name follows SETTINGS' choice (middle C as C3 or C4).
+    // NOTE NAMES: every note's name follows SETTINGS' choice (middle C as C3 or C4).
     if (const auto* names = audioProcessor.getParameters().getRawParameterValue (ParamIDs::noteNames))
         if (const auto octave = notenames::octaveForChoice (juce::roundToInt (names->load())); octave != notenames::middleCOctave.load())
         {
@@ -301,7 +257,7 @@ void MainView::paint (juce::Graphics& g)
 
 void MainView::paintBackground (juce::Graphics& g)
 {
-    // Background: near black, with a faint red warmth behind the kit.
+    // Background: near black, with a faint red warmth behind the page.
     g.fillAll (ParagonColours::background);
     const auto centre = juce::Point<float> (450.0f, 254.0f);
     g.setGradientFill (juce::ColourGradient (ParagonColours::glow.withAlpha (0.06f), centre,
@@ -336,22 +292,21 @@ void MainView::paintBackground (juce::Graphics& g)
         g.setColour (ParagonColours::panelEdge);
         g.drawRoundedRectangle (group.reduced (0.5f), 5.0f, 1.0f);
     }
-    for (auto x : { tabEdges[1], tabEdges[2], tabEdges[3], tabEdges[4] })
+    for (auto x : { tabEdges[1], tabEdges[2] })
         g.drawVerticalLine (juce::roundToInt (x * mockScale), tabsGroup.getY() + 8.0f, tabsGroup.getBottom() - 8.0f);
 
     g.setColour (ParagonColours::panelEdge);
     g.drawHorizontalLine (juce::roundToInt (64.0f * mockScale), 0.0f, (float) getWidth());
 
-    // The strip's frame (the keyboard's until PR7-D 0.41.0, the song track's until PR7-I 0.1.0).
+    // The strip's frame: the fretboard's (the keyboard's until PR7-D 0.41.0, the song track's until PR7-I 0.1.0).
     DockStyle::drawPanel (g, stripArea.toFloat().expanded (0.0f, 0.0f));
 }
 
 void MainView::resized()
 {
     backgroundCache.invalidate();
-    // Header
     {
-        IconButton* tabs[] = { &drumsTab, &mixerTab, &fxTab, &presetsTab, &settingsTab };
+        IconButton* tabs[] = { &guitarTab, &presetsTab, &settingsTab };
         for (size_t i = 0; i < std::size (tabs); ++i)
             tabs[i]->setBounds (mock (tabEdges[i] + (i > 0 ? 1.0f : 0.0f), 12, tabEdges[i + 1] - (i + 1 < std::size (tabs) ? 1.0f : 0.0f), 53));
     }
@@ -364,14 +319,9 @@ void MainView::resized()
     settingsButton.setBounds (mock (1611, 14, 1649, 50));
 
     outputColumn.setBounds (outputArea);
-
-    stripNote.setBounds (stripArea.reduced (8, 6));
-
-    fxPage.setBounds (pageArea);
-    drumPage.setBounds (pageArea);
-    mixerPage.setBounds (pageArea);
+    fretboard.setBounds (stripArea.reduced (4, 2));
+    guitarPage.setBounds (pageArea);
     rigBrowser.setBounds (pageArea);
     settingsPage.setBounds (pageArea);
-    machine.setBounds (machineArea);
     progressBox.setCentrePosition (getLocalBounds().getCentre());
 }

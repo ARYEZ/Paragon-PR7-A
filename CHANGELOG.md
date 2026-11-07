@@ -2,6 +2,27 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.2.0
+
+**PR7-I plays a guitar now: your renders from your guitar instrument, on the strings and frets a player would use.** The drums are gone. This is the first half of the playing engine (sustain); palm mute and the Tron-look guitar page come in 0.3.0.
+
+- **Render lists.** On the new GUITAR page, each of the seven strings has a MIDI file to render through your guitar instrument. Click MIDI to save it, drag it straight onto a track, or use SAVE ALL LISTS. Each file holds every fret from open to the 24th, at three dynamics, with two takes each of a down and an up stroke: 300 notes and about 28 minutes per string. The files set your instrument's own keyswitches themselves (force string, sustain, picking direction, legato off), so you just load one and bounce it.
+- **Importing a render.** Drop the bounced WAV on its string's row (or click IMPORT...). PR7-I finds where your DAW actually started the notes, cuts every take at its pick, checks each one's pitch, and saves them in the guitar's folder.
+  - It refuses a file that's clearly wrong: another string's render, one that stopped early, or silence. In those cases nothing is saved, and the row says what's wrong.
+  - The guitar's folder can be anywhere (CHOOSE FOLDER...). The takes stay on your computer; none ship with the plugin.
+- **The playing engine.**
+  - Each note goes on the string and fret a player would choose. A virtual hand stays where you're playing, open strings are used low on the neck, and a string already ringing is avoided. A chord's lowest note moves the hand first, so drop A's D5 is a one-finger barre at the 5th fret.
+  - One note per string: a new note on a ringing string stops it, as re-picking does. Releasing a note damps its string over RELEASE, and other strings ring on.
+  - Picking alternates down and up, and each stroke cycles its two takes, so the same take never plays twice in a row.
+  - Velocity picks the dynamic, and VEL > VOL sets how much it changes the level within that dynamic.
+- **Controls:** FRETTING MODE (Natural or Polyphonic), PICKING MODE (Alternate, Down, Up), FORCE STRING, HAND POSITION (Auto or a fret), TRANSPOSE, VEL > VOL, RELEASE, TONE, and the preset's LEVEL.
+- **Your instrument's default keyswitches work the same way here:** force string C-2 to F#-2 (G-2: off), hand position A#-2 (by velocity, B-2: Auto), sustain C-1, picking C7 / C#7 / D7. SETTINGS lists them in your note-name style.
+- **The fretboard** along the bottom of the window lights each note on its string and fret, shades the hand's reach, and highlights a forced string. Each string has its colour from PR7-D's Tron kit: pink on the low A, through red, to orange on the high E. It's a plain first version; 0.3.0 gives it the full Tron look.
+- **Gaps are filled.** Until every string is imported, missing notes are played by the nearest takes, shifted to the right pitch, so you can try it after rendering a single string.
+- **Removed:** the drum kit and the DRUMS page, the mixer, and the whole effects rack. PR7-G after PR7-I does the amp and effects, as you do now.
+- **New presets:** Init, Tight Rhythm, Chords, Lead Up The Neck, Down Picked. These are ways of playing; the sound itself comes from your renders.
+- **What can't be checked here:** how it sounds with your real renders. Everything was tested with made-up tones at the right pitches, so the first listen is yours.
+
 ## 0.1.0
 
 **PR7-I's first version: its own plugin, made from PR7-D's code.** This is the starting point for the guitar

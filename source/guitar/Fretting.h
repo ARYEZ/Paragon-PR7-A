@@ -38,11 +38,15 @@ namespace guitar
     // a note of the same chord); `hand`: the hand's fret (1 to 21).
     Position choose (int note, const std::array<bool, numStrings>& busy, int hand, const FretSettings&) noexcept;
 
-    // Notes struck together (a chord): placed lowest first, each on a string the others don't take where it can.
+    // Notes struck together (a chord): placed lowest first, each on a string the others don't take where it can. With an
+    // AUTO hand (`handFollows`), each note placed moves the hand before the next, as a player's hand goes to the lowest
+    // note's fret first: drop A's D5 (D2 A2 D3) is a barre at the 5th fret, not the open A and D strings.
     // `places` gets one Position per note, in the notes' order. Nothing allocated (the audio thread calls it).
     inline constexpr int maxChord = 16;
-    void chooseChord (const int* notes, int count, std::array<bool, numStrings> busy, int hand, const FretSettings&, Position* places) noexcept;
-    std::vector<Position> chooseChord (const std::vector<int>& notes, std::array<bool, numStrings> busy, int hand, const FretSettings&);
+    void chooseChord (const int* notes, int count, std::array<bool, numStrings> busy, int hand, const FretSettings&, Position* places,
+                      bool handFollows = true) noexcept;
+    std::vector<Position> chooseChord (const std::vector<int>& notes, std::array<bool, numStrings> busy, int hand, const FretSettings&,
+                                       bool handFollows = true);
 
     // AUTO hand: where the hand goes after playing at `fret` (it moves just enough to reach it; open strings don't move it).
     int followHand (int hand, int fret, FretMode) noexcept;

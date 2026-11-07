@@ -8,11 +8,12 @@ namespace guitar::renders
         auto t = leadInSeconds + noteDelaySeconds;
         for (int fret = 0; fret <= numFrets; ++fret)
             for (int layer = 0; layer < numLayers; ++layer)
-                for (const auto stroke : { Stroke::down, Stroke::up })
-                {
-                    result.push_back ({ string, fret, layer, stroke, t });
-                    t += slotSeconds;
-                }
+                for (int rr = 0; rr < numRoundRobins; ++rr)
+                    for (const auto stroke : { Stroke::down, Stroke::up })
+                    {
+                        result.push_back ({ string, fret, layer, stroke, rr, t });
+                        t += slotSeconds;
+                    }
         return result;
     }
 
@@ -42,7 +43,7 @@ namespace guitar::renders
             key (a == Articulation::mute ? keys::mute : keys::sustain, slot);
             key (take.stroke == Stroke::down ? keys::pickDown : keys::pickUp, slot + 0.05);
             track.addEvent (juce::MidiMessage::textMetaEvent (6, "F" + juce::String (take.fret) + " L" + juce::String (take.layer + 1)
-                                                                    + (take.stroke == Stroke::down ? " DOWN" : " UP")).withTimeStamp (ticks (take.noteSeconds)));
+                                                                    + (take.stroke == Stroke::down ? " DOWN " : " UP ") + juce::String (take.roundRobin + 1)).withTimeStamp (ticks (take.noteSeconds)));
             track.addEvent (juce::MidiMessage::noteOn (1, take.note(), (juce::uint8) take.velocity()).withTimeStamp (ticks (take.noteSeconds)));
             track.addEvent (juce::MidiMessage::noteOff (1, take.note()).withTimeStamp (ticks (take.noteSeconds + holdSeconds)));
         }
@@ -64,7 +65,7 @@ namespace guitar::renders
     juce::String takeFileName (Articulation a, const Take& t)
     {
         return articulationName (a) + "/s" + juce::String (t.string) + "_f" + juce::String (t.fret).paddedLeft ('0', 2) + "_l"
-             + juce::String (t.layer) + (t.stroke == Stroke::down ? "_d" : "_u") + ".wav";
+             + juce::String (t.layer) + (t.stroke == Stroke::down ? "_d" : "_u") + "_r" + juce::String (t.roundRobin) + ".wav";
     }
 
     std::optional<TakeId> parseTakeFile (const juce::File& file)
@@ -78,14 +79,16 @@ namespace guitar::renders
         else
             return std::nullopt;
         const auto parts = juce::StringArray::fromTokens (file.getFileNameWithoutExtension(), "_", {});
-        if (parts.size() != 4 || ! parts[0].startsWith ("s") || ! parts[1].startsWith ("f") || ! parts[2].startsWith ("l")
-            || (parts[3] != "d" && parts[3] != "u"))
+        if (parts.size() != 5 || ! parts[0].startsWith ("s") || ! parts[1].startsWith ("f") || ! parts[2].startsWith ("l")
+            || (parts[3] != "d" && parts[3] != "u") || ! parts[4].startsWith ("r"))
             return std::nullopt;
+        id.roundRobin = parts[4].substring (1).getIntValue();
         id.string = parts[0].substring (1).getIntValue();
         id.fret = parts[1].substring (1).getIntValue();
         id.layer = parts[2].substring (1).getIntValue();
         id.stroke = parts[3] == "d" ? Stroke::down : Stroke::up;
-        if (id.string < 0 || id.string >= numStrings || id.fret < 0 || id.fret > numFrets || id.layer < 0 || id.layer >= numLayers)
+        if (id.string < 0 || id.string >= numStrings || id.fret < 0 || id.fret > numFrets || id.layer < 0 || id.layer >= numLayers
+            || id.roundRobin < 0 || id.roundRobin >= numRoundRobins)
             return std::nullopt;
         return id;
     }

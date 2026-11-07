@@ -23,24 +23,19 @@ namespace
         label.setColour (juce::Label::textColourId, ParagonColours::textDim);
     }
 
-    // One line describing a preset: its samples, whether it has a beat, and the sends it uses.
+    // One line describing a preset: how it frets and picks (PR7-I 0.2.0).
     juce::String describeBlocks (const Rig& rig)
     {
-        const auto isOn = [&rig] (const juce::String& id)
+        const auto value = [&rig] (const juce::String& id, float fallback)
         {
             const auto found = rig.parameters.find (id);
-            return found != rig.parameters.end() && found->second > 0.5f;
+            return found != rig.parameters.end() ? found->second : fallback;
         };
-        const auto samples = (int) rig.drumSamples.size();
         juce::StringArray parts;
-        parts.add (samples == 0 ? juce::String ("drum synths") : juce::String (samples) + (samples == 1 ? " sample" : " samples"));
-        const auto& patterns = rig.modulation.drumPatterns;
-        if (std::any_of (patterns.begin(), patterns.end(), [] (const auto& p) { return ! p.isEmpty(); }))
-            parts.add ("a beat");
-        if (isOn (ParamIDs::delayOn))
-            parts.add ("delay");
-        if (isOn (ParamIDs::reverbOn))
-            parts.add ("reverb");
+        parts.add (ParamIDs::fretModeNames[juce::jlimit (0, ParamIDs::fretModeNames.size() - 1, juce::roundToInt (value (ParamIDs::fretMode, 0.0f)))].toLowerCase());
+        parts.add (ParamIDs::pickModeNames[juce::jlimit (0, ParamIDs::pickModeNames.size() - 1, juce::roundToInt (value (ParamIDs::pickMode, 0.0f)))].toLowerCase() + " picking");
+        if (const auto hand = juce::roundToInt (value (ParamIDs::handPosition, 0.0f)); hand > 0)
+            parts.add ("hand at fret " + juce::String (hand));
         return parts.joinIntoString (", ");
     }
 }

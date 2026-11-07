@@ -7,46 +7,7 @@ FetchContent_MakeAvailable(catch2)
 add_executable(ParagonX1Tests
     TestMain.cpp
     GuitarTests.cpp
-    DrumTests.cpp
-    DrumKitTests.cpp
-    DrumSeqTests.cpp
-    DrumEditorTests.cpp
-    DrumKitFileTests.cpp
-    KitViewTests.cpp
-    ArticulationTests.cpp
-    MidiInTests.cpp
-    InstrumentTests.cpp
-    MixerTests.cpp
-    AcousticDrumTests.cpp
-    MicSimTests.cpp
-    DrumGizmoTests.cpp
-    LayerTests.cpp
-    RenderImportTests.cpp
-    SamplePackTests.cpp
-    DrumSeqPluginTests.cpp
-    StackSizeTests.cpp
-    ParameterIdTests.cpp
-    ProcessorTests.cpp
-    RigTests.cpp
-    UiTests.cpp
-    MachineTests.cpp
-    NoteMapTests.cpp
-    OutputTests.cpp
-    UndoTests.cpp
-    EffectTests.cpp
-    EqTests.cpp
-    LimiterTests.cpp
-    MasterLimiterTests.cpp
-    RackTests.cpp
-    DelayReverbTests.cpp
-    ModFxTests.cpp
-    ModFxStereoTests.cpp
-    DriveGlitchTests.cpp
-    InsertTests.cpp
-    SendTests.cpp
-    CompressorTests.cpp
-    DominionTests.cpp
-    MultibandTests.cpp
+    PluginTests.cpp
     EditorSnapshot.cpp)
 
 # Link the plugin's shared code (processor, editor, JUCE modules) so the
@@ -71,9 +32,10 @@ add_executable(GuitarCoreTests
     ../source/guitar/RenderImport.cpp
     ../source/guitar/GuitarLibrary.cpp
     ../source/guitar/Guitar.cpp
-    ../source/dsp/synth/DiskStreamer.cpp)
+    ../source/dsp/DiskStreamer.cpp)
 target_include_directories(GuitarCoreTests PRIVATE ../source)
 target_compile_definitions(GuitarCoreTests PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_STANDALONE_APPLICATION=1
     JUCE_USE_MP3AUDIOFORMAT=0 JUCE_MODAL_LOOPS_PERMITTED=1)
 target_link_libraries(GuitarCoreTests PRIVATE juce::juce_audio_formats juce::juce_dsp juce::juce_gui_basics Catch2::Catch2
     juce::juce_recommended_config_flags)
+set_target_properties(GuitarCoreTests PROPERTIES EXCLUDE_FROM_ALL TRUE)   # built on request; its tests run in ParagonX1Tests too

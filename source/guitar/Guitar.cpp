@@ -115,12 +115,16 @@ namespace guitar
             busy[(size_t) st] = onString[(size_t) st] >= 0;
         FretSettings fs { s.fretMode, getForcedString (s) };
         std::array<Position, maxChord> places {};
-        chooseChord (chord.notes.data(), chord.count, busy, handNow (s), fs, places.data());
+        const auto handIsAuto = (ksHand >= 0 ? ksHand : s.hand) == 0;
+        chooseChord (chord.notes.data(), chord.count, busy, handNow (s), fs, places.data(), handIsAuto);
 
         const auto pick = ksPick >= 0 ? (PickMode) ksPick : s.pick;
         const auto stroke = pick == PickMode::down ? Stroke::down : pick == PickMode::up ? Stroke::up : nextStroke;
         nextStroke = stroke == Stroke::down ? Stroke::up : Stroke::down;
         lastStrokePlayed = stroke;
+        auto& rrCounter = nextRoundRobin[stroke == Stroke::down ? 0u : 1u];
+        const auto roundRobin = rrCounter;
+        rrCounter = (rrCounter + 1) % renders::numRoundRobins;
 
         for (size_t i = 0; i < (size_t) chord.count; ++i)
         {
@@ -132,9 +136,10 @@ namespace guitar
                 stopVoice (voices[(size_t) old], stopSeconds);
             const auto velocity = chord.velocities[i];
             const auto layer = layerFor (velocity);
-            const auto found = library != nullptr ? library->find (Articulation::sustain, p.string, p.fret, layer, stroke) : Library::Found {};
+            const auto found = library != nullptr ? library->find (Articulation::sustain, p.string, p.fret, layer, stroke, roundRobin) : Library::Found {};
             if (found.take == nullptr)
                 continue;
+            lastTakePlayed = found.take;
             auto& v = freeVoice();
             v = {};
             v.active = v.held = true;
@@ -149,7 +154,7 @@ namespace guitar
                 if ((v.stream = s.streamer->claim (*found.take->stream)) >= 0)
                     s.streamer->attach (v.stream, 0);
             onString[(size_t) p.string] = (int) (&v - voices.data());
-            if (handNow (s) == autoHand && (ksHand < 0 ? s.hand : ksHand) == 0)
+            if (handIsAuto)
                 autoHand = followHand (autoHand, p.fret, s.fretMode);
         }
     }

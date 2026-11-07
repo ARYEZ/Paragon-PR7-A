@@ -10,26 +10,37 @@ palm-muted djent and progressive metal rhythm parts. Its own plugin: no sampler 
 It plays a clean DI guitar. For amps, cabinets and pedals, put [PR7-G](https://github.com/ARYEZ/Paragon-PR7-G) (the
 family's guitar amp-and-effects plugin) after it in your DAW.
 
-Paragon PR7-I starts from [Paragon PR7-D](https://github.com/ARYEZ/Paragon-PR7-D) 0.60.0, the family's drum
-instrument, for its sample engine (velocity layers, round-robins, streaming from disk), MIDI handling, multiple
-outputs, presets, undo and look. It installs alongside its siblings and keeps its own presets.
+Paragon PR7-I started from [Paragon PR7-D](https://github.com/ARYEZ/Paragon-PR7-D) 0.60.0, the family's drum
+instrument, for its streaming from disk, presets, undo, MIDI learn and look. It installs alongside its siblings and
+keeps its own presets. The guitar is a 7-string in drop A (A E A D G B E).
 
 ## Status
 
-**0.1.0 is the starting point, not a guitar yet.** It is PR7-D with its own name, logo and presets folder, and with
-PR7-D's groove player and song track taken out. Until the guitar engine arrives (stage 1), what it plays is still
-PR7-D's drum kit.
-
-PR7-I is built in stages, each one released (the plan, to be confirmed):
+PR7-I is built in stages, each one released:
 
 | Stage | What | Now |
 |---|---|---|
-| **0** | Its own plugin, from PR7-D's code, the drum-only tools taken out | **Done (0.1.0)** |
-| **1** | The playing engine: each note on a string and fret as a player would choose, strings that ring and stop like real ones, sustain and palm mute | Next |
+| **0** | Its own plugin, from PR7-D's code | **Done (0.1.0)** |
+| **1a** | The playing engine with sustain: strings and frets as a player chooses, one note per string, alternate picking with round-robins, velocity layers; render lists and importing renders; the drums and effects removed | **Done (0.2.0)** |
+| **1b** | Palm mute (by velocity, as the reference does), and the GUITAR page in PR7-D's Tron look with the reference's layout | Next (0.3.0) |
 | **2** | The other articulations: staccato and chugs, pinch and natural harmonics, slides, legato, tremolo picking, fret and pick noises | Planned |
-| **3** | Realism: alternate picking, round-robins and velocity layers, automatic double-tracking, a little timing and tuning variation | Planned |
-| **4** | The editor and tools: strumming and chords, a tab-like note view, keyswitch maps | Planned |
-| **5** | The sound source: your own DI recordings, with a "record this list" helper and an importer | Planned |
+| **3** | Realism: automatic double-tracking, a little timing and tuning variation | Planned |
+| **4** | The editor and tools: strumming and chords, keyswitch maps | Planned |
+
+## Using it
+
+1. **Render the lists.** On the GUITAR page, each string has a MIDI file (click MIDI to save it, drag it onto a DAW track,
+   or SAVE ALL LISTS). Load it on a track with your guitar instrument as a clean DI (its effects off, one guitar, no
+   anti-repetition, ringing or release noises) and bounce it to a WAV from bar 1 to the end. Each string is 300 notes:
+   every fret 0-24, three dynamics, two takes each of a down and an up stroke, about 28 minutes.
+2. **Import.** Drop each WAV on its string's row. PR7-I finds the notes, cuts them, checks their pitch and saves them in
+   the guitar's folder (CHOOSE FOLDER... to put it elsewhere). A wrong file is refused and the row says why.
+3. **Play.** Notes go where a player would put them; the fretboard along the bottom shows each one's string and fret.
+   Put PR7-G after PR7-I for the amp, cabinet and effects.
+
+**Keyswitches** (the reference instrument's defaults, so parts written for it play the same): force string C-2 (low A)
+to F#-2 (high E), G-2 off; hand position A#-2 (its velocity is the fret), B-2 auto; sustain C-1; picking up / down /
+alternate C7 / C#7 / D7. Note names as in Cubase (middle C = C3); SETTINGS can switch to C4.
 
 ## Download
 

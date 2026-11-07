@@ -2,8 +2,6 @@
 
 #include <juce_core/juce_core.h>
 
-#include "dsp/synth/Drums.h"
-#include "rigs/ModMatrix.h"
 
 #include <map>
 #include <optional>
@@ -34,13 +32,10 @@ struct Rig
 
     // THE DRUMS' samples, by slot (0 to 11), saved inside the preset. Shared, not copied: a preset copied
     // for undo keeps pointing at the same audio, and two presets are the same kit if they point at the same samples.
-    std::map<int, std::shared_ptr<const synth::drums::Sample>> drumSamples;
     // THE SAMPLE ENGINE (0.19.0): each slot's instrument by where it came from ("sfz|note|path" or "folder||path"),
     // loaded again from the user's files (a kit can be gigabytes: the preset keeps the reference, not the audio).
-    std::map<int, juce::String> drumInstruments;
 
     // The drum sequencer's patterns and the drums' drawn envelopes (ModMatrix: PR7-K's name).
-    ModMatrix modulation;
 
     // Free text shown with the rig: what it's for.
     juce::String notes;

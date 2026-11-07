@@ -49,50 +49,61 @@ namespace guitar
                     source->parts.push_back ({ 1, 0, 0, 0.5f, 0 });
                 take->stream = source;
             }
-            library->add (id->articulation, id->string, id->fret, id->layer, id->stroke, take);
+            library->add (id->articulation, id->string, id->fret, id->layer, id->stroke, id->roundRobin, take);
         }
         if (progress != nullptr)
             *progress = 1.0f;
         return library;
     }
 
-    void Library::add (Articulation a, int string, int fret, int layer, Stroke stroke, std::shared_ptr<const Take> take)
+    void Library::add (Articulation a, int string, int fret, int layer, Stroke stroke, int roundRobin, std::shared_ptr<const Take> take)
     {
-        takes[(size_t) a][(size_t) string][(size_t) fret][(size_t) layer][stroke == Stroke::down ? 0u : 1u] = std::move (take);
+        takes[(size_t) a][(size_t) string][(size_t) fret][(size_t) layer][stroke == Stroke::down ? 0u : 1u]
+             [(size_t) juce::jlimit (0, renders::numRoundRobins - 1, roundRobin)] = std::move (take);
     }
 
-    const Take* Library::anyLayer (int a, int s, int f, int layer, int stroke) const noexcept
+    const Take* Library::at (int a, int s, int f, int l, int k, int rr) const noexcept
+    {
+        // The round-robin asked for, else another of the same stroke.
+        const auto& rrs = takes[(size_t) a][(size_t) s][(size_t) f][(size_t) l][(size_t) k];
+        for (int i = 0; i < renders::numRoundRobins; ++i)
+            if (const auto* t = rrs[(size_t) ((rr + i) % renders::numRoundRobins)].get())
+                return t;
+        return nullptr;
+    }
+
+    const Take* Library::anyLayer (int a, int s, int f, int layer, int stroke, int rr) const noexcept
     {
         // This dynamic, then nearer ones; each the stroke asked for first.
         for (int d = 0; d < renders::numLayers; ++d)
             for (const auto l : { layer - d, layer + d })
                 if (l >= 0 && l < renders::numLayers)
                 {
-                    if (const auto* t = at (a, s, f, l, stroke)) return t;
-                    if (const auto* t = at (a, s, f, l, 1 - stroke)) return t;
+                    if (const auto* t = at (a, s, f, l, stroke, rr)) return t;
+                    if (const auto* t = at (a, s, f, l, 1 - stroke, rr)) return t;
                 }
         return nullptr;
     }
 
-    Library::Found Library::find (Articulation articulation, int string, int fret, int layer, Stroke stroke) const noexcept
+    Library::Found Library::find (Articulation articulation, int string, int fret, int layer, Stroke stroke, int rr) const noexcept
     {
         const auto a = (int) articulation, k = stroke == Stroke::down ? 0 : 1;
         layer = juce::jlimit (0, renders::numLayers - 1, layer);
         if (string < 0 || string >= numStrings || fret < 0 || fret > numFrets)
             return {};
-        if (const auto* t = at (a, string, fret, layer, k))
+        if (const auto* t = at (a, string, fret, layer, k, rr))
             return { t, 1.0, true };
-        if (const auto* t = anyLayer (a, string, fret, layer, k))
+        if (const auto* t = anyLayer (a, string, fret, layer, k, rr))
             return { t, 1.0, false };
         for (int d = 1; d <= numFrets; ++d)
             for (const auto f : { fret - d, fret + d })
                 if (f >= 0 && f <= numFrets)
-                    if (const auto* t = anyLayer (a, string, f, layer, k))
+                    if (const auto* t = anyLayer (a, string, f, layer, k, rr))
                         return { t, std::pow (2.0, (fret - f) / 12.0), false };
         const auto note = noteOf (string, fret);
         for (int s = 0; s < numStrings; ++s)
             if (const auto f = note - openNotes[(size_t) s]; s != string && f >= 0 && f <= numFrets)
-                if (const auto* t = anyLayer (a, s, f, layer, k))
+                if (const auto* t = anyLayer (a, s, f, layer, k, rr))
                     return { t, 1.0, false };
         return {};
     }
@@ -102,8 +113,9 @@ namespace guitar
         auto n = 0;
         for (const auto& layers : takes[(size_t) a][(size_t) string])
             for (const auto& strokes : layers)
-                for (const auto& t : strokes)
-                    n += t != nullptr ? 1 : 0;
+                for (const auto& rrs : strokes)
+                    for (const auto& t : rrs)
+                        n += t != nullptr ? 1 : 0;
         return n;
     }
 

@@ -53,6 +53,7 @@ namespace
             for (int f = 0; f <= numFrets; ++f)
                 for (int l = 0; l < renders::numLayers; ++l)
                     for (const auto stroke : { Stroke::down, Stroke::up })
+                        for (int rr = 0; rr < renders::numRoundRobins; ++rr)
                     {
                         auto take = std::make_shared<Take>();
                         take->sampleRate = rate;
@@ -61,7 +62,7 @@ namespace
                         for (int i = 0; i < (int) (seconds * rate); ++i)
                             take->head.push_back (level * (float) std::sin (juce::MathConstants<double>::twoPi * hz * i / rate));
                         take->frames = (juce::int64) take->head.size();
-                        library->add (Articulation::sustain, s, f, l, stroke, take);
+                        library->add (Articulation::sustain, s, f, l, stroke, rr, take);
                     }
         return library;
     }
@@ -123,6 +124,10 @@ TEST_CASE ("FRETTING: open strings low on the neck, the hand's reach, busy strin
     // Drop A's one-finger power chord at the 5th fret (D5), and the open A5: each note its own string.
     CHECK (chooseChord ({ 38, 45, 50 }, none(), 5, natural) == std::vector<Position> { { 0, 5 }, { 1, 5 }, { 2, 5 } });
     CHECK (chooseChord ({ 45, 33, 40 }, none(), 1, natural) == std::vector<Position> { { 2, 0 }, { 0, 0 }, { 1, 0 } });
+    // ... and D5 struck with the hand low on the neck: the lowest note takes the hand to the 5th fret, so a barre there
+    // (not the open A and D strings); with the hand held at the 1st fret (not AUTO), the open strings.
+    CHECK (chooseChord ({ 38, 45, 50 }, none(), 1, natural) == std::vector<Position> { { 0, 5 }, { 1, 5 }, { 2, 5 } });
+    CHECK (chooseChord ({ 38, 45, 50 }, none(), 1, natural, false) == std::vector<Position> { { 0, 5 }, { 2, 0 }, { 3, 0 } });
 
     // AUTO hand: moves just enough to reach a fret; open strings don't move it.
     CHECK (followHand (1, 7, FretMode::natural) == 4);
@@ -131,19 +136,24 @@ TEST_CASE ("FRETTING: open strings low on the neck, the hand's reach, busy strin
     CHECK (followHand (1, 7, FretMode::polyphonic) == 3);
 }
 
-TEST_CASE ("THE RENDER LIST: every fret, three dynamics, down and up; keyswitches first; one file per string", "[guitar][renders]")
+TEST_CASE ("THE RENDER LIST: every fret, three dynamics, two round-robins of down and up; keyswitches first; one file per string", "[guitar][renders]")
 {
     const auto list = renders::takes (Articulation::sustain, 0);
-    REQUIRE (list.size() == 25 * 3 * 2);
+    REQUIRE (list.size() == 25 * 3 * 2 * 2);
+    REQUIRE ((int) list.size() == Library::takesPerString);
     CHECK_THAT (list.front().noteSeconds, WithinAbs (2.25, 1e-9));
     CHECK_THAT (list[1].noteSeconds - list[0].noteSeconds, WithinAbs (renders::slotSeconds, 1e-9));
     CHECK (list[0].stroke == Stroke::down);
     CHECK (list[1].stroke == Stroke::up);
+    CHECK (list[2].stroke == Stroke::down);   // down, up, down, up: the two round-robins of each stroke
+    CHECK (list[2].roundRobin == 1);
+    CHECK (list[3].layer == 0);
+    CHECK (list[4].layer == 1);
     CHECK (list.back().fret == 24);
     CHECK (list.back().note() == 33 + 24);
     for (const auto& t : list)
         CHECK (t.velocity() <= 119);   // sustain's velocities (above: the reference's rake and pinch harmonic)
-    CHECK_THAT (renders::lengthSeconds (Articulation::sustain, 0), WithinAbs (2.0 + 150 * 5.5, 1e-9));
+    CHECK_THAT (renders::lengthSeconds (Articulation::sustain, 0), WithinAbs (2.0 + 300 * 5.5, 1e-9));
     CHECK (renders::fileName (Articulation::sustain, 0) == "PR7-I Sustain - String 7 (low A)");
     CHECK (renders::fileName (Articulation::sustain, 3) == "PR7-I Sustain - String 4 (D)");
 
@@ -177,19 +187,21 @@ TEST_CASE ("THE RENDER LIST: every fret, three dynamics, down and up; keyswitche
     }
     CHECK (forced);
     CHECK (legatoOff);
-    CHECK (notes == 150);
+    CHECK (notes == 300);
     CHECK_THAT (firstNote, WithinAbs (2.25, 0.001));
     CHECK (firstStrokeKey < firstNote);
 
     // A take's file name, and back.
     const auto name = renders::takeFileName (Articulation::sustain, list[7]);
-    CHECK (name == "Sustain/s0_f01_l0_u.wav");
+    CHECK (name == "Sustain/s0_f00_l1_u_r1.wav");
     const auto id = renders::parseTakeFile (juce::File ("/x").getChildFile (name));
     REQUIRE (id);
-    CHECK (id->fret == 1);
-    CHECK (id->layer == 0);
+    CHECK (id->fret == 0);
+    CHECK (id->layer == 1);
     CHECK (id->stroke == Stroke::up);
-    CHECK_FALSE (renders::parseTakeFile (juce::File ("/x/Other/s0_f01_l0_u.wav")));
+    CHECK (id->roundRobin == 1);
+    CHECK_FALSE (renders::parseTakeFile (juce::File ("/x/Other/s0_f01_l0_u_r0.wav")));
+    CHECK_FALSE (renders::parseTakeFile (juce::File ("/x/Sustain/s0_f01_l0_u.wav")));
 }
 
 TEST_CASE ("PITCH: measured within a few cents, low A to the 24th fret", "[guitar][renders]")
@@ -217,16 +229,16 @@ TEST_CASE ("IMPORT A RENDER: the offset found, every take cut at its pick, in tu
     const auto report = renders::importAudio (audio.data(), (int) audio.size(), rate, Articulation::sustain, 0, folder, &progress);
     INFO (report.summary());
     REQUIRE (report.ok());
-    CHECK (report.written == 150);
+    CHECK (report.written == 300);
     CHECK (report.outOfTune.isEmpty());
     CHECK_THAT (report.offsetSeconds, WithinAbs (0.023, 0.001));
     CHECK (progress.load() == 1.0f);
-    CHECK (report.summary() == "150 notes imported, all in tune");
+    CHECK (report.summary() == "300 notes imported, all in tune");
 
     // A take's file: mono, the render's rate, its tone starting `preroll` in (the pick's noise kept before it).
     juce::AudioFormatManager formats;
     formats.registerBasicFormats();
-    std::unique_ptr<juce::AudioFormatReader> reader (formats.createReaderFor (folder.getChildFile ("Sustain/s0_f12_l2_d.wav")));
+    std::unique_ptr<juce::AudioFormatReader> reader (formats.createReaderFor (folder.getChildFile ("Sustain/s0_f12_l2_d_r0.wav")));
     REQUIRE (reader != nullptr);
     CHECK (reader->numChannels == 1);
     CHECK (reader->sampleRate == rate);
@@ -257,18 +269,18 @@ TEST_CASE ("IMPORT A RENDER: the offset found, every take cut at its pick, in tu
 
     // THE LIBRARY: the folder loaded; the string's 150 takes; another string's notes played by stand-ins.
     const auto library = Library::load (folder);
-    CHECK (library->count (Articulation::sustain, 0) == 150);
-    CHECK (library->total() == 150);
+    CHECK (library->count (Articulation::sustain, 0) == 300);
+    CHECK (library->total() == 300);
     const auto exact = library->find (Articulation::sustain, 0, 5, 1, Stroke::up);
     REQUIRE (exact.take != nullptr);
     CHECK (exact.exact);
-    CHECK (exact.take->file.getFileName() == "s0_f05_l1_u.wav");
+    CHECK (exact.take->file.getFileName() == "s0_f05_l1_u_r0.wav");
     CHECK (exact.take->stream != nullptr);   // longer than its head: the rest streams
     CHECK ((int) exact.take->head.size() == (int) std::ceil (Library::headSeconds * rate));
     const auto standIn = library->find (Articulation::sustain, 3, 2, 1, Stroke::down);   // E3 on the D string: the low A's 19th fret
     REQUIRE (standIn.take != nullptr);
     CHECK_FALSE (standIn.exact);
-    CHECK (standIn.take->file.getFileName() == "s0_f19_l1_d.wav");
+    CHECK (standIn.take->file.getFileName() == "s0_f19_l1_d_r0.wav");
     CHECK (Library::load (folder.getChildFile ("nothing"))->isEmpty());
     folder.getParentDirectory().deleteRecursively();
 }
@@ -317,8 +329,15 @@ TEST_CASE ("THE ENGINE: alternate picking; DOWN / UP; velocity picks the dynamic
     CHECK_THAT (levelAt (p.left, 110.0, 4800, 4800) / down, WithinAbs (0.5, 0.02));
     CHECK_THAT (down, WithinAbs (1.0, 0.02));
 
-    // DOWN: every stroke a down stroke; the soft and medium dynamics by velocity.
+    // DOWN: every stroke a down stroke, its round-robins in turn (never the same take twice running); the soft and
+    // medium dynamics by velocity.
     p.settings.pick = PickMode::down;
+    p.play (0.05, { { Player::off (45), 0 }, { Player::on (45, 120), 1 } });
+    const auto* first = p.guitar.lastTake();
+    p.play (0.05, { { Player::off (45), 0 }, { Player::on (45, 120), 1 } });
+    CHECK (p.guitar.lastTake() != first);
+    p.play (0.05, { { Player::off (45), 0 }, { Player::on (45, 120), 1 } });
+    CHECK (p.guitar.lastTake() == first);
     p.left.clear();
     p.play (0.2, { { Player::off (45), 0 }, { Player::on (45, 40), 1 } });
     CHECK (p.guitar.lastStroke() == Stroke::down);
@@ -396,5 +415,50 @@ TEST_CASE ("THE ENGINE: a take read past its head from disk, as a whole note", "
     CHECK_THAT (frequencyOf (p.left, (size_t) (1.0 * sampleRate), (size_t) (1.9 * sampleRate)), WithinAbs (110.0, 0.3));
     CHECK (rms (p.left, (size_t) (1.5 * sampleRate), (size_t) (1.9 * sampleRate)) > 0.1);   // well past the 0.25 s head
     CHECK (streamer.getUnderruns() == 0);
+    folder.getParentDirectory().deleteRecursively();
+}
+
+// PARAGON_RENDER_LISTS=<folder> ./GuitarCoreTests "[render-lists]": the seven strings' render lists written as MIDI files.
+TEST_CASE ("Write the render lists", "[.][render-lists]")
+{
+    const auto folder = juce::File (juce::SystemStats::getEnvironmentVariable ("PARAGON_RENDER_LISTS", "render-lists"));
+    folder.createDirectory();
+    for (int s = 0; s < numStrings; ++s)
+    {
+        const auto file = folder.getChildFile (renders::fileName (Articulation::sustain, s) + ".mid");
+        file.deleteFile();
+        juce::FileOutputStream out (file);
+        REQUIRE (out.openedOk());
+        REQUIRE (renders::toMidi (Articulation::sustain, s).writeTo (out));
+    }
+}
+
+TEST_CASE ("THE ENGINE: streaming live (not waiting for the disk), the note whole and clean", "[guitar][engine]")
+{
+    constexpr double rate = 8000.0;
+    const auto folder = tempGuitar ("StreamLive");
+    const auto audio = fakeRender (Articulation::sustain, 2, rate, 0.0);
+    REQUIRE (renders::importAudio (audio.data(), (int) audio.size(), rate, Articulation::sustain, 2, folder).ok());
+    const auto library = Library::load (folder);
+    Streamer streamer;
+    Player p;
+    p.settings.library = library.get();
+    p.settings.streamer = &streamer;
+    p.settings.waitForDisk = false;
+    // In real time: a block's worth of time between blocks, as a host gives the disk.
+    p.guitar.process (std::vector<float> (blockSize).data(), std::vector<float> (blockSize).data(), 0, {}, 0, p.settings);
+    for (int b = 0; b < 375; ++b)
+    {
+        p.play ((double) blockSize / sampleRate, b == 0 ? std::vector<std::pair<juce::MidiMessage, int>> { { Player::on (45, 120), 0 } }
+                                                        : std::vector<std::pair<juce::MidiMessage, int>> {});
+        juce::Thread::sleep (5);
+    }
+    auto peak = 0.0f;
+    for (const auto x : p.left)
+        peak = std::max (peak, std::abs (x));
+    CHECK (peak < 1.5f);
+    CHECK_THAT (frequencyOf (p.left, (size_t) (1.0 * sampleRate), (size_t) (1.9 * sampleRate)), WithinAbs (110.0, 0.3));
+    CHECK (rms (p.left, (size_t) (1.5 * sampleRate), (size_t) (1.9 * sampleRate)) > 0.1);
+    INFO ("underruns " << streamer.getUnderruns());
     folder.getParentDirectory().deleteRecursively();
 }

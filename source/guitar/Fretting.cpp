@@ -53,7 +53,7 @@ namespace guitar
     }
 
     void chooseChord (const int* notes, int count, std::array<bool, numStrings> busy, int hand, const FretSettings& settings,
-                      Position* places) noexcept
+                      Position* places, bool handFollows) noexcept
     {
         count = juce::jlimit (0, maxChord, count);
         std::array<int, maxChord> order {};
@@ -69,14 +69,19 @@ namespace guitar
             const auto p = choose (notes[index], busy, hand, chordSettings);
             places[index] = p;
             if (p.valid())
+            {
                 busy[(size_t) p.string] = true;
+                if (handFollows)
+                    hand = followHand (hand, p.fret, settings.mode);
+            }
         }
     }
 
-    std::vector<Position> chooseChord (const std::vector<int>& notes, std::array<bool, numStrings> busy, int hand, const FretSettings& settings)
+    std::vector<Position> chooseChord (const std::vector<int>& notes, std::array<bool, numStrings> busy, int hand, const FretSettings& settings,
+                                       bool handFollows)
     {
         std::vector<Position> result (std::min ((size_t) maxChord, notes.size()));
-        chooseChord (notes.data(), (int) result.size(), busy, hand, settings, result.data());
+        chooseChord (notes.data(), (int) result.size(), busy, hand, settings, result.data(), handFollows);
         return result;
     }
 
