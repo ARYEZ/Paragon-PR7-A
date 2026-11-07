@@ -459,14 +459,15 @@ TEST_CASE ("Write the render lists", "[.][render-lists]")
         juce::FileOutputStream out (file);
         REQUIRE (renders::rrcheck::toMidi().writeTo (out));
     }
-    for (int s = 0; s < numStrings; ++s)
-    {
-        const auto file = folder.getChildFile (renders::fileName (Articulation::sustain, s) + ".mid");
-        file.deleteFile();
-        juce::FileOutputStream out (file);
-        REQUIRE (out.openedOk());
-        REQUIRE (renders::toMidi (Articulation::sustain, s).writeTo (out));
-    }
+    for (const auto a : { Articulation::sustain, Articulation::mute })
+        for (int s = 0; s < numStrings; ++s)
+        {
+            const auto file = folder.getChildFile (renders::fileName (a, s) + ".mid");
+            file.deleteFile();
+            juce::FileOutputStream out (file);
+            REQUIRE (out.openedOk());
+            REQUIRE (renders::toMidi (a, s).writeTo (out));
+        }
 }
 
 TEST_CASE ("THE ENGINE: streaming live (not waiting for the disk), the note whole and clean", "[guitar][engine]")

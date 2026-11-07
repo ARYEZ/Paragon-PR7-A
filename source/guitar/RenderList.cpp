@@ -5,8 +5,10 @@ namespace guitar::renders
     const Spec& spec (Articulation a)
     {
         static const Spec sustain { 3, { 45, 85, 118 }, 2, 4.0, 5.5, keys::sustain };
-        // MUTE's velocities: placeholders until the owner's Mute Layer table (one per degree, mid-zone).
-        static const Spec mute { 4, { 20, 50, 80, 110 }, 8, 1.0, 1.6, keys::mute };
+        // MUTE: Jupiter's Mute Layer table (the owner's screenshot, factory map, November 2026, measured from its bars):
+        // five degrees of muting in zones 1-25, 26-51, 52-76, 77-102, 103-127; one velocity mid-zone each, at least 12 from
+        // a zone's edge.
+        static const Spec mute { 5, { 13, 38, 64, 89, 115 }, 8, 1.0, 1.6, keys::mute };
         return a == Articulation::mute ? mute : sustain;
     }
 

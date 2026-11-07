@@ -32,10 +32,9 @@ namespace guitar::renders
     //   - SUSTAIN (fixed: the owner renders these lists): 3 dynamics at velocities 45 / 85 / 118 (below the reference's
     //     rake, 120-126, and pinch harmonic, 127); 2 round-robins of each stroke (what the reference has: its round-robin
     //     check, November 2026); each note held 4 s in a 5.5 s slot.
-    //   - MUTE (palm mute, 0.3.0, not yet sent): velocity sets how muted (the reference's way), one velocity per degree of
-    //     muting it has (from its Mute Layer table: to be confirmed by the owner); 8 round-robins of each stroke (Jupiter
-    //     has 6 up strokes and 10 down strokes; the import leaves copies out); a palm mute is gone within a second, so
-    //     each held 1 s in a 1.6 s slot.
+    //   - MUTE (palm mute, 0.3.0): velocity sets how muted (the reference's way): its five degrees (Jupiter's Mute Layer
+    //     table) at 13 / 38 / 64 / 89 / 115; 8 round-robins of each stroke (Jupiter has 6 up strokes and 10 down strokes;
+    //     the import leaves copies out); a palm mute is gone within a second, so each held 1 s in a 1.6 s slot.
     inline constexpr int maxLayers = 6, maxRoundRobins = 8;
     struct Spec
     {
