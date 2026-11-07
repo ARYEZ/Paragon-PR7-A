@@ -501,7 +501,9 @@ TEST_CASE ("THE GUITAR PAGE 0.4.0: its controls; the capo dragged on the neck; P
         }
     INFO (outside << " of " << coloured);
     CHECK (coloured > 1000);
-    CHECK (outside == 0);
+    // A real colour outside the range (a green, a blue) would be thousands of pixels; Windows' text smoothing and JPEG
+    // decoding can leave a stray blended edge pixel or two (1 in 41972 on CI for 0.4.0), so allow 1 in 2000.
+    CHECK (outside * 2000 <= coloured);
 }
 
 TEST_CASE ("0.4.0: BITE (less low-mid, more top); POLY WINDOW reported as latency; old presets get the new controls' defaults", "[plugin]")
