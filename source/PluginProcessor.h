@@ -14,9 +14,6 @@
 #include "Rack.h"
 #include "dsp/synth/Drums.h"
 #include "dsp/synth/NoteMap.h"
-#include "grooves/GrooveLibrary.h"
-#include "song/Song.h"
-#include "song/Creator.h"
 #include "rigs/RigLibrary.h"
 #include "rigs/UndoHistory.h"
 #include "rigs/MidiLinks.h"
@@ -37,7 +34,6 @@ struct CurrentRig
     }
 };
 
-namespace song::playstyle { class AmountModel; }
 
 // PR7-D: an instrument. MIDI in (from the DAW and the on-screen keyboard),
 // the drum kit and its sequencer, the effects, the preset's level and OUTPUT, stereo out.
@@ -408,101 +404,6 @@ public:
     int getHostNumerator() const noexcept { return hostNumerator.load(); }
     int getHostDenominator() const noexcept { return hostDenominator.load(); }
 
-    //==========================================================================
-    // THE GROOVE PLAYER (0.4.0): the player's groove folders, and the preview playing one through the kit.
-    grooves::Library& getGrooveLibrary() noexcept { return *grooveFolders; }
-    // 0.54.0: EDIT PLAY STYLE's AMOUNT learned from the library's grooves (song/AmountModel.h), learned again whenever
-    // the list of grooves changes (on the next ask). Message thread.
-    const song::playstyle::AmountModel& getAmountModel();
-    // How a groove in linked folder `folder` is played: its notes through that folder's map.
-    synth::drums::notemap::Map grooveLayout (int folder) const;
-    // Plays it through the kit from its start, looping or once, at the preview's tempo and velocity (the library's
-    // settings: call applyGroovePreview after changing them).
-    // GROOVE PARTS (0.7.0): `parts` (grooves::DrumPart bits) the drums it plays: the rest of the groove left out.
-    void playGroove (const grooves::Groove&, int folder, bool loop, unsigned parts = grooves::allParts);
-    void stopGroove();
-    void applyGroovePreview();
-    // RIFF MATCH (0.32.0): a riff heard with the groove previews, in time: from the preview's start, looping its part
-    // (`loopSeconds` from `startSeconds` of `audio`, mono, at `rate`). While it's heard the previews play at its tempo
-    // (times the preview's factor). Message thread.
-    void setRiff (std::shared_ptr<const juce::AudioBuffer<float>> audio, double rate, double startSeconds, double loopSeconds, double bpm);
-    void clearRiff();
-    bool hasRiff() const noexcept { return riffPlayback != nullptr; }
-    void setRiffListening (bool on) noexcept { riffListening = on; }
-    bool isRiffListening() const noexcept { return riffListening.load(); }
-    void setRiffLevel (float gain) noexcept { riffLevel = gain; }
-    // Beats into the groove playing (its loop), or -1; and which file.
-    double getGroovePosition() const noexcept { return groovePosition.load(); }
-    juce::File getGrooveFile() const { return groovePreview != nullptr ? groovePreview->file : juce::File(); }
-    // The tempo it plays at: the song's or its own, times the factor.
-    double grooveTempo (double grooveBpm) const noexcept;
-    // DRAG OUT: the groove as a MIDI file (in the temporary folder) for a DAW track or the desktop: velocity scaled, notes
-    // moved for the factor, and (FOR THIS KIT) on this kit's notes in its map (as written, if the folder's map is it).
-    juce::File grooveDragFile (const grooves::Groove&, int folder, unsigned parts = grooves::allParts) const;
-    std::function<int (int)> grooveNoteFor (int folder, unsigned parts = grooves::allParts) const;
-    // INTO THE SEQUENCER (0.5.0): the groove as drum sequencer pattern `pattern` (0-3), replacing it: each hit a note on
-    // its drum's row at its exact place (off the grid too), with its velocity, the preview's factor and velocity scale;
-    // LENGTH set to the groove's (at most maxBeats: hits after that are left out), the sequencer on, playing it.
-    struct GrooveToPattern { int placed = 0, noDrum = 0, pastEnd = 0; int lengthBeats = 0; };
-    GrooveToPattern grooveToPattern (const grooves::Groove&, int folder, int pattern);
-    // (0.13.0) The same with the notes through `map` (a file from outside the linked folders: the kit's own map), and a
-    // MIDI file dropped on the sequencer's grid as pattern `pattern` (nothing if it can't be read: placed 0).
-    GrooveToPattern grooveToPattern (const grooves::Groove&, const synth::drums::notemap::Map& map, int pattern);
-    GrooveToPattern grooveFileToPattern (const juce::File&, int pattern);
-    // GROOVE PARTS (0.7.0): the groove's `parts` laid into pattern `pattern`: that pattern's notes on those parts'
-    // drums replaced by the groove's (where played, with velocity, factor and velocity scale), the groove repeated to
-    // fill the pattern's LENGTH; its other drums, LENGTH and the sequencer's settings left as they are. Undoable.
-    GrooveToPattern layerParts (const grooves::Groove&, int folder, unsigned parts, int pattern);
-
-    // TAP TO FIND (0.6.0): a loop of `loopBeats` at `bpm` with a metronome (on MAIN) while tapping; notes played (the
-    // DAW's, the on-screen keyboard's) and the pads' taps recorded where they fall in the loop, by drum group.
-    void startTapping (double bpm, double loopBeats, double beatsPerBar);
-    void stopTapping();
-    bool isTapping() const noexcept { return tapping.load(); }
-    double getTapBeat() const noexcept { return tapPosition.load(); }   // where in the loop now (-1: not tapping)
-    void tapPad (int lane) noexcept;   // a pad clicked: its drum plays and the tap is recorded (at the next block)
-    struct Tap { int lane = 0; double beat = 0.0; };
-    int popTaps (std::vector<Tap>& into);   // the taps recorded since the last call (message thread)
-    static constexpr float metronomeLevel = 0.25f;   // the click's peak (about -12 dBFS): heard over the kit, not loud
-
-    // THE SONG TRACK (0.8.0): grooves laid out as blocks, played with the DAW's song position (its ppq) while the DAW
-    // plays, from PLAY's place while it's stopped. Kept in the project (not in presets); edits are undo steps.
-    const song::Song& getSong() const noexcept { return *songData; }
-    void setSong (song::Song);   // an edit: played from the next block, an undo step
-    // EDIT PLAY STYLE (0.46.0): the song as it would be while a knob turns, heard at once but not yet an undo step (the
-    // setSong when the knob is let go makes it one); and SOLO SELECTED: only these drums of the song heard (0: all).
-    void previewSong (song::Song);
-    void setSongSolo (song::SlotMask);
-    song::SlotMask getSongSolo() const noexcept { return songSolo; }
-    // 0.47.0, the GRID EDITOR's row SOLO / MUTE: only these drums of the song heard (none: every drum; an empty mask:
-    // none at all).
-    void setSongHeard (std::optional<song::SlotMask>);
-    // A block from a groove in linked folder `folder` (its notes through that folder's map, at the preview's TEMPO
-    // factor and VELOCITY), and that block put in the song at `beat` (-1: after the last block). Returns its index.
-    song::Block songBlockFrom (const grooves::Groove&, int folder) const;
-    int addToSong (const grooves::Groove&, int folder, double beat = -1.0);
-    int addBlockToSong (song::Block, double beat = -1.0);   // any block (a MIDI file dropped on the strip)
-    void playSong (double fromBeat = 0.0);   // with the DAW stopped: plays from there at the DAW's last tempo
-    void stopSong();
-    bool isSongPlaying() const noexcept { return songLocal.load(); }   // PLAY (with FOLLOW DAW off, also while the DAW plays)
-    double getSongPosition() const noexcept { return songPosition.load(); }   // beats into the song (-1: not playing)
-    bool isCountingIn() const noexcept { return songCountingIn.load(); }       // 0.45.0: PLAY's count-in bar sounding
-    // EXPORT MIDI: the whole song on the kit's notes (each drum's home note in the map), at the DAW's tempo.
-    juce::MidiFile songToMidi() const;
-    juce::File songDragFile() const;
-    // IMPORT MIDI FILE (0.11.0): a whole song's MIDI through the kit's note map, as blocks (one per marker in it, else one)
-    // after the song there (from the next bar line; an empty song: the song); with its tempo changes and time
-    // signatures if `withTempo`. Returns how many blocks it added (0: nothing the kit plays, or not a MIDI file).
-    int importSongMidi (const juce::File&, bool withTempo);
-
-    // RECORD (0.12.0): armed, the notes played (the DAW's, the on-screen keyboard's) while the song plays (with the DAW,
-    // or PLAY) are written into it at their beats, through the kit's map: on top of the blocks there (a repeating block
-    // written out first, so a note lands only where it was played), or in a "Recorded" block made bar by bar where there's
-    // none. mergeRecordedNotes (the message thread, often) puts them in; disarming ends the take: one undo step.
-    void setSongRecording (bool);
-    bool isSongRecording() const noexcept { return songRecording.load(); }
-    int mergeRecordedNotes();   // how many it put in
-
     // THE DRUM MACHINE (0.38.0): PLAY starts the DRUM SEQUENCER (on, following the song) from its first step on a clock of
     // its own at the machine's TEMPO while the DAW isn't playing (the DAW leads while it plays); STOP stops it. REC, while
     // it runs, writes the drums played (the DAW's notes, the on-screen keyboard's, the face's pads) into the pattern
@@ -514,55 +415,6 @@ public:
     void setMachineRecording (bool);
     bool isMachineRecording() const noexcept { return machineRecording.load(); }
     int mergeMachineNotes();   // how many it put in
-
-    // BOUNCE (0.12.0): the song rendered to WAV files, faster than real time, by a copy of the plugin made from the
-    // project's state (this one plays on, untouched): from the start through the song's tempo changes (none: the DAW's
-    // last tempo) to its end, then on until the kit and effects have died away (silence, or `tailSeconds`); the plugin's
-    // own delay (the limiter's look-ahead) taken off, so bar 1 is at the file's start.
-    struct BounceOptions
-    {
-        bool perOutput = false;     // a file per output used, as routed (else one file: every drum in it)
-        int bits = 24;              // 16, 24, or 32 (float)
-        float gainDb = 0.0f;
-        double tailSeconds = 10.0;
-        juce::String name = "PR7-D Song";
-    };
-    class SongBouncer
-    {
-    public:
-        SongBouncer (ParagonX1AudioProcessor& from, BounceOptions, juce::File folder);   // the message thread
-        ~SongBouncer();
-        juce::Array<juce::File> run();   // any thread: the files written (none: an empty song, cancelled, or not written)
-        std::atomic<float> progress { 0.0f };
-        std::atomic<bool> cancel { false };
-        juce::String error;
-
-    private:
-        std::unique_ptr<ParagonX1AudioProcessor> copy;
-        BounceOptions options;
-        juce::File folder;
-        double sampleRate = 48000.0, bpm = 120.0;
-    };
-    juce::ChangeBroadcaster songBroadcaster;   // the song changed (an edit, undo, a project loaded)
-    // THE SONG's CLIPBOARD (0.9.0): a block (or some of its drums) copied, from the song or from a groove (its ticked
-    // GROOVE PARTS), to paste as a block or onto blocks' drums. Message thread; not saved.
-    const std::optional<song::Block>& getSongClipboard() const noexcept { return songClipboard; }
-    void setSongClipboard (std::optional<song::Block> b) { songClipboard = std::move (b); }
-    void copyGrooveForSong (const grooves::Groove&, int folder, unsigned parts = grooves::allParts);
-    // THE SONG CREATOR (0.10.0): the grooves around a source groove in columns by song part (from the linked folders'
-    // index); a groove of them as a block; a whole song from a structure's sections, each its column's next groove (a
-    // missing part played by the nearest kind, a missing fill by the groove before it playing on). The song made isn't
-    // set: MAKE SONG / ADD TO END do that (an undo step).
-    song::Columns songCreatorColumns (const juce::File& source) const;
-    std::optional<song::Block> songBlockFor (const grooves::Entry&) const;
-    song::Song songFromStructure (const std::vector<song::Section>&, const song::Columns&) const;
-    // SONG STRUCTURES: ours, then the player's ("Song Structures.xml" in the presets folder). Saving a name that's
-    // there replaces it.
-    std::vector<song::Structure> getSongStructures() const;
-    bool saveSongStructure (const juce::String& name, const std::vector<song::Section>&);
-    bool renameSongStructure (const juce::String& from, const juce::String& to);
-    bool removeSongStructure (const juce::String& name);
-    juce::File songStructuresFile() const;
 
     juce::AudioProcessorValueTreeState& getParameters() noexcept { return parameters; }
     LevelMeterSource& getOutputMeter() noexcept { return outputMeter; }
@@ -699,13 +551,11 @@ private:
         Rig rig;
         CurrentRig current;
         bool modified = false;   // restored too, but doesn't count as a change
-        std::shared_ptr<const song::Song> song;   // THE SONG TRACK (not in presets, but its edits are undone too)
 
         bool operator== (const Snapshot& other) const
         {
             return rig.parameters == other.rig.parameters && rig.drumSamples == other.rig.drumSamples
-                && rig.modulation == other.rig.modulation && current == other.current
-                && (song == other.song || (song != nullptr && other.song != nullptr && *song == *other.song));
+                && rig.modulation == other.rig.modulation && current == other.current;
         }
     };
     Snapshot takeSnapshot() const;
@@ -767,102 +617,6 @@ private:
     juce::File knownKitsFile() const;
     mutable std::mutex kitsLock;
 
-    // THE GROOVE PLAYER: the preview, made on the message thread (its notes already drums), played by the audio
-    // thread through a plain pointer; a replaced one kept a while (as samples are), in case a block is still on it.
-    struct GroovePreview
-    {
-        struct Hit { double beat; int slot; float velocity; };
-        std::vector<Hit> hits;   // in time order
-        double lengthBeats = 4.0, bpm = 120.0, endBeat = 4.0;
-        bool loop = true;
-        juce::File file;
-    };
-    int collectGrooveHits (int numSamples) noexcept;   // audio thread: the preview's hits in the next numSamples
-    struct RiffPlayback
-    {
-        std::shared_ptr<const juce::AudioBuffer<float>> audio;
-        double rate = 48000.0, start = 0.0, loop = 1.0, bpm = 120.0;
-    };
-    std::shared_ptr<const RiffPlayback> riffPlayback;
-    std::atomic<const RiffPlayback*> riffForAudio { nullptr };
-    std::vector<std::pair<std::shared_ptr<const RiffPlayback>, double>> retiredRiffs;
-    std::atomic<bool> riffListening { true };
-    std::atomic<float> riffLevel { 1.0f };
-    // Audio thread: where the preview was at this block's start (beats since it began), and its beats a sample.
-    double riffFrom = -1.0, riffPerSample = 0.0;
-    bool riffFirstChunk = true;
-    void runRiff (juce::AudioBuffer<float>&, int numSamples) noexcept;
-    std::unique_ptr<grooves::Library> grooveFolders;
-    std::unique_ptr<song::playstyle::AmountModel> amountModel;   // 0.54.0 (getAmountModel)
-    int amountModelGeneration = -1;
-    std::shared_ptr<const GroovePreview> groovePreview;
-    std::atomic<const GroovePreview*> grooveForAudio { nullptr };
-    std::vector<std::pair<std::shared_ptr<const GroovePreview>, double>> retiredGrooves;
-    const GroovePreview* grooveNow = nullptr;   // audio thread: the one it's playing, where, and whether it's done
-    // Its place: beats at the last tempo change plus whole samples since, times the tempo (summing a beat-per-sample
-    // block by block would drift a sample in a few seconds).
-    double grooveBaseBeat = 0.0, groovePerSample = 0.0;
-    juce::int64 grooveSamples = 0;
-    bool grooveDone = false;
-    std::atomic<double> groovePosition { -1.0 };
-    std::atomic<bool> grooveSongTempo { true };
-    std::atomic<double> grooveFactor { 1.0 };
-    std::atomic<float> grooveVelocity { 1.0f };
-    std::array<synth::drums::SlotHit, 512> grooveHits {};   // the preview's hits, then the song's (sorted by sample)
-
-    // THE SONG TRACK: the song (message thread) and its hits for the audio thread (as the preview's, kept a while when
-    // replaced); PLAY's clock (whole samples since PLAY, as the preview's).
-    struct SongPlayback
-    {
-        std::vector<song::Hit> events;
-        double endBeat = 0.0;
-        song::Song timing;   // 0.11.0: only its tempo changes (PLAY's clock through them; none: the DAW's tempo)
-        bool followDaw = true;   // 0.12.0: FOLLOW DAW
-        // 0.44.0: the LOOP AREA (PLAY's clock only), THE CLICK, and the bar lines (for the click's accent).
-        bool loopOn = false;
-        double loopStart = 0.0, loopEnd = 0.0;
-        song::Song::Click click = song::Song::Click::recording;
-        bool countIn = true;
-        std::vector<double> barLines;
-        bool isBarLine (double beat) const noexcept;
-        double barLengthAt (double beat) const noexcept;
-    };
-    void installSong (std::shared_ptr<const song::Song>);
-    song::SlotMask songSolo = 0;
-    std::optional<song::SlotMask> songHeard;
-    int collectSongHits (int numSamples, double ppq, double bpm, synth::drums::SlotHit* into, int room) noexcept;
-    std::shared_ptr<const song::Song> songData = std::make_shared<const song::Song>();
-    std::optional<song::Block> songClipboard;
-    // RECORD: the notes on their way from the audio thread; where the song is in the piece being played (for their beats).
-    struct RecordedNote { double beat = 0.0; int slot = 0; float velocity = 1.0f; };
-    juce::AbstractFifo recordFifo { 2048 };
-    std::array<RecordedNote, 2048> recordBuffer {};
-    std::atomic<bool> songRecording { false };
-    struct SongChunk
-    {
-        bool active = false, timed = false;
-        double from = 0.0, perSample = 0.0, samplesFrom = 0.0, bpm = 120.0;
-        const SongPlayback* playback = nullptr;
-        // 0.44.0: PLAY went round the LOOP AREA in this piece at sample `wrapAt`: from there on these.
-        int wrapAt = 1 << 30;
-        double from2 = 0.0, samplesFrom2 = 0.0;
-        // 0.45.0: THE COUNT-IN in this piece: its first `startAt` samples are counting in (no song, no recording; its
-        // clicks `countInSpb` samples apart, `countInFrom` samples into it at the piece's start, `countInBeats` of them).
-        int startAt = 0, countInBeats = 0;
-        double countInFrom = 0.0, countInSpb = 0.0;
-    } songChunk;   // audio thread
-    juce::int64 songCountInLeft = 0, songCountInDone = 0;   // audio thread: samples of count-in still to come, and done
-    double songCountInSpb = 0.0;
-    int songCountInBeats = 0;
-    // THE CLICK (0.44.0): this block's clicks (their samples from the block's start, accented on a bar line), and the one
-    // sounding (it carries on into the next block). Added to MAIN after everything, as TAP TO FIND's.
-    struct SongClick { int sample = 0; bool accent = false; };
-    std::array<SongClick, 64> songClicks {};
-    int numSongClicks = 0, songClickAt = -1;
-    bool songClickAccent = false;
-    void noteSongClicks (int blockOffset, int numSamples, double bpm) noexcept;
-    void runSongClick (juce::AudioBuffer<float>&, int numSamples) noexcept;
-    void recordSongNotes (const juce::MidiBuffer&, int offset, int numSamples, const synth::drums::KitSettings&) noexcept;
     // THE DRUM MACHINE's clock and REC (audio thread but the atomics): the sequencer's song position and tempo this block
     // (the DAW's while it plays, else PLAY's own, else -1), and the notes on their way to the pattern.
     std::atomic<bool> machinePlaying { false }, machineRestart { false }, machineRecording { false }, dawPlaying { false };
@@ -872,31 +626,6 @@ private:
     juce::AbstractFifo machineFifo { 1024 };
     std::array<MachineNote, 1024> machineBuffer {};
     void recordMachineNote (double ppq, double bpm, int slot, float velocity, const synth::drumseq::Settings&) noexcept;
-    int takeBlock = -1;   // message thread: this take's "Recorded" block (it grows bar by bar)
-    std::shared_ptr<const SongPlayback> songPlayback;
-    std::atomic<const SongPlayback*> songForAudio { nullptr };
-    std::vector<std::pair<std::shared_ptr<const SongPlayback>, double>> retiredSongs;
-    std::atomic<bool> songLocal { false }, songCountingIn { false };
-    std::atomic<double> songLocalFrom { 0.0 }, songPosition { -1.0 };
-    std::atomic<int> songLocalStarts { 0 };   // PLAY pressed again: the clock starts over
-    int songLocalSeen = 0;
-    juce::int64 songSamples = 0;   // audio thread: samples since PLAY (at songPerSample beats each, from songBase)
-    double songBase = 0.0, songPerSample = 0.0;
-    double songStartSeconds = 0.0;   // audio thread, with tempo changes: PLAY's start, in seconds from the song's start
-    bool songTimed = false;          // ... and whether the clock goes by them
-
-    // TAP TO FIND: the loop's clock (whole samples since it started, as the preview's), the metronome's click, the pads
-    // waiting for the next block (a bit each), and what was tapped on its way to the page.
-    void runTapping (juce::AudioBuffer<float>&, const juce::MidiBuffer&, const synth::drums::KitSettings&) noexcept;
-    std::atomic<bool> tapping { false };
-    std::atomic<double> tapBpm { 120.0 }, tapLoopBeats { 8.0 }, tapBeatsPerBar { 4.0 }, tapPosition { -1.0 };
-    std::atomic<int> tapsWaiting { 0 }, tapRestart { 0 };
-    int tapRestartSeen = 0;
-    juce::int64 tapSamples = 0;
-    int clickAt = -1;          // samples into the click sounding (-1: none)
-    bool clickAccent = false;
-    juce::AbstractFifo tapFifo { 512 };
-    std::array<Tap, 512> tapBuffer {};
     std::array<std::atomic<bool>, ParamIDs::numDrums> pendingPreview {};
     juce::MidiBuffer drumMidi;
     // Reversed synth drums' rendered hits (by slot), what each was made from, and the audio thread's pointers.

@@ -717,7 +717,7 @@ DrumPage::DrumPage (ParagonX1AudioProcessor& p) : processor (p), display (p), en
     addChildComponent (layerPanel);
     envelopeTab.setToggleState (true, juce::dontSendNotification);
     envelopeTab.setTooltip ("The drum's ENVELOPE and its hit.");
-    velocityTab.setTooltip ("The drum's VELOCITY CURVE (how hard each hit plays, whatever plays it: grooves, the song, the sequencer, "
+    velocityTab.setTooltip ("The drum's VELOCITY CURVE (how hard each hit plays, whatever plays it: the sequencer, "
                             "your keys) and its VELOCITY GATE. Several drums chosen: all of them.");
     envelopeTab.onClick = [this] { showVelocity (false); };
     velocityTab.onClick = [this] { showVelocity (true); };

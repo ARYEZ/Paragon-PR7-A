@@ -233,17 +233,15 @@ TEST_CASE ("THE DRUM MACHINE's face: over the window, its steps, columns, keys, 
     drums.showView (DrumPage::View::machine);
     CHECK (view->isShowingMachine());
     CHECK_FALSE (drums.isVisible());
-    CHECK_FALSE (view->getSongTrack().isVisible());
     CHECK (machine.getBounds().getY() >= 64);
     checkInside (machine);
-    view->showPage (MainView::Page::grooves);
+    view->showPage (MainView::Page::mixer);
     CHECK_FALSE (view->isShowingMachine());
     view->showPage (MainView::Page::drums);
     CHECK (view->isShowingMachine());   // back on DRUMS: the machine again
     machine.getKey ("KIT").onClick();
     CHECK_FALSE (view->isShowingMachine());
     CHECK (drums.isVisible());
-    CHECK (view->getSongTrack().isVisible());
     CHECK (drums.getView() == DrumPage::View::kit);
     drums.showView (DrumPage::View::machine);
 
@@ -358,7 +356,7 @@ TEST_CASE ("THE DRUM MACHINE 0.39.0's face: a pad given another drum, its knobs 
 
 //==============================================================================
 // 0.40.0: THE PROGRESS BOX (PR7-S's), while a long job runs.
-TEST_CASE ("THE PROGRESS BOX: a kit loading for over half a second, then gone; a bounce with CANCEL", "[progress][ui]")
+TEST_CASE ("THE PROGRESS BOX: a kit loading for over half a second, then gone", "[progress][ui]")
 {
     ParagonX1AudioProcessor p;
     p.setPlayConfigDetails (0, 2, sampleRate, blockSize);
@@ -384,32 +382,6 @@ TEST_CASE ("THE PROGRESS BOX: a kit loading for over half a second, then gone; a
     CHECK (bar.getPixelAt (30, 10).getBrightness() > 0.6f);    // lit
     CHECK (bar.getPixelAt (170, 10).getBrightness() < 0.3f);   // not yet
     CHECK (bar.getPixelAt (30, 10).getRed() > 200);
-
-    // A bounce: the box at once, its CANCEL stops it; the box goes when the bounce has.
-    song::Song s;
-    song::Block b;
-    b.length = b.loopLength = 64.0;
-    for (int beat = 0; beat < 64; ++beat)
-        b.hits.push_back ({ (double) beat, 0, 1.0f });
-    s.blocks.push_back (b);
-    p.setSong (s);
-    auto& track = view->getSongTrack();
-    const auto folder = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("pr7d-progress-test");
-    folder.deleteRecursively();
-    folder.createDirectory();
-    ParagonX1AudioProcessor::BounceOptions options;
-    options.tailSeconds = 1.0;
-    track.startBounce (options, folder);
-    view->checkLongJobs (5000.0);
-    CHECK (box.isVisible());
-    CHECK (box.getWhat() == "BOUNCING THE SONG TO AUDIO");
-    CHECK (box.getCancelKey().isVisible());
-    box.getCancelKey().onClick();
-    for (int i = 0; i < 500 && track.getBounceProgress() >= 0.0; ++i)
-        juce::Thread::sleep (10);
-    box.update();
-    CHECK_FALSE (box.isVisible());
-    folder.deleteRecursively();
 }
 
 TEST_CASE ("THE DRUM MACHINE 0.43.0: FINISH gives the face its own finish (pearl white, black, white + neon), the plugin's untouched", "[machine][ui]")

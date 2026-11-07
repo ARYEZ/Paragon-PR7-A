@@ -112,8 +112,7 @@ jobs:
   # above, zipped, with notes from CHANGELOG.md.
   release:
     name: Release
-    # Off while PR7-I 0.1.0 is being made from PR7-D's code (so CI can't publish a half-made release); 0.1.0 turns it back on.
-    if: false && github.event_name == 'push'
+    if: github.event_name == 'push'
     needs: build
     runs-on: ubuntu-24.04
     permissions:

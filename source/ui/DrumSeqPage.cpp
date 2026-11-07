@@ -345,9 +345,10 @@ void DrumSeqGrid::itemDropped (const SourceDetails& details)
     repaint();
 }
 
-bool DrumSeqGrid::isInterestedInFileDrag (const juce::StringArray& files)
+bool DrumSeqGrid::isInterestedInFileDrag (const juce::StringArray&)
 {
-    return files.size() == 1 && juce::File (files[0]).hasFileExtension ("mid;midi");
+    // PR7-I 0.1.0: a MIDI file dropped here went through the groove reader, which is gone (the page goes in stage 1).
+    return false;
 }
 
 void DrumSeqGrid::fileDragEnter (const juce::StringArray& files, int, int)
@@ -363,11 +364,9 @@ void DrumSeqGrid::fileDragExit (const juce::StringArray&)
     repaint();
 }
 
-void DrumSeqGrid::filesDropped (const juce::StringArray& files, int, int)
+void DrumSeqGrid::filesDropped (const juce::StringArray&, int, int)
 {
     dropText.clear();
-    if (processor.grooveFileToPattern (juce::File (files[0]), getPattern()).placed > 0)
-        refreshShown();
     repaint();
 }
 

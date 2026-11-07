@@ -165,7 +165,7 @@ SettingsPage::SettingsPage (ParagonX1AudioProcessor& p)
       mapChoice (p.getParameters(), ParamIDs::drumsMap, "MAP",
                  "Which notes play which drum. ROOT: the 36 keys from ROOT, in order. GROOVE LIBRARY: the layout popular drum "
                  "software's groove libraries are written in. GENERAL MIDI: the General MIDI drum map. CUSTOM: your own (change "
-                 "any note in the list). Not part of a preset: it suits your controller and grooves."),
+                 "any note in the list). Not part of a preset: it suits your controller and your MIDI."),
       channelChoice (p.getParameters(), ParamIDs::drumsMidiChannel, "CHANNEL",
                      "MIDI IN CHANNEL: which channel your DAW or controller plays the kit on (ANY: all of them). Not part of a preset."),
       namesChoice (p.getParameters(), ParamIDs::noteNames, "NOTE NAMES",
@@ -366,7 +366,7 @@ void SettingsPage::paint (juce::Graphics& g)
     section (keysArea, "MIDI IN / E-DRUMS", "Which notes from your DAW or controller play which drum. ROOT: the 36 keys from ROOT (now "
                                                 + note (root) + " to " + note (root + synth::drums::numSlots - 1)
                                                 + "), and with the sequencer on KEY the four below start its patterns. Click a note's "
-                                                  "number to edit it on the right. Grooves and the song aren't changed by any of this.");
+                                                  "number to edit it on the right.");
     section (rigsArea, "PRESETS", "Your presets are files in this folder, so you can back them up or share them:\n"
                                   + processor.getRigLibrary().getFolder().getFullPathName());
     section (midiArea, "MIDI LINKS", shownLinks.isEmpty()

@@ -22,9 +22,9 @@ namespace
 
     const auto tabsGroup = mockF (336, 10, 1087, 55);   // PR7-K's group, for four tabs here
     const auto rigGroup = mockF (1102, 10, 1399, 55);
-    // The tabs' edges in the group, in the mockup's pixels: DRUMS | GROOVES | FX | PRESETS | SETTINGS (five alike).
-    // Six tabs (0.20.0: MIXER) share the group the five did, equally.
-    constexpr float tabEdges[] = { 338.0f, 462.5f, 587.0f, 711.5f, 836.0f, 960.5f, 1085.0f };
+    // The tabs' edges in the group, in the mockup's pixels: DRUMS | MIXER | FX | PRESETS | SETTINGS, five alike
+    // (PR7-I 0.1.0: GROOVES gone; PR7-D 0.20.0's six tabs shared the same group).
+    constexpr float tabEdges[] = { 338.0f, 487.4f, 636.8f, 786.2f, 935.6f, 1085.0f };
 
     // In canvas pixels.
     const juce::Rectangle<int> outputArea { 1496, 68, 92, 672 };
@@ -73,21 +73,16 @@ void GainColumn::resized()
 MainView::MainView (ParagonX1AudioProcessor& processorToShow)
     : audioProcessor (processorToShow),
       outputColumn ("OUTPUT", processorToShow.getParameters(), ParamIDs::outputGain, processorToShow.getOutputMeter()),
-      songTrack (processorToShow),
       drumPage (processorToShow),
-      groovesPage (processorToShow),
       mixerPage (processorToShow),
       fxPage (processorToShow),
       rigBrowser (processorToShow),
       settingsPage (processorToShow),
-      blockEditor (processorToShow),
-      playStyle (processorToShow),
-      songCreator (processorToShow),
       machine (processorToShow)
 {
     setOpaque (true);   // it fills itself: nothing behind it needs drawing
     // Header
-    for (auto* tab : { &drumsTab, &groovesTab, &mixerTab, &fxTab, &presetsTab, &settingsTab })
+    for (auto* tab : { &drumsTab, &mixerTab, &fxTab, &presetsTab, &settingsTab })
     {
         tab->setClickingTogglesState (true);
         tab->setRadioGroupId (100);
@@ -98,8 +93,6 @@ MainView::MainView (ParagonX1AudioProcessor& processorToShow)
     presetsTab.setComponentID ("presetsTab");
     settingsTab.setComponentID ("settingsTab");
     drumsTab.onClick = [this] { showPage (Page::drums); };
-    groovesTab.setComponentID ("groovesTab");
-    groovesTab.onClick = [this] { showPage (Page::grooves); };
     mixerTab.setComponentID ("mixerTab");
     mixerTab.onClick = [this] { showPage (Page::mixer); };
     fxTab.setComponentID ("fxTab");
@@ -124,67 +117,6 @@ MainView::MainView (ParagonX1AudioProcessor& processorToShow)
                                                                       &outputColumn })
         addAndMakeVisible (component);
 
-    // THE SONG TRACK: the strip under the pages (0.41.0: the on-screen keyboard that shared it is gone, at the owner's
-    // ask); a groove dropped on it from the list is a block.
-    addAndMakeVisible (songTrack);
-    songTrack.onGrooveDropped = [this] (int row, double beat) { groovesPage.addRowToSong (row, beat); };
-    songTrack.onEditBlock = [this] (int block) { openGridEditor (block); };
-    addChildComponent (blockEditor);
-    // EDIT PLAY STYLE (0.46.0): from the block's menu (EDIT MIDI), the P key, a double-click (or the block's arrow) when
-    // it was the one used last; its GRID EDITOR tab, and the grid editor's EDIT PLAY STYLE, switch between the two.
-    addChildComponent (playStyle);
-    songTrack.onPlayStyle = [this] (int block) { openPlayStyle (block); };
-    songTrack.onEditMidi = [this] (int block)
-    {
-        if (playStyleLast)
-            openPlayStyle (block);
-        else
-            openGridEditor (block);
-    };
-    songTrack.onArrow = [this] (int block)
-    {
-        // Again on the block it's open on: closed.
-        if (playStyle.isVisible() && ! playStyle.getBlocks().empty() && playStyle.getBlocks().front() == block)
-            playStyle.close();
-        else if (blockEditor.isVisible() && blockEditor.getBlock() == block)
-            hideGridEditor();
-        else
-            songTrack.onEditMidi (block);
-    };
-    songTrack.onSelectionChanged = [this]
-    {
-        if (playStyle.isVisible())
-        {
-            if (const auto chosen = songTrack.getSelection(); ! chosen.empty())
-                playStyle.setBlocks (chosen);
-        }
-    };
-    playStyle.onHighlightChanged = [this] (song::SlotMask slots) { songTrack.setHighlight (slots); };
-    playStyle.onClose = [this]
-    {
-        songTrack.setMultiChoose (false);
-        songTrack.setHighlight (0);
-        songTrack.setRecordingAllowed (true);
-    };
-    playStyle.onGridEditor = [this] (int block) { openGridEditor (block); };
-    blockEditor.onPlayStyle = [this] (int block) { if (gridWindow != nullptr) setGridEditorInOwnWindow (false); openPlayStyle (block); };
-    blockEditor.onToggleWindow = [this] { setGridEditorInOwnWindow (gridWindow == nullptr); };
-    blockEditor.onClose = [this]
-    {
-        // Closed (X, or its block gone) while in its own window: the window goes too.
-        if (gridWindow != nullptr)
-            juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<MainView> (this)]
-            {
-                if (safe != nullptr && safe->gridWindow != nullptr)
-                {
-                    safe->setGridEditorInOwnWindow (false);
-                    safe->blockEditor.setVisible (false);
-                }
-            });
-    };
-    // THE SONG CREATOR: CREATOR... on the strip (again: closes it), USE WITH SONG CREATOR on a groove or a block, a groove
-    // from the GROOVES list dropped on it; its grooves dragged onto the strip.
-    addChildComponent (songCreator);
     // THE DRUM MACHINE (0.38.0): the DRUMS page's MACHINE view; its VIEW keys go back to the page's other views, and the
     // drum chosen is the page's.
     addChildComponent (machine);
@@ -197,63 +129,17 @@ MainView::MainView (ParagonX1AudioProcessor& processorToShow)
     machine.onChoose = [this] (int slot) { drumPage.clickRow (slot, {}); };
     drumPage.onViewChanged = [this] (DrumPage::View) { updateMachine(); };
     addChildComponent (progressBox);
-    songTrack.onOpenCreator = [this]
-    {
-        if (songCreator.isVisible())
-            songCreator.setVisible (false);
-        else
-            openSongCreator();
-    };
-    songTrack.onUseWithCreator = [this] (const juce::File& f) { openSongCreator (f); };
-    songTrack.onCreatorDropped = [this] (int part, int index, double beat) { songCreator.addToSong (part, index, beat); };
-    groovesPage.onUseWithCreator = [this] (const juce::File& f) { openSongCreator (f); };
-    songCreator.chosenBlock = [this] { return songTrack.getChosen(); };
-    // A GROOVE DROPPED ON THE SEQUENCER's GRID (0.13.0): from the GROOVES list (a row, or a GROOVE PARTS row), or the
-    // song creator's columns.
-    auto& grid = drumPage.getSequencer().getGrid();
-    grid.describeDrop = [this, &grid] (const juce::String& d) -> juce::String
-    {
-        const auto letter = synth::drumseq::patternNames[grid.getPattern()];
-        if (d.startsWith ("groove:"))
-            return groovesPage.describeRowDrop (grid.getPattern());
-        if (d.startsWith ("part:"))
-            return "DROP: ITS " + grooves::drumPartNames[juce::jlimit (0, grooves::numDrumParts - 1, d.fromFirstOccurrenceOf (":", false, false).getIntValue())]
-                 + " LAID ONTO PATTERN " + letter;
-        if (d.startsWith ("creator:"))
-            return "DROP: THE GROOVE REPLACES PATTERN " + letter;
-        return {};
-    };
-    grid.onDrop = [this, &grid] (const juce::String& d)
-    {
-        const auto value = d.fromFirstOccurrenceOf (":", false, false);
-        if (d.startsWith ("groove:"))
-            return groovesPage.rowToPattern (value.getIntValue(), grid.getPattern());
-        if (d.startsWith ("part:"))
-            return groovesPage.partToPattern (value.getIntValue(), grid.getPattern());
-        if (d.startsWith ("creator:"))
-            return songCreator.toPattern (value.upToFirstOccurrenceOf (":", false, false).getIntValue(),
-                                          value.fromFirstOccurrenceOf (":", false, false).getIntValue(), grid.getPattern());
-        return false;
-    };
-    songCreator.onGrooveRowDropped = [this] (int row)
-    {
-        const auto& results = groovesPage.getResults();
-        if (row >= 0 && row < (int) results.size())
-            songCreator.setSource (results[(size_t) row].file);
-    };
-    groovesPage.onAddedToSong = [this] { showSong (true); };
 
+    // PR7-I 0.1.0: the strip under the pages is empty (the song track was PR7-D's); a quiet note says what it's for.
+    // (No on-screen keyboard: PR7-D 0.41.0 took it off every screen at the owner's ask.)
+    stripNote.setText ("THE NOTE VIEW: the strings and frets each note plays on will show here, with the guitar engine",
+                       juce::dontSendNotification);
+    stripNote.setJustificationType (juce::Justification::centred);
+    stripNote.setFont (juce::FontOptions (14.0f));
+    stripNote.setColour (juce::Label::textColourId, ParagonColours::textDim);
+    stripNote.setInterceptsMouseClicks (false, false);
+    addAndMakeVisible (stripNote);
     addAndMakeVisible (drumPage);
-    addChildComponent (groovesPage);
-    groovesPage.onToggleWindow = [this] { setGroovesInOwnWindow (groovesWindow == nullptr); };
-    groovesAwayNote.setText ("GROOVES is in a window of its own.", juce::dontSendNotification);
-    groovesAwayNote.setJustificationType (juce::Justification::centred);
-    groovesAwayNote.setFont (juce::FontOptions (18.0f, juce::Font::bold));
-    groovesAwayNote.setColour (juce::Label::textColourId, ParagonColours::textDim);
-    groovesShowWindow.onClick = [this] { if (auto* w = getGroovesWindow()) w->toFront (true); };
-    groovesBringBack.onClick = [this] { setGroovesInOwnWindow (false); };
-    for (juce::Component* c : { (juce::Component*) &groovesAwayNote, (juce::Component*) &groovesShowWindow, (juce::Component*) &groovesBringBack })
-        addChildComponent (c);
     addChildComponent (mixerPage);
     addChildComponent (fxPage);
     addChildComponent (rigBrowser);
@@ -268,160 +154,16 @@ MainView::MainView (ParagonX1AudioProcessor& processorToShow)
 MainView::~MainView()
 {
     audioProcessor.rigBroadcaster.removeChangeListener (this);
-    groovesWindow.reset();   // (lets go of the page before the page goes)
-    gridWindow.reset();
-}
-
-//==============================================================================
-// THE GROOVES WINDOW (0.45.0)
-struct MainView::GroovesWindow final : public juce::DocumentWindow
-{
-    explicit GroovesWindow (MainView& v)
-        : juce::DocumentWindow ("Paragon PR7-D: GROOVES", ParagonColours::background, juce::DocumentWindow::allButtons,
-                                MainView::groovesWindowOnDesktop), view (v)
-    {
-        // The system's own title bar (no JUCE colours), resizable; over the DAW, so clicking the DAW doesn't hide it.
-        setUsingNativeTitleBar (true);
-        setLookAndFeel (&view.getLookAndFeel());
-        setContentNonOwned (&view.groovesPage, false);
-        setResizable (true, false);
-        setResizeLimits (1100, 560, 6000, 4000);
-        // Centred on the screen; with no screen at all (CI's tests) just its size (centring asks for one).
-        if (juce::Desktop::getInstance().getDisplays().getPrimaryDisplay() != nullptr)
-            centreWithSize (pageArea.getWidth(), pageArea.getHeight());
-        else
-            setSize (pageArea.getWidth(), pageArea.getHeight());
-        setAlwaysOnTop (true);
-    }
-    ~GroovesWindow() override
-    {
-        clearContentComponent();   // the page isn't ours: MainView takes it back
-        setLookAndFeel (nullptr);
-    }
-    void closeButtonPressed() override
-    {
-        // Closing it brings GROOVES back into the plugin (after this call: it deletes this window).
-        juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<MainView> (&view)]
-        {
-            if (safe != nullptr)
-                safe->setGroovesInOwnWindow (false);
-        });
-    }
-    MainView& view;
-};
-
-juce::Component* MainView::getGroovesWindow() const noexcept { return groovesWindow.get(); }
-
-// THE GRID EDITOR'S WINDOW (0.48.0), as the GROOVES window.
-struct MainView::GridWindow final : public juce::DocumentWindow
-{
-    explicit GridWindow (MainView& v)
-        : juce::DocumentWindow ("Paragon PR7-D: GRID EDITOR", ParagonColours::background, juce::DocumentWindow::allButtons,
-                                MainView::groovesWindowOnDesktop), view (v)
-    {
-        setUsingNativeTitleBar (true);
-        setLookAndFeel (&view.getLookAndFeel());
-        setContentNonOwned (&view.blockEditor, false);
-        setResizable (true, false);
-        setResizeLimits (1100, 560, 6000, 4000);
-        if (juce::Desktop::getInstance().getDisplays().getPrimaryDisplay() != nullptr)
-            centreWithSize (pageArea.getWidth(), pageArea.getHeight());
-        else
-            setSize (pageArea.getWidth(), pageArea.getHeight());
-        setAlwaysOnTop (true);
-    }
-    ~GridWindow() override
-    {
-        clearContentComponent();
-        setLookAndFeel (nullptr);
-    }
-    void closeButtonPressed() override
-    {
-        juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<MainView> (&view)]
-        {
-            if (safe != nullptr)
-                safe->setGridEditorInOwnWindow (false);
-        });
-    }
-    MainView& view;
-};
-
-juce::Component* MainView::getGridEditorWindow() const noexcept { return gridWindow.get(); }
-
-void MainView::setGridEditorInOwnWindow (bool own)
-{
-    if (own == (gridWindow != nullptr))
-    {
-        if (own)
-            gridWindow->toFront (true);
-        return;
-    }
-    if (own)
-    {
-        blockEditor.setVisible (true);
-        gridWindow = std::make_unique<GridWindow> (*this);
-        gridWindow->setVisible (true);
-    }
-    else
-    {
-        gridWindow.reset();
-        addChildComponent (blockEditor);
-        blockEditor.setBounds (pageArea);
-        blockEditor.toFront (false);
-    }
-    blockEditor.setInOwnWindow (own);
-}
-
-void MainView::hideGridEditor()
-{
-    if (gridWindow != nullptr)
-        setGridEditorInOwnWindow (false);
-    blockEditor.setVisible (false);
-}
-
-void MainView::setGroovesInOwnWindow (bool own)
-{
-    if (own == (groovesWindow != nullptr))
-    {
-        if (own)
-            groovesWindow->toFront (true);
-        return;
-    }
-    if (own)
-    {
-        groovesPage.setVisible (true);
-        groovesWindow = std::make_unique<GroovesWindow> (*this);
-        groovesWindow->setVisible (true);
-    }
-    else
-    {
-        groovesWindow.reset();
-        addChildComponent (groovesPage);
-        groovesPage.setBounds (pageArea);
-        groovesPage.toBehind (&blockEditor);   // (behind EDIT PLAY STYLE too: it comes after the editor)
-    }
-    groovesPage.setInOwnWindow (own);
-    showPage (page);
-}
-
-void MainView::showGroovesAway()
-{
-    const auto away = groovesWindow != nullptr && page == Page::grooves;
-    for (juce::Component* c : { (juce::Component*) &groovesAwayNote, (juce::Component*) &groovesShowWindow, (juce::Component*) &groovesBringBack })
-        c->setVisible (away);
 }
 
 void MainView::showPage (Page newPage)
 {
     page = newPage;
     auto& tab = newPage == Page::presets ? presetsTab : newPage == Page::settings ? settingsTab : newPage == Page::fx ? fxTab
-              : newPage == Page::grooves ? groovesTab : newPage == Page::mixer ? mixerTab : drumsTab;
+              : newPage == Page::mixer ? mixerTab : drumsTab;
     tab.setToggleState (true, juce::dontSendNotification);
     fxPage.setVisible (newPage == Page::fx);
     drumPage.setVisible (newPage == Page::drums);
-    if (groovesWindow == nullptr)
-        groovesPage.setVisible (newPage == Page::grooves);
-    showGroovesAway();   // 0.45.0: in its own window: the tab says so
     mixerPage.setVisible (newPage == Page::mixer);
     rigBrowser.setVisible (newPage == Page::presets);
     settingsPage.setVisible (newPage == Page::settings);
@@ -438,7 +180,7 @@ void MainView::updateMachine()
         progressBox.toFront (false);   // (a long job's box stays over everything)
     drumPage.setVisible (page == Page::drums && ! shown);
     outputColumn.setVisible (! shown);
-    songTrack.setVisible (! shown);
+    stripNote.setVisible (! shown);
 }
 
 void MainView::refreshRig()
@@ -453,11 +195,6 @@ void MainView::checkLongJobs (double nowMs)
 {
     if (progressBox.isShowingJob())
         return;
-    if (songTrack.isBouncing())
-    {
-        progressBox.show ({ "BOUNCING THE SONG TO AUDIO", [this] { return songTrack.getBounceProgress(); }, [this] { songTrack.cancelBounce(); } });
-        return;
-    }
     // 0.51.0: IMPORT A RENDER cutting its hits.
     if (audioProcessor.getRenderImportProgress() >= 0.0)
     {
@@ -480,7 +217,6 @@ void MainView::checkLongJobs (double nowMs)
 void MainView::timerCallback()
 {
     checkLongJobs (juce::Time::getMillisecondCounterHiRes());
-    updateDragHover (juce::Time::getMillisecondCounterHiRes(), groovesPage.isDragAndDropActive() || isDragAndDropActive());
     // NOTE NAMES (0.35.1): every note's name follows SETTINGS' choice (middle C as C3 or C4).
     if (const auto* names = audioProcessor.getParameters().getRawParameterValue (ParamIDs::noteNames))
         if (const auto octave = notenames::octaveForChoice (juce::roundToInt (names->load())); octave != notenames::middleCOctave.load())
@@ -600,13 +336,13 @@ void MainView::paintBackground (juce::Graphics& g)
         g.setColour (ParagonColours::panelEdge);
         g.drawRoundedRectangle (group.reduced (0.5f), 5.0f, 1.0f);
     }
-    for (auto x : { tabEdges[1], tabEdges[2], tabEdges[3], tabEdges[4], tabEdges[5] })
+    for (auto x : { tabEdges[1], tabEdges[2], tabEdges[3], tabEdges[4] })
         g.drawVerticalLine (juce::roundToInt (x * mockScale), tabsGroup.getY() + 8.0f, tabsGroup.getBottom() - 8.0f);
 
     g.setColour (ParagonColours::panelEdge);
     g.drawHorizontalLine (juce::roundToInt (64.0f * mockScale), 0.0f, (float) getWidth());
 
-    // The song strip's frame (the keyboard's until 0.41.0).
+    // The strip's frame (the keyboard's until PR7-D 0.41.0, the song track's until PR7-I 0.1.0).
     DockStyle::drawPanel (g, stripArea.toFloat().expanded (0.0f, 0.0f));
 }
 
@@ -615,7 +351,7 @@ void MainView::resized()
     backgroundCache.invalidate();
     // Header
     {
-        IconButton* tabs[] = { &drumsTab, &groovesTab, &mixerTab, &fxTab, &presetsTab, &settingsTab };
+        IconButton* tabs[] = { &drumsTab, &mixerTab, &fxTab, &presetsTab, &settingsTab };
         for (size_t i = 0; i < std::size (tabs); ++i)
             tabs[i]->setBounds (mock (tabEdges[i] + (i > 0 ? 1.0f : 0.0f), 12, tabEdges[i + 1] - (i + 1 < std::size (tabs) ? 1.0f : 0.0f), 53));
     }
@@ -629,127 +365,13 @@ void MainView::resized()
 
     outputColumn.setBounds (outputArea);
 
-    songTrack.setBounds (stripArea.reduced (8, 6));   // the whole strip (0.41.0: no keyboard, no KEYS | SONG)
+    stripNote.setBounds (stripArea.reduced (8, 6));
 
     fxPage.setBounds (pageArea);
     drumPage.setBounds (pageArea);
-    if (groovesWindow == nullptr)
-        groovesPage.setBounds (pageArea);
-    groovesAwayNote.setBounds (pageArea.withSizeKeepingCentre (pageArea.getWidth(), 40).translated (0, -40));
-    groovesShowWindow.setBounds (pageArea.withSizeKeepingCentre (180, 32).translated (-100, 20));
-    groovesBringBack.setBounds (pageArea.withSizeKeepingCentre (180, 32).translated (100, 20));
     mixerPage.setBounds (pageArea);
     rigBrowser.setBounds (pageArea);
     settingsPage.setBounds (pageArea);
-    if (gridWindow == nullptr)
-        blockEditor.setBounds (pageArea);
-    playStyle.setBounds (pageArea);
-    songCreator.setBounds (pageArea);
     machine.setBounds (machineArea);
     progressBox.setCentrePosition (getLocalBounds().getCentre());
-}
-
-void MainView::showSong (bool)
-{
-    // 0.41.0: the song track is always the strip under the pages (the keyboard it switched with is gone).
-    songTrack.setVisible (! machine.isVisible());
-}
-
-void MainView::openPlayStyle (int block)
-{
-    showSong (true);
-    songCreator.setVisible (false);
-    if (gridWindow == nullptr)   // (in its own window it stays up)
-        blockEditor.setVisible (false);
-    playStyleLast = true;
-    auto chosen = songTrack.getSelection();
-    if (std::find (chosen.begin(), chosen.end(), block) == chosen.end())
-    {
-        chosen = { block };
-        songTrack.setSelection (chosen);
-    }
-    songTrack.setMultiChoose (true);
-    songTrack.setRecordingAllowed (false);   // as the manual has it: no recording into the song while it's open
-    playStyle.open (chosen);
-}
-
-void MainView::openGridEditor (int block)
-{
-    showSong (true);
-    songCreator.setVisible (false);
-    if (playStyle.isVisible())
-        playStyle.close();
-    playStyleLast = false;
-    blockEditor.open (block);
-    if (gridWindow != nullptr)
-        gridWindow->toFront (true);
-}
-
-void MainView::openSongCreator (const juce::File& source)
-{
-    showSong (true);
-    if (gridWindow == nullptr)   // (in its own window it stays up)
-        blockEditor.setVisible (false);
-    if (playStyle.isVisible())
-        playStyle.close();
-    if (source != juce::File())
-        songCreator.setSource (source);
-    songCreator.open();
-}
-
-//==============================================================================
-// A GROOVE DRAGGED OVER THE DRUMS TAB (0.13.0)
-bool MainView::isInterestedInDragSource (const SourceDetails& details)
-{
-    const auto d = details.description.toString();
-    return d.startsWith ("groove:") || d.startsWith ("part:") || d.startsWith ("creator:");
-}
-
-void MainView::itemDragMove (const SourceDetails& details)
-{
-    if (drumsTab.getBounds().contains (details.localPosition) && ! dragPeek && page != Page::drums)
-    {
-        if (hoverSince < 0.0)
-            hoverSince = juce::Time::getMillisecondCounterHiRes();
-    }
-    else
-        hoverSince = -1.0;
-}
-
-void MainView::itemDragExit (const SourceDetails&)
-{
-    hoverSince = -1.0;
-}
-
-void MainView::itemDropped (const SourceDetails&)
-{
-    hoverSince = -1.0;   // dropped somewhere that takes nothing
-}
-
-void MainView::updateDragHover (double nowMs, bool dragStillOn)
-{
-    // Half a second over DRUMS: its SEQUENCER in front, the page the drag came from left under it (hiding that would end
-    // the drag).
-    if (hoverSince >= 0.0 && dragStillOn && nowMs - hoverSince >= 500.0)
-    {
-        hoverSince = -1.0;
-        dragPeek = true;
-        drumPage.showView (DrumPage::View::sequencer);
-        drumPage.setVisible (true);
-        drumPage.toFront (false);
-        drumsTab.setToggleState (true, juce::dontSendNotification);
-    }
-    // The drag over: the window settles on DRUMS.
-    if (dragPeek && ! dragStillOn)
-    {
-        dragPeek = false;
-        songCreator.setVisible (false);
-        if (gridWindow == nullptr)   // (in its own window it stays up)
-            blockEditor.setVisible (false);
-        if (playStyle.isVisible())
-            playStyle.close();
-        showPage (Page::drums);
-    }
-    if (! dragStillOn)
-        hoverSince = -1.0;
 }

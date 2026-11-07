@@ -119,45 +119,45 @@ TEST_CASE ("The window opens as big as fits above the taskbar, up to 1824 x 1026
     CHECK (Editor::openingSize ({ 800, 600 }).x == 960);   // never below the smallest size
 }
 
-TEST_CASE ("The window opens on the DRUMS page; GROOVES, FX, PRESETS and SETTINGS cover it; the song strip and OUTPUT stay", "[ui]")
+TEST_CASE ("The window opens on the DRUMS page; MIXER, FX, PRESETS and SETTINGS cover it; the strip and OUTPUT stay", "[ui]")
 {
     Window w;
-    // 0.41.0: no on-screen keyboard anywhere; the SONG track has its strip.
+    // PR7-D 0.41.0: no on-screen keyboard anywhere. PR7-I 0.1.0: the song track is gone; the strip holds a note.
     CHECK (inside<juce::MidiKeyboardComponent> (*w.view) == nullptr);
-    auto* keyboard = &w.view->getSongTrack();
-    CHECK (keyboard->isVisible());
+    auto* strip = &w.view->getStripNote();
+    CHECK (strip->isVisible());
     CHECK (w.view->getPage() == MainView::Page::drums);
     CHECK (w.view->getDrumPage().isVisible());
     checkLayout (*w.view, "drums");
 
-    // The six tabs (0.20.0: MIXER), side by side in the header, the shown page's lit.
+    // The five tabs (PR7-I 0.1.0: GROOVES gone), side by side in the header, the shown page's lit.
+    CHECK (w.view->findChildWithID ("groovesTab") == nullptr);
     std::vector<juce::Button*> tabs;
-    for (const auto* id : { "drumsTab", "groovesTab", "mixerTab", "fxTab", "presetsTab", "settingsTab" })
+    for (const auto* id : { "drumsTab", "mixerTab", "fxTab", "presetsTab", "settingsTab" })
     {
         auto* tab = dynamic_cast<juce::Button*> (w.view->findChildWithID (id));
         INFO (id);
         REQUIRE (tab != nullptr);
         CHECK (tab->getBottom() < 64);
-        CHECK (tab->getWidth() > 110);   // six share the group (each its icon and name)
+        CHECK (tab->getWidth() > 130);   // five share the group (each its icon and name)
         if (! tabs.empty())
             CHECK (tab->getX() >= tabs.back()->getRight());
         tabs.push_back (tab);
     }
     CHECK (tabs[0]->getToggleState());
 
-    const std::pair<MainView::Page, int> pages[] = { { MainView::Page::grooves, 1 }, { MainView::Page::mixer, 2 }, { MainView::Page::fx, 3 },
-                                                     { MainView::Page::presets, 4 }, { MainView::Page::settings, 5 } };
+    const std::pair<MainView::Page, int> pages[] = { { MainView::Page::mixer, 1 }, { MainView::Page::fx, 2 },
+                                                     { MainView::Page::presets, 3 }, { MainView::Page::settings, 4 } };
     for (const auto& [page, tab] : pages)
     {
         INFO (tab);
         w.view->showPage (page);
         CHECK_FALSE (w.view->getDrumPage().isVisible());
-        CHECK (keyboard->isVisible());
+        CHECK (strip->isVisible());
         CHECK (tabs[(size_t) tab]->getToggleState());
         checkLayout (*w.view, "page");
     }
     CHECK (w.view->getFxPage().isVisible() == false);   // SETTINGS shown last
-    CHECK (w.view->getGroovesPage().isVisible() == false);
     tabs[0]->onClick();   // as clicking DRUMS does
     CHECK (w.view->getDrumPage().isVisible());
 }

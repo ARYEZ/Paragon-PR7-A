@@ -353,8 +353,6 @@ TEST_CASE ("0.33.0's DRUMS: tom 4, the hat's shoulder, the chokes; a choke stops
     CHECK (isChoke (C1C));
     CHECK_FALSE (isChoke (CY));
     CHECK (generalMidi()[41] == T4);
-    CHECK (grooves::laneOf (T4) == (int) grooves::Lane::toms);
-    CHECK (grooves::laneOf (C2C) == (int) grooves::Lane::crash);
 
     // A crash ringing, then its choke: the crash stops (within 30 ms), the choke plays.
     Plugin p;
@@ -410,8 +408,6 @@ TEST_CASE ("0.36.0's DRUMS: crashes 3 to 6, the FX crash, china 2, tom 5: they p
     CHECK (homeChannel (CFX) == synth::mixer::cymbals);
     CHECK (homeChannel (CH2) == synth::mixer::cymbals);
     CHECK (homeChannel (T5) == synth::mixer::tom3);
-    CHECK (grooves::drumPartOf (C4) == (int) grooves::DrumPart::crash);
-    CHECK (grooves::drumPartOf (T5) == (int) grooves::DrumPart::toms);
     CHECK (pack::slotFor (juce::StringArray { "CRASH3" }) == C3);
     CHECK (pack::slotFor (juce::StringArray { "CRASH6" }) == C6);
     CHECK (pack::slotFor (juce::StringArray { "CHINA2" }) == CH2);

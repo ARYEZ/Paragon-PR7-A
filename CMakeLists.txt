@@ -79,16 +79,6 @@ target_sources(ParagonX1
         source/dsp/synth/DiskStreamer.cpp
         source/dsp/synth/Instrument.cpp
         source/dsp/synth/RenderImport.cpp
-        source/grooves/Groove.cpp
-        source/grooves/GrooveLibrary.cpp
-        source/grooves/Rhythm.cpp
-        source/grooves/Riff.cpp
-        source/grooves/SqliteReader.cpp
-        source/grooves/GrooveDatabase.cpp
-        source/song/Song.cpp
-        source/song/PlayStyle.cpp
-        source/song/AmountModel.cpp
-        source/song/Creator.cpp
         # The effects: PR7-E's rack (ECHELON, DOMINION, CONSTRICTOR, the LIMITER) and PR7-G's sends and inserts.
         source/dsp/dominion/Dominion.cpp
         source/dsp/effects/Compressor.cpp
@@ -138,13 +128,6 @@ target_sources(ParagonX1
         source/ui/VelocityCurveEditor.cpp
         source/ui/MidiInPanel.cpp
         source/ui/MixerPage.cpp
-        source/ui/GroovesPage.cpp
-        source/ui/TapPanel.cpp
-        source/ui/RiffPanel.cpp
-        source/ui/SongTrack.cpp
-        source/ui/BlockEditor.cpp
-        source/ui/PlayStylePanel.cpp
-        source/ui/SongCreator.cpp
         source/ui/DrumSeqPage.cpp
         source/ui/FxPage.cpp
         source/ui/SendPages.cpp
