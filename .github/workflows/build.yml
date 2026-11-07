@@ -76,18 +76,25 @@ jobs:
             # list", exit 134) after pluginval has printed SUCCESS: seen once
             # on 0.21.0, while 15 local runs passed, and valgrind found no memory
             # errors in the drum code's tests or in pluginval's opening of the
-            # plugin and its editor. Those two alone get one more try; a second
-            # failure, or any other failure, fails the build.
-            set +e
-            xvfb-run -a $RUN "$PLUGIN"
-            status=$?
-            set -e
-            if [ $status -eq 139 ] || [ $status -eq 134 ]; then
-              echo "pluginval crashed (exit $status, its known Linux shutdown crash): running it once more"
-              xvfb-run -a $RUN "$PLUGIN"
-            elif [ $status -ne 0 ]; then
+            # plugin and its editor. November 2026 (0.60.0): it failed both of
+            # CI's tries; under gdb here it came 1 run in 6, the same place,
+            # after SUCCESS. So: that crash (exit 139 / 134) after pluginval has
+            # printed SUCCESS gets up to 3 more tries; any other failure, a
+            # crash before SUCCESS, or 4 crashes in a row fail the build.
+            for attempt in 1 2 3 4; do
+              set +e
+              xvfb-run -a $RUN "$PLUGIN" 2>&1 | tee pluginval.log
+              status=${PIPESTATUS[0]}
+              set -e
+              if [ $status -eq 0 ]; then
+                break
+              fi
+              if { [ $status -eq 139 ] || [ $status -eq 134 ]; } && grep -q "^SUCCESS" pluginval.log && [ $attempt -lt 4 ]; then
+                echo "pluginval crashed after SUCCESS (exit $status, its known Linux shutdown crash): try $((attempt + 1)) of 4"
+                continue
+              fi
               exit $status
-            fi
+            done
           else
             $RUN "$PLUGIN"
           fi
