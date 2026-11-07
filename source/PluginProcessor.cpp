@@ -26,6 +26,7 @@ ParagonX1AudioProcessor::ParagonX1AudioProcessor()
     velToVolValue = find (ParamIDs::velocityToVolume);
     releaseValue = find (ParamIDs::release);
     transposeValue = find (ParamIDs::transpose);
+    variationValue = find (ParamIDs::variation);
     patchLevelValue = find (ParamIDs::patchLevel);
     outputValue = find (ParamIDs::outputGain);
     bypassValue = find (ParamIDs::bypass);
@@ -105,6 +106,7 @@ guitar::Settings ParagonX1AudioProcessor::getGuitarSettings() const noexcept
     s.velocityToVolume = velToVolValue->load();
     s.releaseSeconds = releaseValue->load();
     s.transpose = juce::roundToInt (transposeValue->load());
+    s.variation = variationValue->load();
     return s;
 }
 

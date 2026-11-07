@@ -9,10 +9,13 @@
 // way the owner's reference guitar instrument does:
 //
 //   - Each note gets a string and fret (Fretting.h): notes struck at the same moment are a chord, fretted together.
-//   - ONE NOTE PER STRING: a new note on a sounding string stops it (5 ms), as picking it again does; a NOTE-OFF damps
-//     the string over RELEASE. Notes on other strings ring on.
-//   - PICKING: ALTERNATE (down, up, down... one stroke per chord), DOWN or UP: which stroke's take plays; each stroke's
-//     ROUND-ROBINS in turn, so the same take never plays twice running.
+//   - ONE NOTE PER STRING: a new note on a string stops whatever it's still doing (5 ms), held or ringing out its release,
+//     as picking it again does; a NOTE-OFF damps the string over RELEASE. Notes on other strings ring on.
+//   - PICKING: ALTERNATE (down, up, down... one stroke per chord), DOWN or UP: which stroke's take plays; its ROUND-ROBIN
+//     chosen at random but never the take that played last on that string (0.3.0; 0.2.0 went round them in turn), so
+//     a chugged note has no pattern to hear.
+//   - VARIATION (0.3.0): each note a little different, as no two picks are alike: up to 3 ms further into its take, up to
+//     half a dB louder or quieter, up to 3 cents sharp or flat, all times VARIATION (0: the takes exactly as recorded).
 //   - VELOCITY picks the dynamic (the render list's three: below 65 soft, below 102 medium, then hard), and within it
 //     VEL > VOL scales the level (0: the take as recorded; 1: fully by velocity).
 //   - KEYSWITCHES, below the guitar's lowest note (A1) and above its highest: the reference's defaults, so MIDI parts
@@ -32,6 +35,7 @@ namespace guitar
         PickMode pick = PickMode::alternate;
         float velocityToVolume = 0.5f;
         float releaseSeconds = 0.08f;
+        float variation = 0.0f;        // 0 to 1
         int transpose = 0;
         const Library* library = nullptr;
         Streamer* streamer = nullptr;
@@ -86,7 +90,8 @@ namespace guitar
         int autoHand = 1;
         double idleSamples = 0.0;
         Stroke nextStroke = Stroke::down;
-        std::array<int, 2> nextRoundRobin {};   // by stroke
+        std::array<const Take*, numStrings> lastOnString {};   // the take started last on each string
+        juce::Random random { 0x7072 };
         int ksForce = -2;           // -2: no keyswitch (the setting), -1: off, else a string
         int ksHand = -1;            // -1: no keyswitch, 0: AUTO, else a fret
         int ksPick = -1;

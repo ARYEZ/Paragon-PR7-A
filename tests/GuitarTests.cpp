@@ -5,8 +5,11 @@
 
 #include "guitar/Guitar.h"
 #include "guitar/RenderImport.h"
+#include "guitar/RoundRobinCheck.h"
 
 #include <juce_audio_formats/juce_audio_formats.h>
+
+#include <set>
 
 using namespace guitar;
 
@@ -16,7 +19,10 @@ namespace
 
     // A made-up render of a list: each take a decaying tone at its pitch, its level by dynamic, starting `late` seconds
     // after where the list puts it, with a little pick noise just before.
-    std::vector<float> fakeRender (Articulation a, int string, double rate, double late, int pitchShift = 0, double lengthScale = 1.0)
+    // Each round-robin its own recording (its own overtone: the (2 + round-robin)th harmonic); `copiesFrom` > 0: round-robins
+    // from that one on copy the earlier ones (as an instrument with fewer round-robins than the list asks for gives).
+    std::vector<float> fakeRender (Articulation a, int string, double rate, double late, int pitchShift = 0, double lengthScale = 1.0,
+                                   int copiesFrom = 0)
     {
         std::vector<float> audio ((size_t) (renders::lengthSeconds (a, string) * rate * lengthScale), 0.0f);
         juce::Random random (7);
@@ -25,13 +31,16 @@ namespace
             const auto hz = guitar::frequencyOf (take.note() + pitchShift);
             const auto start = (int) ((take.noteSeconds + late) * rate);
             const auto level = 0.2f + 0.3f * (float) take.layer;
+            const auto rr = copiesFrom > 0 ? take.roundRobin % copiesFrom : take.roundRobin;
+            const auto overtone = hz * (2.0 + rr);
             for (int i = -(int) (0.01 * rate); i < 0; ++i)
                 if (start + i >= 0 && start + i < (int) audio.size())
                     audio[(size_t) (start + i)] += 0.004f * (random.nextFloat() - 0.5f);
             for (int i = 0; i < (int) (renders::holdSeconds * rate); ++i)
                 if (start + i < (int) audio.size())
                     audio[(size_t) (start + i)] += level * std::exp (-0.6f * (float) i / (float) rate)
-                                                 * (float) std::sin (juce::MathConstants<double>::twoPi * hz * i / rate);
+                                                 * (float) (std::sin (juce::MathConstants<double>::twoPi * hz * i / rate)
+                                                            + (overtone < 0.45 * rate ? 0.3 * std::sin (juce::MathConstants<double>::twoPi * overtone * i / rate) : 0.0));
         }
         return audio;
     }
@@ -139,21 +148,22 @@ TEST_CASE ("FRETTING: open strings low on the neck, the hand's reach, busy strin
 TEST_CASE ("THE RENDER LIST: every fret, three dynamics, two round-robins of down and up; keyswitches first; one file per string", "[guitar][renders]")
 {
     const auto list = renders::takes (Articulation::sustain, 0);
-    REQUIRE (list.size() == 25 * 3 * 2 * 2);
+    REQUIRE (list.size() == 25 * 3 * 2 * 4);
     REQUIRE ((int) list.size() == Library::takesPerString);
     CHECK_THAT (list.front().noteSeconds, WithinAbs (2.25, 1e-9));
     CHECK_THAT (list[1].noteSeconds - list[0].noteSeconds, WithinAbs (renders::slotSeconds, 1e-9));
     CHECK (list[0].stroke == Stroke::down);
     CHECK (list[1].stroke == Stroke::up);
-    CHECK (list[2].stroke == Stroke::down);   // down, up, down, up: the two round-robins of each stroke
+    CHECK (list[2].stroke == Stroke::down);   // down, up, down, up...: the four round-robins of each stroke
     CHECK (list[2].roundRobin == 1);
-    CHECK (list[3].layer == 0);
-    CHECK (list[4].layer == 1);
+    CHECK (list[7].roundRobin == 3);
+    CHECK (list[7].layer == 0);
+    CHECK (list[8].layer == 1);
     CHECK (list.back().fret == 24);
     CHECK (list.back().note() == 33 + 24);
     for (const auto& t : list)
         CHECK (t.velocity() <= 119);   // sustain's velocities (above: the reference's rake and pinch harmonic)
-    CHECK_THAT (renders::lengthSeconds (Articulation::sustain, 0), WithinAbs (2.0 + 300 * 5.5, 1e-9));
+    CHECK_THAT (renders::lengthSeconds (Articulation::sustain, 0), WithinAbs (2.0 + 600 * 5.5, 1e-9));
     CHECK (renders::fileName (Articulation::sustain, 0) == "PR7-I Sustain - String 7 (low A)");
     CHECK (renders::fileName (Articulation::sustain, 3) == "PR7-I Sustain - String 4 (D)");
 
@@ -187,19 +197,19 @@ TEST_CASE ("THE RENDER LIST: every fret, three dynamics, two round-robins of dow
     }
     CHECK (forced);
     CHECK (legatoOff);
-    CHECK (notes == 300);
+    CHECK (notes == 600);
     CHECK_THAT (firstNote, WithinAbs (2.25, 0.001));
     CHECK (firstStrokeKey < firstNote);
 
     // A take's file name, and back.
     const auto name = renders::takeFileName (Articulation::sustain, list[7]);
-    CHECK (name == "Sustain/s0_f00_l1_u_r1.wav");
+    CHECK (name == "Sustain/s0_f00_l0_u_r3.wav");
     const auto id = renders::parseTakeFile (juce::File ("/x").getChildFile (name));
     REQUIRE (id);
     CHECK (id->fret == 0);
-    CHECK (id->layer == 1);
+    CHECK (id->layer == 0);
     CHECK (id->stroke == Stroke::up);
-    CHECK (id->roundRobin == 1);
+    CHECK (id->roundRobin == 3);
     CHECK_FALSE (renders::parseTakeFile (juce::File ("/x/Other/s0_f01_l0_u_r0.wav")));
     CHECK_FALSE (renders::parseTakeFile (juce::File ("/x/Sustain/s0_f01_l0_u.wav")));
 }
@@ -229,11 +239,12 @@ TEST_CASE ("IMPORT A RENDER: the offset found, every take cut at its pick, in tu
     const auto report = renders::importAudio (audio.data(), (int) audio.size(), rate, Articulation::sustain, 0, folder, &progress);
     INFO (report.summary());
     REQUIRE (report.ok());
-    CHECK (report.written == 300);
+    CHECK (report.written == 600);
+    CHECK (report.copies == 0);
     CHECK (report.outOfTune.isEmpty());
     CHECK_THAT (report.offsetSeconds, WithinAbs (0.023, 0.001));
     CHECK (progress.load() == 1.0f);
-    CHECK (report.summary() == "300 notes imported, all in tune");
+    CHECK (report.summary() == "600 notes imported, all in tune");
 
     // A take's file: mono, the render's rate, its tone starting `preroll` in (the pick's noise kept before it).
     juce::AudioFormatManager formats;
@@ -269,8 +280,8 @@ TEST_CASE ("IMPORT A RENDER: the offset found, every take cut at its pick, in tu
 
     // THE LIBRARY: the folder loaded; the string's 150 takes; another string's notes played by stand-ins.
     const auto library = Library::load (folder);
-    CHECK (library->count (Articulation::sustain, 0) == 300);
-    CHECK (library->total() == 300);
+    CHECK (library->count (Articulation::sustain, 0) == 600);
+    CHECK (library->total() == 600);
     const auto exact = library->find (Articulation::sustain, 0, 5, 1, Stroke::up);
     REQUIRE (exact.take != nullptr);
     CHECK (exact.exact);
@@ -329,15 +340,19 @@ TEST_CASE ("THE ENGINE: alternate picking; DOWN / UP; velocity picks the dynamic
     CHECK_THAT (levelAt (p.left, 110.0, 4800, 4800) / down, WithinAbs (0.5, 0.02));
     CHECK_THAT (down, WithinAbs (1.0, 0.02));
 
-    // DOWN: every stroke a down stroke, its round-robins in turn (never the same take twice running); the soft and
-    // medium dynamics by velocity.
+    // DOWN: every stroke a down stroke, its round-robins at random but never the take just played (a chug of 32 downs:
+    // no take twice running, all four used); the soft and medium dynamics by velocity.
     p.settings.pick = PickMode::down;
-    p.play (0.05, { { Player::off (45), 0 }, { Player::on (45, 120), 1 } });
-    const auto* first = p.guitar.lastTake();
-    p.play (0.05, { { Player::off (45), 0 }, { Player::on (45, 120), 1 } });
-    CHECK (p.guitar.lastTake() != first);
-    p.play (0.05, { { Player::off (45), 0 }, { Player::on (45, 120), 1 } });
-    CHECK (p.guitar.lastTake() == first);
+    std::set<const Take*> used;
+    const Take* previous = nullptr;
+    for (int i = 0; i < 32; ++i)
+    {
+        p.play (0.01, { { Player::off (45), 0 }, { Player::on (45, 120), 1 } });
+        CHECK (p.guitar.lastTake() != previous);
+        previous = p.guitar.lastTake();
+        used.insert (previous);
+    }
+    CHECK (used.size() == (size_t) renders::numRoundRobins);
     p.left.clear();
     p.play (0.2, { { Player::off (45), 0 }, { Player::on (45, 40), 1 } });
     CHECK (p.guitar.lastStroke() == Stroke::down);
@@ -412,17 +427,26 @@ TEST_CASE ("THE ENGINE: a take read past its head from disk, as a whole note", "
     p.settings.streamer = &streamer;
     p.settings.waitForDisk = true;
     p.play (2.0, { { Player::on (45, 120), 0 } });   // the A string open (its renders are 8 kHz: played at 48 kHz)
-    CHECK_THAT (frequencyOf (p.left, (size_t) (1.0 * sampleRate), (size_t) (1.9 * sampleRate)), WithinAbs (110.0, 0.3));
+    const auto atPitch = levelAt (p.left, 110.0, (size_t) (1.0 * sampleRate), (size_t) (0.9 * sampleRate));
+    CHECK (atPitch > 0.2);                                                                                   // the A2, a second in
+    CHECK (levelAt (p.left, 116.5, (size_t) (1.0 * sampleRate), (size_t) (0.9 * sampleRate)) < 0.1 * atPitch);   // not a semitone off
     CHECK (rms (p.left, (size_t) (1.5 * sampleRate), (size_t) (1.9 * sampleRate)) > 0.1);   // well past the 0.25 s head
     CHECK (streamer.getUnderruns() == 0);
     folder.getParentDirectory().deleteRecursively();
 }
 
-// PARAGON_RENDER_LISTS=<folder> ./GuitarCoreTests "[render-lists]": the seven strings' render lists written as MIDI files.
+// PARAGON_RENDER_LISTS=<folder> ./GuitarCoreTests "[render-lists]": the seven strings' render lists written as MIDI files,
+// and the round-robin check's.
 TEST_CASE ("Write the render lists", "[.][render-lists]")
 {
     const auto folder = juce::File (juce::SystemStats::getEnvironmentVariable ("PARAGON_RENDER_LISTS", "render-lists"));
     folder.createDirectory();
+    {
+        const auto file = folder.getChildFile (renders::rrcheck::fileName + ".mid");
+        file.deleteFile();
+        juce::FileOutputStream out (file);
+        REQUIRE (renders::rrcheck::toMidi().writeTo (out));
+    }
     for (int s = 0; s < numStrings; ++s)
     {
         const auto file = folder.getChildFile (renders::fileName (Articulation::sustain, s) + ".mid");
@@ -457,8 +481,120 @@ TEST_CASE ("THE ENGINE: streaming live (not waiting for the disk), the note whol
     for (const auto x : p.left)
         peak = std::max (peak, std::abs (x));
     CHECK (peak < 1.5f);
-    CHECK_THAT (frequencyOf (p.left, (size_t) (1.0 * sampleRate), (size_t) (1.9 * sampleRate)), WithinAbs (110.0, 0.3));
+    const auto atPitch = levelAt (p.left, 110.0, (size_t) (1.0 * sampleRate), (size_t) (0.9 * sampleRate));
+    CHECK (atPitch > 0.2);                                                                                   // the A2, a second in
+    CHECK (levelAt (p.left, 116.5, (size_t) (1.0 * sampleRate), (size_t) (0.9 * sampleRate)) < 0.1 * atPitch);   // not a semitone off
     CHECK (rms (p.left, (size_t) (1.5 * sampleRate), (size_t) (1.9 * sampleRate)) > 0.1);
     INFO ("underruns " << streamer.getUnderruns());
     folder.getParentDirectory().deleteRecursively();
+}
+
+TEST_CASE ("IMPORT A RENDER 0.3.0: round-robins that are copies of earlier ones left out, and said", "[guitar][renders]")
+{
+    // An instrument with only two takes per stroke, asked for four: round-robins 3 and 4 copy 1 and 2.
+    constexpr double rate = 8000.0;
+    const auto folder = tempGuitar ("Copies");
+    const auto audio = fakeRender (Articulation::sustain, 1, rate, 0.01, 0, 1.0, 2);
+    const auto report = renders::importAudio (audio.data(), (int) audio.size(), rate, Articulation::sustain, 1, folder);
+    INFO (report.summary());
+    REQUIRE (report.ok());
+    CHECK (report.written == 300);
+    CHECK (report.copies == 300);
+    CHECK (report.fewestRoundRobins == 2);
+    CHECK (report.summary() == "300 notes imported, all in tune, 300 copies of other takes left out (as few as 2 different per stroke)");
+    CHECK (folder.getChildFile ("Sustain/s1_f03_l1_d_r1.wav").existsAsFile());
+    CHECK_FALSE (folder.getChildFile ("Sustain/s1_f03_l1_d_r2.wav").exists());
+    // The guitar then cycles the two it has.
+    const auto library = Library::load (folder);
+    CHECK (library->find (Articulation::sustain, 1, 3, 1, Stroke::down, 2).take == library->find (Articulation::sustain, 1, 3, 1, Stroke::down, 0).take);
+    folder.getParentDirectory().deleteRecursively();
+}
+
+TEST_CASE ("THE ROUND-ROBIN CHECK: its list; how many different takes each stroke has, and in what order", "[guitar][renders]")
+{
+    using namespace renders::rrcheck;
+    const auto list = takes();
+    REQUIRE (list.size() == 3 * 2 * repeats);
+    CHECK_THAT (lengthSeconds() / 60.0, WithinAbs (4.03, 0.01));
+    // Its MIDI: per take the string forced, the articulation, the stroke, then the note.
+    const auto midi = toMidi();
+    juce::MidiMessageSequence seq (*midi.getTrack (0));
+    auto notes = 0, mutes = 0;
+    for (int i = 0; i < seq.getNumEvents(); ++i)
+        if (const auto& m = seq.getEventPointer (i)->message; m.isNoteOn())
+        {
+            notes += m.getNoteNumber() >= lowestNote && m.getNoteNumber() <= highestNote ? 1 : 0;
+            mutes += m.getNoteNumber() == renders::keys::mute ? 1 : 0;
+        }
+    CHECK (notes == 96);
+    CHECK (mutes == 32);
+
+    // A made-up render: the first note's downs 4 recordings in turn, its ups 4 in turn; the palm mute's 3 in no fixed
+    // order; the D string's 8 in turn. Each recording its own overtone (and so its own shape).
+    constexpr double rate = 16000.0;
+    std::vector<float> audio ((size_t) (lengthSeconds() * rate), 0.0f);
+    juce::Random random (3);
+    for (const auto& t : list)
+    {
+        const auto& g = groups()[(size_t) t.group];
+        const auto recording = t.group == 0 ? t.repeat % 4 : t.group == 1 ? random.nextInt (3) : t.repeat % 8;
+        const auto hz = guitar::frequencyOf (noteOf (g.string, g.fret));
+        const auto start = (int) ((t.noteSeconds + 0.012) * rate);
+        for (int i = 0; i < (int) (holdSeconds * rate); ++i)
+            audio[(size_t) (start + i)] += 0.5f * std::exp (-2.0f * (float) i / (float) rate)
+                                         * (float) (std::sin (juce::MathConstants<double>::twoPi * hz * i / rate)
+                                                    + 0.4 * std::sin (juce::MathConstants<double>::twoPi * hz * (2.0 + recording) * i / rate + recording));
+    }
+    const auto report = analyse (audio.data(), (int) audio.size(), rate);
+    INFO (report.summary());
+    REQUIRE (report.error.isEmpty());
+    REQUIRE (report.results.size() == 6);
+    CHECK (report.results[0].different == 4);
+    CHECK (report.results[0].inTurn);
+    CHECK (report.results[0].describe().startsWith ("Sustain, low A open, hard, down: 4 different, in turn (1 2 3 4 1 2 3 4"));
+    CHECK (report.results[1].stroke == Stroke::up);
+    CHECK (report.results[2].different == 3);
+    CHECK (report.results[4].different == 8);
+    CHECK (report.results[4].inTurn);
+    CHECK (report.fewest() == 3);
+    std::vector<float> silence (audio.size(), 0.0f);
+    CHECK (analyse (silence.data(), (int) silence.size(), rate).error.isNotEmpty());
+}
+
+// PARAGON_RR_CHECK=<render of the check list> ./GuitarCoreTests "[rr-check]": what it says about the instrument.
+TEST_CASE ("Analyse a render of the round-robin check list", "[.][rr-check]")
+{
+    const auto report = renders::rrcheck::analyseFile (juce::File (juce::SystemStats::getEnvironmentVariable ("PARAGON_RR_CHECK", "")));
+    std::cout << report.summary() << "\nFewest different takes of a stroke: " << report.fewest() << std::endl;
+}
+
+TEST_CASE ("THE ENGINE 0.3.0: VARIATION: each note a touch different in level, start and tuning; none at 0", "[guitar][engine]")
+{
+    const auto levels = [] (float variation)
+    {
+        Player p;
+        p.settings.pick = PickMode::down;
+        p.settings.variation = variation;
+        std::vector<double> result;
+        for (int i = 0; i < 12; ++i)
+        {
+            p.left.clear();
+            p.play (0.25, { { Player::off (45), 0 }, { Player::on (45, 120), 1 } });
+            result.push_back (levelAt (p.left, 110.0, 2400, 9600));
+        }
+        return result;
+    };
+    // Off: every note the take's own level (1.0: the hard dynamic's down takes here).
+    for (const auto l : levels (0.0f))
+        CHECK_THAT (l, WithinAbs (1.0, 0.01));
+    // Full: within half a dB either way, and not all alike.
+    const auto varied = levels (1.0f);
+    auto lowest = 10.0, highest = 0.0;
+    for (const auto l : varied)
+    {
+        CHECK (std::abs (db (l)) < 0.55);
+        lowest = std::min (lowest, l);
+        highest = std::max (highest, l);
+    }
+    CHECK (db (highest) - db (lowest) > 0.2);
 }

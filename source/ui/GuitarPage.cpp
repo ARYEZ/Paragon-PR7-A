@@ -5,7 +5,7 @@
 
 namespace
 {
-    constexpr int perString = guitar::Library::takesPerString;   // a string's takes (300)
+    constexpr int perString = guitar::Library::takesPerString;   // a string's takes (600)
 
     bool isAudio (const juce::String& path)
     {
@@ -23,6 +23,9 @@ GuitarPage::GuitarPage (ParagonX1AudioProcessor& p)
       transpose (p.getParameters(), ParamIDs::transpose, "TRANSPOSE", "Moves every note played (not the keyswitches)."),
       velToVol (p.getParameters(), ParamIDs::velocityToVolume, "VEL > VOL", "How much velocity changes the level within a dynamic (velocity always picks the dynamic)."),
       release (p.getParameters(), ParamIDs::release, "RELEASE", "How quickly a string stops when its note ends."),
+      variation (p.getParameters(), ParamIDs::variation, "VARIATION",
+                 "Each note a little different, as no two picks are: a touch later into its take, a touch louder or quieter, "
+                 "a few cents sharp or flat. Fully down: the takes exactly as recorded."),
       tone (p.getParameters(), ParamIDs::tone, "TONE", "A gentle low-pass on the whole guitar; fully up: open."),
       level (p.getParameters(), ParamIDs::patchLevel, "LEVEL", "The preset's own level.")
 {
@@ -30,7 +33,7 @@ GuitarPage::GuitarPage (ParagonX1AudioProcessor& p)
         addAndMakeVisible (c);
     for (auto* c : { &fretMode, &pickMode, &forceString, &hand, &transpose })
         playing.addAndMakeVisible (c);
-    for (auto* c : { &velToVol, &release, &tone, &level })
+    for (auto* c : { &velToVol, &release, &variation, &tone, &level })
         sound.addAndMakeVisible (c);
 
     folderLabel.setColour (juce::Label::textColourId, ParagonColours::text);
@@ -47,8 +50,8 @@ GuitarPage::GuitarPage (ParagonX1AudioProcessor& p)
         guitarPanel.addAndMakeVisible (c);
 
     renderHelp.setText ("Render each string's list through your guitar instrument as a DI (its effects off, one guitar, no "
-                        "anti-repetition, ringing or release noises), then import the audio. Each string: 25 frets x 3 dynamics x 2 "
-                        "round-robins of down and up, about 28 minutes.", juce::dontSendNotification);
+                        "anti-repetition, ringing or release noises), then import the audio. Each string: 25 frets x 3 dynamics x 4 "
+                        "round-robins of down and up, about 55 minutes.", juce::dontSendNotification);
     renderHelp.setColour (juce::Label::textColourId, ParagonColours::textDim);
     renderHelp.setFont (juce::FontOptions (13.0f));
     renderHelp.setJustificationType (juce::Justification::topLeft);
@@ -145,7 +148,7 @@ void GuitarPage::resized()
     renders.setBounds (area);
 
     SynthPanel::layoutRow (playing.getContentArea().withHeight (ParamControl::knobHeight + 20), { &fretMode, &pickMode, &forceString, &hand, &transpose });
-    SynthPanel::layoutRow (sound.getContentArea().withHeight (ParamControl::knobHeight + 20), { &velToVol, &release, &tone, &level });
+    SynthPanel::layoutRow (sound.getContentArea().withHeight (ParamControl::knobHeight + 20), { &velToVol, &release, &variation, &tone, &level });
     {
         auto c = guitarPanel.getContentArea();
         folderLabel.setBounds (c.removeFromTop (24));

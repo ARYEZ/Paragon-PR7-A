@@ -1,8 +1,11 @@
 #include "guitar/RenderImport.h"
+#include "guitar/RoundRobinCheck.h"
 
 #include <juce_audio_formats/juce_audio_formats.h>
 
 #include <algorithm>
+#include <map>
+#include <tuple>
 #include <cmath>
 
 namespace guitar::renders
@@ -39,6 +42,8 @@ namespace guitar::renders
             s << ", " << outOfTune.size() << " out of tune";
         if (silent > 0)
             s << ", " << silent << " silent (left out)";
+        if (copies > 0)
+            s << ", " << copies << " copies of other takes left out (as few as " << fewestRoundRobins << " different per stroke)";
         return s;
     }
 
@@ -168,9 +173,44 @@ namespace guitar::renders
             return report;
         }
 
+        // COPIES: each note, dynamic and stroke's round-robins compared; a copy of an earlier one isn't saved.
+        std::vector<bool> keep (cuts.size(), true);
+        report.fewestRoundRobins = numRoundRobins;
+        {
+            std::map<std::tuple<int, int, int>, std::vector<size_t>> sets;
+            for (size_t i = 0; i < cuts.size(); ++i)
+                sets[{ cuts[i].take->fret, cuts[i].take->layer, (int) cuts[i].take->stroke }].push_back (i);
+            const auto compare = toSample (prerollSeconds + rrcheck::compareSeconds);
+            for (const auto& [key, members] : sets)
+            {
+                std::vector<std::vector<float>> heads;
+                for (const auto i : members)
+                    heads.emplace_back (cuts[i].samples.begin(), cuts[i].samples.begin() + std::min ((size_t) compare, cuts[i].samples.size()));
+                const auto ids = rrcheck::sameAs (heads, sampleRate);
+                std::vector<bool> seen (ids.size(), false);
+                auto different = 0;
+                for (size_t k = 0; k < ids.size(); ++k)
+                {
+                    if (seen[(size_t) ids[k]])
+                    {
+                        keep[members[k]] = false;
+                        ++report.copies;
+                    }
+                    else
+                    {
+                        seen[(size_t) ids[k]] = true;
+                        ++different;
+                    }
+                }
+                report.fewestRoundRobins = std::min (report.fewestRoundRobins, different);
+            }
+        }
+
         juce::WavAudioFormat wav;
         for (size_t i = 0; i < cuts.size(); ++i)
         {
+            if (! keep[i])
+                continue;
             const auto file = guitarFolder.getChildFile (takeFileName (articulation, *cuts[i].take));
             file.getParentDirectory().createDirectory();
             file.deleteFile();

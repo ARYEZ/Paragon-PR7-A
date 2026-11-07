@@ -53,6 +53,7 @@ target_sources(ParagonX1
         source/guitar/Fretting.cpp
         source/guitar/RenderList.cpp
         source/guitar/RenderImport.cpp
+        source/guitar/RoundRobinCheck.cpp
         source/guitar/GuitarLibrary.cpp
         source/guitar/Guitar.cpp
         source/rigs/Rig.cpp

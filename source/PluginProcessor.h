@@ -198,6 +198,7 @@ private:
     std::atomic<float>* velToVolValue = nullptr;
     std::atomic<float>* releaseValue = nullptr;
     std::atomic<float>* transposeValue = nullptr;
+    std::atomic<float>* variationValue = nullptr;
     std::atomic<float>* patchLevelValue = nullptr;
     std::atomic<float>* outputValue = nullptr;
     std::atomic<float>* bypassValue = nullptr;

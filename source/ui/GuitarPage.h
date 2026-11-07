@@ -32,7 +32,7 @@ private:
 
     ParagonX1AudioProcessor& processor;
     SynthPanel playing { "PLAYING" }, sound { "SOUND" }, guitarPanel { "THE GUITAR" }, renders { "RENDERS" };
-    ParamControl fretMode, pickMode, forceString, hand, transpose, velToVol, release, tone, level;
+    ParamControl fretMode, pickMode, forceString, hand, transpose, velToVol, release, variation, tone, level;
     juce::Label folderLabel, guitarStatus, renderHelp;
     juce::TextButton chooseButton { "CHOOSE FOLDER..." }, reloadButton { "RELOAD" }, saveAllButton { "SAVE ALL LISTS..." };
     std::vector<std::unique_ptr<StringRow>> rows;

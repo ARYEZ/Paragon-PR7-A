@@ -49,7 +49,7 @@ namespace guitar
         Found find (Articulation, int string, int fret, int layer, Stroke, int roundRobin = 0) const noexcept;
 
         int count (Articulation, int string) const noexcept;   // takes imported for a string (of takesPerString)
-        static constexpr int takesPerString = (numFrets + 1) * renders::numLayers * 2 * renders::numRoundRobins;   // 300
+        static constexpr int takesPerString = (numFrets + 1) * renders::numLayers * 2 * renders::numRoundRobins;   // 600
         int total() const noexcept;
         bool isEmpty() const noexcept { return total() == 0; }
         const juce::File& getFolder() const noexcept { return folder; }

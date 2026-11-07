@@ -30,6 +30,7 @@ namespace
             p.useRigFolder (folder.getChildFile ("Rigs"));
             p.setPlayConfigDetails (0, 2, sampleRate, blockSize);
             p.setNonRealtime (true);   // as bouncing: streamed takes wait for the disk (blocks here run far faster than real time)
+            p.getParameters().getParameter (ParamIDs::variation)->setValueNotifyingHost (0.0f);   // the takes exactly (levels measured)
             p.prepareToPlay (sampleRate, blockSize);
         }
         // Plays `blocks` blocks, `events` (note, velocity: 0 off) at the first block's start; MAIN's left channel back.
@@ -60,9 +61,11 @@ namespace
         {
             const auto hz = guitar::frequencyOf (take.note());
             const auto start = (int) ((take.noteSeconds + 0.015) * rate);
+            const auto overtone = hz * (2.0 + take.roundRobin);   // each round-robin its own recording
             for (int i = 0; i < (int) (renders::holdSeconds * rate); ++i)
                 audio[(size_t) (start + i)] += (0.2f + 0.3f * (float) take.layer) * std::exp (-0.6f * (float) i / (float) rate)
-                                             * (float) std::sin (juce::MathConstants<double>::twoPi * hz * i / rate);
+                                             * (float) (std::sin (juce::MathConstants<double>::twoPi * hz * i / rate)
+                                                        + (overtone < 3600.0 ? 0.3 * std::sin (juce::MathConstants<double>::twoPi * overtone * i / rate) : 0.0));
         }
         juce::WavAudioFormat wav;
         file.deleteFile();
@@ -131,15 +134,17 @@ TEST_CASE ("THE PLUGIN: a render imported, the guitar folder loaded, notes playe
     const auto render = fakeRenderFile (2, t.folder.getChildFile ("A string.wav"));
     t.p.startImport (render, Articulation::sustain, 2);
     REQUIRE (t.p.waitUntilIdle (60000));
-    CHECK (t.p.getImportReport (2) == "300 notes imported, all in tune");
-    CHECK (t.p.getLibrary()->count (Articulation::sustain, 2) == 300);
+    CHECK (t.p.getImportReport (2) == "600 notes imported, all in tune");
+    CHECK (t.p.getLibrary()->count (Articulation::sustain, 2) == 600);
     CHECK (guitarFolder.getChildFile ("Sustain/s2_f00_l1_d_r0.wav").existsAsFile());
     CHECK (t.p.getImportReport (3).isEmpty());
 
     // A2 on the A string at its pitch, at OUTPUT's -6 dB; the guitar says where it's played.
     t.play (1, { { 45, 120 } });
     const auto out = t.play (100);
-    CHECK_THAT (frequencyOf (out, 4000, 24000), WithinAbs (110.0, 0.3));
+    const auto atPitch = levelAt (out, 110.0, 4000, 19200);
+    CHECK (atPitch > 0.1);                                    // A2's pitch...
+    CHECK (levelAt (out, 116.5, 4000, 19200) < 0.2 * atPitch);   // ... not a semitone off (that would be as loud)
     const auto level = rms (out, 4000, 24000);
     CHECK (level > 0.1);
     CHECK (t.p.getGuitar().getSounding (2).fret == 0);
@@ -312,7 +317,7 @@ TEST_CASE ("THE WINDOW: GUITAR, PRESETS and SETTINGS tabs; the GUITAR page; the 
     CHECK (view->getFretboard().isVisible());
 
     // The rows of RENDERS: each string's, what's there for it.
-    CHECK (view->getGuitarPage().getRow (0).getStatus() == "25 of 300 takes");
+    CHECK (view->getGuitarPage().getRow (0).getStatus() == "25 of 600 takes");
     view->getGuitarPage().refresh();
     CHECK (view->getGuitarPage().getGuitarStatus().contains ("175 takes"));
 

@@ -15,6 +15,9 @@
 //   - CHECKED: each take's pitch is measured (an autocorrelation a moment after the pick) against the note the list
 //     asked for. More than 30% out (over 40 cents) or a render too short means the wrong file (another string's, or
 //     not rendered to the end): nothing is saved, and the report says so. A few out are listed but saved.
+//   - COPIES (0.3.0): the round-robins of each note, dynamic and stroke compared (rrcheck::sameAs): a take that's the same
+//     recording as an earlier one (the instrument has fewer round-robins than the list asks for) isn't saved, so the
+//     guitar never takes a copy for variety; the report says how many different takes there were.
 namespace guitar::renders
 {
     inline constexpr double prerollSeconds = 0.03;
@@ -25,6 +28,8 @@ namespace guitar::renders
     {
         juce::String error;                         // empty: imported
         int written = 0, silent = 0;
+        int copies = 0;                             // takes left out: the same recording as another round-robin
+        int fewestRoundRobins = 0;                  // the fewest different takes any note's stroke had
         double offsetSeconds = 0.0;
         juce::StringArray outOfTune;                // "fret 5, soft, down: +62 cents"
         bool ok() const noexcept { return error.isEmpty(); }

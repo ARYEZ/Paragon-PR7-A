@@ -7,6 +7,7 @@ namespace
     using ToText = std::function<juce::String (float, int)>;
 
     constexpr int firstVersion = 1;   // PR7-I 0.2.0
+    constexpr int v030 = 2;           // PR7-I 0.3.0: VARIATION
 
     const ToText asDb = [] (float value, int) { return juce::String (value, 1) + " dB"; };
     const ToText asPercent = [] (float value, int) { return juce::String (juce::roundToInt (value * 100.0f)) + "%"; };
@@ -68,5 +69,6 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
          [] (float s, int) { return juce::String (juce::roundToInt (s * 1000.0f)) + " ms"; });
     add (layout, transpose, "Transpose", { -12.0f, 12.0f, 1.0f }, 0.0f,
          [] (float v, int) { const auto st = juce::roundToInt (v); return (st > 0 ? "+" : "") + juce::String (st) + " st"; });
+    add (layout, variation, "Variation", { 0.0f, 1.0f, 0.01f }, 0.5f, asPercent, v030);
     return layout;
 }

@@ -25,7 +25,7 @@
 namespace guitar::renders
 {
     inline constexpr int numLayers = 3;
-    inline constexpr int numRoundRobins = 2;   // takes of each stroke (so 4 per note and dynamic: down, up, down, up)
+    inline constexpr int numRoundRobins = 4;   // takes of each stroke (8 per note and dynamic); the owner: "at least four"
     // The dynamics' velocities: sustain stays at 119 or below (above it the reference plays its rake and pinch harmonic).
     inline constexpr std::array<int, numLayers> layerVelocities { 45, 85, 118 };
     inline constexpr double bpm = 120.0;

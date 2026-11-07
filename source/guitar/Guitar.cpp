@@ -122,9 +122,6 @@ namespace guitar
         const auto stroke = pick == PickMode::down ? Stroke::down : pick == PickMode::up ? Stroke::up : nextStroke;
         nextStroke = stroke == Stroke::down ? Stroke::up : Stroke::down;
         lastStrokePlayed = stroke;
-        auto& rrCounter = nextRoundRobin[stroke == Stroke::down ? 0u : 1u];
-        const auto roundRobin = rrCounter;
-        rrCounter = (rrCounter + 1) % renders::numRoundRobins;
 
         for (size_t i = 0; i < (size_t) chord.count; ++i)
         {
@@ -132,23 +129,46 @@ namespace guitar
             if (! p.valid())
                 continue;
             last = p;
-            if (const auto old = onString[(size_t) p.string]; old >= 0)
-                stopVoice (voices[(size_t) old], stopSeconds);
+            // The string picked again: whatever it was still doing stops (held, or still ringing out its release).
+            for (auto& other : voices)
+                if (other.active && other.string == p.string)
+                    stopVoice (other, stopSeconds);
             const auto velocity = chord.velocities[i];
             const auto layer = layerFor (velocity);
-            const auto found = library != nullptr ? library->find (Articulation::sustain, p.string, p.fret, layer, stroke, roundRobin) : Library::Found {};
+            // A round-robin at random, never the take played last on this string.
+            Library::Found found;
+            if (library != nullptr)
+            {
+                const auto first = random.nextInt (renders::numRoundRobins);
+                for (int k = 0; k < renders::numRoundRobins; ++k)
+                {
+                    const auto candidate = library->find (Articulation::sustain, p.string, p.fret, layer, stroke, (first + k) % renders::numRoundRobins);
+                    if (k == 0 || (found.take == lastOnString[(size_t) p.string] && candidate.take != nullptr))
+                        found = candidate;
+                    if (found.take != lastOnString[(size_t) p.string])
+                        break;
+                }
+            }
             if (found.take == nullptr)
                 continue;
+            lastOnString[(size_t) p.string] = found.take;
             lastTakePlayed = found.take;
             auto& v = freeVoice();
             v = {};
-            v.active = v.held = true;
+            v.active = v.held = true;   // (VARIATION below may start it a little in)
             v.string = p.string;
             v.note = chord.notes[i];
             v.take = found.take;
             v.step = found.take->sampleRate / rate * found.pitchRatio;
             const auto ratio = (double) velocity / (double) renders::layerVelocities[(size_t) layer];
             v.gain = (float) juce::jlimit (0.05, 2.0, std::pow (ratio, 1.5 * (double) s.velocityToVolume));
+            if (s.variation > 0.0f)
+            {
+                // VARIATION: a little later into the take, a little louder or quieter, a little sharp or flat.
+                v.position = (double) s.variation * random.nextDouble() * 0.003 * found.take->sampleRate;
+                v.gain *= juce::Decibels::decibelsToGain (s.variation * (random.nextFloat() - 0.5f));
+                v.step *= std::pow (2.0, (double) s.variation * (random.nextDouble() * 6.0 - 3.0) / 1200.0);
+            }
             v.age = ++clock;
             if (found.take->stream != nullptr && s.streamer != nullptr)
                 if ((v.stream = s.streamer->claim (*found.take->stream)) >= 0)

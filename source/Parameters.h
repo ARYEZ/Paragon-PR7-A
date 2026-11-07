@@ -26,6 +26,7 @@ namespace ParamIDs
     inline constexpr auto velocityToVolume = "velToVol";
     inline constexpr auto release        = "release";         // seconds: a note-off damping its string
     inline constexpr auto transpose      = "transpose";       // semitones
+    inline constexpr auto variation      = "variation";       // 0.3.0 (hint 2): each note a little different (guitar::Settings::variation)
 
     inline const juce::StringArray fretModeNames { "Natural", "Polyphonic" };
     inline const juce::StringArray pickModeNames { "Alternate", "Down", "Up" };
