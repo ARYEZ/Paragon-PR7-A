@@ -2,6 +2,15 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.4.2
+
+**Repeated palm mutes no longer machine-gun.** On a chug, the same palm-mute take kept coming back several times in a row. That was a bug, and this fixes it.
+
+- **What was wrong:** your palm-mute import kept only the different takes. That's about 3 or 4 per stroke on most notes; the rest were exact copies and left out. But PR7-I still counted through all 8 take slots, and an empty slot fell back to the first take. So eight chugs on one note played take 1, 2, 3, then take 1 five times running.
+- **Now** PR7-I steps through only the takes a note actually has, in turn: 1, 2, 3, 1, 2, 3. That's the same in-turn order you liked in 0.2.0, just without the empty slots. Sustain sounds exactly as before, because both of its takes are always there.
+- **NOW PLAYING** counts the takes that are there ("take 2 of 3"), not the 8 slots.
+- **What can't be checked here:** how much closer this gets your chugs to your guitar instrument. Tested with made-up takes only.
+
 ## 0.4.1
 
 **A fix for the tabs.** Clicking a tab could leave the page you came from lit as well, as in your screenshot where GUITAR and RENDERS were both lit on the RENDERS page.

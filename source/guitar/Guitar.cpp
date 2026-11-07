@@ -218,7 +218,9 @@ namespace guitar
             {
                 auto& counter = nextRoundRobin[(size_t) a][stroke == Stroke::down ? 0u : 1u];
                 r = counter;
-                counter = (counter + 1) % renders::spec (a).roundRobins;
+                // (0.4.2: counted on past the round-robins rendered, to 840 (every count 1-8 divides it), so a note
+                // with fewer takes than that, its copies left out, still steps through them evenly: Library::at.)
+                counter = (counter + 1) % 840;
             }
             return r;
         };
@@ -313,8 +315,10 @@ namespace guitar
                 // whichever came first in the event list).
                 shown = true;
                 const auto& spec = renders::spec (articulation);
-                const auto r = roundRobins[(size_t) articulation] >= 0 ? roundRobins[(size_t) articulation] : 0;
-                const int values[] = { chord.sources[i], chord.inputVelocities[i], velocity, layer, spec.layers, r, spec.roundRobins,
+                // Which of the note's different takes (0.4.2: of those there, as Library::at steps through them).
+                const auto there = library != nullptr ? juce::jmax (1, library->roundRobinsOf (articulation, p.string, p.fret, layer, stroke)) : 1;
+                const auto r = (roundRobins[(size_t) articulation] >= 0 ? roundRobins[(size_t) articulation] : 0) % there;
+                const int values[] = { chord.sources[i], chord.inputVelocities[i], velocity, layer, spec.layers, r, there,
                                        p.string, p.fret, chord.count, (int) articulation, (stroke == Stroke::up ? 1 : 0) | (chord.power[i] ? 2 : 0) };
                 for (size_t k = 0; k < nowPlaying.size(); ++k)
                     nowPlaying[k] = values[k];

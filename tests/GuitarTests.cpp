@@ -994,3 +994,64 @@ TEST_CASE ("POLY WINDOW 0.4.0: everything a window late; notes within it one cho
     CHECK (run ({ { Player::on (45), 0 }, { Player::off (45), 50 }, { Player::on (45), 100 } }, 240)
            == std::vector<E> { { 240, 45, true }, { 290, 45, false }, { 340, 45, true } });
 }
+
+TEST_CASE ("0.4.2: a note whose copies were left out plays the takes it has evenly in turn (not its first over and over)", "[guitar][engine]")
+{
+    // A palm-muted low A with three different down takes (and two up) kept, as an import with copies left out leaves it.
+    auto library = std::make_shared<Library>();
+    std::vector<const Take*> downs, ups;
+    for (int l = 0; l < renders::spec (Articulation::mute).layers; ++l)
+        for (const auto stroke : { Stroke::down, Stroke::up })
+            for (int rr = 0; rr < (stroke == Stroke::down ? 3 : 2); ++rr)
+            {
+                auto take = std::make_shared<Take>();
+                take->sampleRate = 8000.0;
+                for (int i = 0; i < 2400; ++i)
+                    take->head.push_back (0.2f * (float) std::sin (juce::MathConstants<double>::twoPi * 55.0 * i / 8000.0 + rr));
+                take->frames = (juce::int64) take->head.size();
+                take->loudness = 0.1f;   // (so the library keeps this very take, not a measured copy)
+                library->add (Articulation::mute, 0, 0, l, stroke, rr, take);
+                if (l == 1)
+                    (stroke == Stroke::down ? downs : ups).push_back (take.get());
+            }
+    const auto chug = [&] (PickMode pick, int notes)
+    {
+        Guitar g;
+        g.prepare (sampleRate);
+        Settings s;
+        s.library = library.get();
+        s.keyMap = KeyMap::factory;
+        s.pick = pick;
+        std::vector<const Take*> played;
+        std::vector<float> l (blockSize), r (blockSize);
+        juce::MidiBuffer ks;
+        ks.addEvent (juce::MidiMessage::noteOn (1, 13, (juce::uint8) 100), 0);   // C#-1: palm mute (factory map)
+        g.process (l.data(), r.data(), blockSize, ks, 0, s);
+        for (int i = 0; i < notes; ++i)
+        {
+            juce::MidiBuffer midi;
+            midi.addEvent (juce::MidiMessage::noteOn (1, 33, (juce::uint8) 38), 0);   // the 2nd degree of muting
+            g.process (l.data(), r.data(), blockSize, midi, 0, s);
+            played.push_back (g.lastTake());
+            // NOW PLAYING counts the takes there: "take 1 of 3" for a down, "of 2" for an up
+            const auto now = g.getNowPlaying();
+            CHECK (now.roundRobins == (now.stroke == Stroke::down ? 3 : 2));
+            CHECK (now.roundRobin < now.roundRobins);
+        }
+        return played;
+    };
+    // All downs: the three takes in turn, each a third of the time, never twice running.
+    const auto d = chug (PickMode::down, 12);
+    for (size_t i = 0; i < d.size(); ++i)
+    {
+        INFO (i);
+        CHECK (d[i] == downs[i % 3]);
+    }
+    // Alternate: downs 1 2 3, ups 1 2, each in turn.
+    const auto a = chug (PickMode::alternate, 12);
+    for (size_t i = 0; i < a.size(); ++i)
+    {
+        INFO (i);
+        CHECK (a[i] == (i % 2 == 0 ? downs[(i / 2) % 3] : ups[(i / 2) % 2]));
+    }
+}

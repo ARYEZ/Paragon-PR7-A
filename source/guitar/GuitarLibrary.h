@@ -53,6 +53,7 @@ namespace guitar
         const Take* exact (Articulation, int string, int fret, int layer, Stroke, int roundRobin) const noexcept;
 
         int count (Articulation, int string) const noexcept;   // takes imported for a string (of takesPerString)
+        int roundRobinsOf (Articulation, int string, int fret, int layer, Stroke) const noexcept;   // 0.4.2: the different takes there
         static int takesPerString (Articulation a) noexcept   // sustain 300
         {
             return (numFrets + 1) * renders::spec (a).layers * 2 * renders::spec (a).roundRobins;

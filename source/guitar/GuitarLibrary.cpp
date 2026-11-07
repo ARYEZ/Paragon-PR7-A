@@ -87,13 +87,19 @@ namespace guitar
 
     const Take* Library::at (int a, int s, int f, int l, int k, int rr) const noexcept
     {
-        // The round-robin asked for, else another of the same stroke.
+        // 0.4.2: the round-robin counter steps through the takes that are THERE (rr modulo how many), so a note whose
+        // copies were left out on import (palm mutes: 3-4 different takes of a stroke out of 8 rendered) still plays its
+        // takes evenly in turn: 1 2 3 1 2 3. Until 0.4.1 a missing slot fell back to the next one there, the first take,
+        // so a chug went 1 2 3 1 1 1 1 1: the machine gun the owner heard on repeated palm mutes. With every slot there
+        // (sustain's two) this is exactly the old order.
         const auto& rrs = takes[(size_t) a][(size_t) s][(size_t) f][(size_t) l][(size_t) k];
         const auto n = renders::spec ((Articulation) a).roundRobins;
+        std::array<const Take*, renders::maxRoundRobins> there {};
+        auto count = 0;
         for (int i = 0; i < n; ++i)
-            if (const auto* t = rrs[(size_t) ((rr + i) % n)].get())
-                return t;
-        return nullptr;
+            if (const auto* t = rrs[(size_t) i].get())
+                there[(size_t) count++] = t;
+        return count > 0 ? there[(size_t) (juce::jmax (0, rr) % count)] : nullptr;
     }
 
     const Take* Library::anyLayer (int a, int s, int f, int layer, int stroke, int rr) const noexcept
@@ -131,6 +137,16 @@ namespace guitar
                 if (const auto* t = anyLayer (a, s, f, layer, k, rr))
                     return { t, 1.0, false };
         return {};
+    }
+
+    int Library::roundRobinsOf (Articulation a, int string, int fret, int layer, Stroke stroke) const noexcept
+    {
+        if (string < 0 || string >= numStrings || fret < 0 || fret > numFrets || layer < 0 || layer >= renders::maxLayers)
+            return 0;
+        auto n = 0;
+        for (const auto& t : takes[(size_t) a][(size_t) string][(size_t) fret][(size_t) layer][stroke == Stroke::down ? 0u : 1u])
+            n += t != nullptr ? 1 : 0;
+        return n;
     }
 
     int Library::count (Articulation a, int string) const noexcept
