@@ -3,6 +3,7 @@
 #include "TestUtils.h"
 
 #include "PluginProcessor.h"
+#include "PluginTestUtils.h"
 #include "ui/DrumPage.h"
 #include "dsp/effects/Drive.h"
 
@@ -15,6 +16,7 @@ namespace
         {
             processor.setPlayConfigDetails (0, 2, sampleRate, blockSize);
             processor.prepareToPlay (sampleRate, blockSize);
+            testkit::useRootKeys (processor);   // (0.59.0: ROOT's keys, as these tests play them)
             processor.seedRandomForTest (1);
         }
         void set (const juce::String& id, float value)

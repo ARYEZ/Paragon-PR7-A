@@ -57,6 +57,7 @@ namespace
         {
             processor.setPlayConfigDetails (0, 2, sampleRate, blockSize);
             processor.prepareToPlay (sampleRate, blockSize);
+            testkit::useRootKeys (processor);   // (0.59.0: ROOT's keys, as these tests play them)
             processor.useRigFolder (presets);
         }
         void set (const juce::String& id, float value) { testkit::set (processor, id, value); }

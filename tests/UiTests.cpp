@@ -5,6 +5,7 @@
 #include "Parameters.h"
 #include "PluginEditor.h"
 #include "PluginProcessor.h"
+#include "PluginTestUtils.h"
 
 using Catch::Matchers::WithinAbs;
 
@@ -70,6 +71,7 @@ namespace
     {
         Window()
         {
+            testkit::useRootKeys (processor);   // (0.59.0: ROOT's keys, as these tests play them)
             editor.reset (processor.createEditor());
             editor->setSize (1600, 900);
             view = dynamic_cast<MainView*> (editor->getChildComponent (0));

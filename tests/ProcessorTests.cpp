@@ -18,6 +18,7 @@ namespace
         auto processor = std::make_unique<ParagonX1AudioProcessor>();
         processor->setPlayConfigDetails (0, outputs, sampleRate, blockSize);
         processor->prepareToPlay (sampleRate, blockSize);
+        testkit::useRootKeys (*processor);   // (0.59.0: ROOT's keys, as these tests play them)
         return processor;
     }
 

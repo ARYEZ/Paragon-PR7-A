@@ -3,6 +3,7 @@
 #include "TestUtils.h"
 
 #include "PluginProcessor.h"
+#include "PluginTestUtils.h"
 #include "ui/DrumPage.h"
 #include "ui/KitView.h"
 
@@ -23,6 +24,7 @@ namespace
         {
             processor.setPlayConfigDetails (0, 2, sampleRate, blockSize);
             processor.prepareToPlay (sampleRate, blockSize);
+            testkit::useRootKeys (processor);   // (0.59.0: ROOT's keys, as these tests play them)
             processor.useRigFolder (presets);
         }
         void run (double seconds, juce::MidiBuffer midi = {})

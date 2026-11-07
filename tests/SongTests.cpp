@@ -73,6 +73,7 @@ namespace
             p.useRigFolder (folder);
             p.setPlayConfigDetails (0, 2, sampleRate, blockSize);
             p.prepareToPlay (sampleRate, blockSize);
+            testkit::useRootKeys (p);   // (0.59.0: ROOT's keys, as these tests play them)
             // The kick and snare play a short steady burst (20 ms, full from its first sample): each hit shows where it starts.
             const auto burst = testkit::tone ([] (double) { return 1.0; }, 100.0, 0.02, 0.5f, 1, sampleRate);
             testkit::useSample (p, BD, burst);

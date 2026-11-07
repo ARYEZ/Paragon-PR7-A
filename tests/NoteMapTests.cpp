@@ -55,6 +55,7 @@ namespace
         {
             processor.setPlayConfigDetails (0, 2, sampleRate, blockSize);
             processor.prepareToPlay (sampleRate, blockSize);
+            testkit::useRootKeys (processor);   // (0.59.0: ROOT's keys, as these tests play them)
             processor.seedRandomForTest (1);
         }
         void set (const juce::String& id, float value) { testkit::set (processor, id, value); }
@@ -115,7 +116,11 @@ TEST_CASE ("NOTE MAP: General MIDI's drums on their notes", "[notemap]")
 TEST_CASE ("NOTE MAP in the plugin: each layout's notes play their drums; ROOT as before", "[notemap]")
 {
     Plugin p;
-    CHECK (p.processor.getMapLayout() == Layout::root);   // a new PR7-D plays as 0.1.0 did
+    {
+        ParagonX1AudioProcessor fresh;
+        CHECK (fresh.getMapLayout() == Layout::grooveLibrary);   // 0.59.0: a new PR7-D starts on the owner's map
+    }
+    CHECK (p.processor.getMapLayout() == Layout::root);   // (the helper put it on ROOT)
     CHECK (p.sounding (36) == std::vector<int> { BD });
     CHECK (p.sounding (48) == std::vector<int> { RD });   // ROOT + 12: the first slot 0.2.0 added
     CHECK (p.sounding (22).empty());

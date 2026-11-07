@@ -2,6 +2,14 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.59.0
+
+**A new PR7-D starts on GROOVE LIBRARY** (your map, from 0.58.0), since it's the map you'll use for everything. Before, a new instance started on ROOT.
+
+- **What starts on it:** every PR7-D you add to a project from now on, and the factory presets loaded into it. The map isn't part of a preset, so loading a preset doesn't change it.
+- **Projects you've already saved keep the map they were saved with.** If one was on ROOT, it stays on ROOT, so MIDI written for ROOT's keys still plays the same drums. To move one over: SETTINGS > MIDI IN / E-DRUMS > MAP > Groove Library, then save the project.
+- **ROOT is still there** under MAP. The drum sequencer's KEY mode (four keys below ROOT starting patterns) still works only on ROOT.
+
 ## 0.58.0
 
 **GROOVE LIBRARY is now your full map, note for note** (you sent the complete MIDI mapping of your big progressive kit, notes 0 to 127, and asked for ours to match exactly). Choose **Groove Library** under SETTINGS > MIDI IN / E-DRUMS > MAP.

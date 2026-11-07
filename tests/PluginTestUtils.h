@@ -60,6 +60,10 @@ namespace testkit
         parameter->setValueNotifyingHost (parameter->convertTo0to1 (plainValue));
     }
 
+    // 0.59.0: a new PR7-D starts on GROOVE LIBRARY. Tests that play the kit on ROOT's keys (keyFor: 36 + slot) put it
+    // on ROOT first.
+    inline void useRootKeys (ParagonX1AudioProcessor& processor) { set (processor, ParamIDs::drumsMap, 0.0f); }
+
     // Slot `slot` plays `sample` as recorded: SAMPLE, PITCH 0, DECAY / TONE / SNAP at their neutral middle.
     inline void useSample (ParagonX1AudioProcessor& processor, int slot, std::shared_ptr<const synth::drums::Sample> sample)
     {
