@@ -79,6 +79,11 @@ target_sources(ParagonX1
         source/dsp/synth/DiskStreamer.cpp
         source/dsp/synth/Instrument.cpp
         source/dsp/synth/RenderImport.cpp
+        source/guitar/Fretting.cpp
+        source/guitar/RenderList.cpp
+        source/guitar/RenderImport.cpp
+        source/guitar/GuitarLibrary.cpp
+        source/guitar/Guitar.cpp
         # The effects: PR7-E's rack (ECHELON, DOMINION, CONSTRICTOR, the LIMITER) and PR7-G's sends and inserts.
         source/dsp/dominion/Dominion.cpp
         source/dsp/effects/Compressor.cpp

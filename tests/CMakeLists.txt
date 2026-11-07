@@ -6,6 +6,7 @@ FetchContent_MakeAvailable(catch2)
 
 add_executable(ParagonX1Tests
     TestMain.cpp
+    GuitarTests.cpp
     DrumTests.cpp
     DrumKitTests.cpp
     DrumSeqTests.cpp
@@ -60,3 +61,19 @@ target_compile_definitions(ParagonX1Tests PRIVATE
 include(${catch2_SOURCE_DIR}/extras/Catch.cmake)
 catch_discover_tests(ParagonX1Tests)
 
+
+# The guitar's own code alone (PR7-I 0.2.0): its tests built without the plugin (quick to build while working on it).
+add_executable(GuitarCoreTests
+    TestMain.cpp
+    GuitarTests.cpp
+    ../source/guitar/Fretting.cpp
+    ../source/guitar/RenderList.cpp
+    ../source/guitar/RenderImport.cpp
+    ../source/guitar/GuitarLibrary.cpp
+    ../source/guitar/Guitar.cpp
+    ../source/dsp/synth/DiskStreamer.cpp)
+target_include_directories(GuitarCoreTests PRIVATE ../source)
+target_compile_definitions(GuitarCoreTests PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_STANDALONE_APPLICATION=1
+    JUCE_USE_MP3AUDIOFORMAT=0 JUCE_MODAL_LOOPS_PERMITTED=1)
+target_link_libraries(GuitarCoreTests PRIVATE juce::juce_audio_formats juce::juce_dsp juce::juce_gui_basics Catch2::Catch2
+    juce::juce_recommended_config_flags)
