@@ -14,6 +14,10 @@ namespace ParamIDs
     inline constexpr auto bypass     = "bypass";
     // NOTE NAMES: how notes are named (notenames::choiceNames: middle C is C3 or C4).
     inline constexpr auto noteNames  = "noteNames";
+    // KEY MAP (0.3.0, hint 3): how the articulation keyswitches work (guitar::KeyMap): the owner's own map (C-1 palm
+    // mute / sustain by velocity) or the reference's factory one. Not in presets: it belongs to the MIDI parts.
+    inline constexpr auto keyMap     = "keyMap";
+    inline const juce::StringArray keyMapNames { "Split (C-1 by velocity)", "Factory (C-1 / C#-1)" };
 
     // In presets.
     inline constexpr auto patchLevel = "patchLevel";   // the preset's own level
@@ -34,7 +38,7 @@ namespace ParamIDs
                                                       "String 3 (G)", "String 2 (B)", "String 1 (high E)" };
 
     // Not in presets: they belong to the project (or the computer), not the sound.
-    inline const juce::StringArray notInRigs { outputGain, bypass, noteNames };
+    inline const juce::StringArray notInRigs { outputGain, bypass, noteNames, keyMap };
 }
 
 namespace ParamRanges

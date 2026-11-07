@@ -53,16 +53,16 @@ namespace
     };
 
     // A made-up render of a string's list (tones at each take's pitch, a little late), as a WAV file at 8 kHz.
-    juce::File fakeRenderFile (int string, const juce::File& file)
+    juce::File fakeRenderFile (int string, const juce::File& file, Articulation a = Articulation::sustain)
     {
         constexpr double rate = 8000.0;
-        std::vector<float> audio ((size_t) (renders::lengthSeconds (Articulation::sustain, string) * rate), 0.0f);
-        for (const auto& take : renders::takes (Articulation::sustain, string))
+        std::vector<float> audio ((size_t) (renders::lengthSeconds (a, string) * rate), 0.0f);
+        for (const auto& take : renders::takes (a, string))
         {
             const auto hz = guitar::frequencyOf (take.note());
             const auto start = (int) ((take.noteSeconds + 0.015) * rate);
             const auto overtone = hz * (2.0 + take.roundRobin);   // each round-robin its own recording
-            for (int i = 0; i < (int) (renders::spec (Articulation::sustain).holdSeconds * rate); ++i)
+            for (int i = 0; i < (int) (renders::spec (a).holdSeconds * rate); ++i)
                 audio[(size_t) (start + i)] += (0.2f + 0.3f * (float) take.layer) * std::exp (-0.6f * (float) i / (float) rate)
                                              * (float) (std::sin (juce::MathConstants<double>::twoPi * hz * i / rate)
                                                         + (overtone < 3600.0 ? 0.3 * std::sin (juce::MathConstants<double>::twoPi * overtone * i / rate) : 0.0));
@@ -134,10 +134,10 @@ TEST_CASE ("THE PLUGIN: a render imported, the guitar folder loaded, notes playe
     const auto render = fakeRenderFile (2, t.folder.getChildFile ("A string.wav"));
     t.p.startImport (render, Articulation::sustain, 2);
     REQUIRE (t.p.waitUntilIdle (60000));
-    CHECK (t.p.getImportReport (2) == "300 notes imported, all in tune");
+    CHECK (t.p.getImportReport (Articulation::sustain, 2) == "300 notes imported, all in tune");
     CHECK (t.p.getLibrary()->count (Articulation::sustain, 2) == 300);
     CHECK (guitarFolder.getChildFile ("Sustain/s2_f00_l1_d_r0.wav").existsAsFile());
-    CHECK (t.p.getImportReport (3).isEmpty());
+    CHECK (t.p.getImportReport (Articulation::sustain, 3).isEmpty());
 
     // A2 on the A string at its pitch, at OUTPUT's -6 dB; the guitar says where it's played.
     t.play (1, { { 45, 120 } });
@@ -166,7 +166,7 @@ TEST_CASE ("THE PLUGIN: a render imported, the guitar folder loaded, notes playe
     // An import of the wrong file: refused, said on the row, nothing changed.
     t.p.startImport (render, Articulation::sustain, 4);
     REQUIRE (t.p.waitUntilIdle (60000));
-    CHECK (t.p.getImportReport (4).contains ("aren't the pitch"));
+    CHECK (t.p.getImportReport (Articulation::sustain, 4).contains ("aren't the pitch"));
     CHECK (t.p.getLibrary()->count (Articulation::sustain, 4) == 0);
 }
 
@@ -373,4 +373,40 @@ TEST_CASE ("0.2.2: VARIATION off by default, and in projects and presets saved b
     rigXml->setAttribute ("parameterVersion", 1);
     CHECK (Rig::fromXml (*rigXml)->parameters.at (ParamIDs::variation) == 0.0f);
     CHECK (Rig::fromXml (*rig.toXml())->parameters.at (ParamIDs::variation) == 0.5f);
+}
+
+TEST_CASE ("PALM MUTE 0.3.0: a palm-mute render imported into Mute; played palm-muted by the owner's split map; KEY MAP", "[plugin]")
+{
+    Plugin t;
+    CHECK (t.p.getGuitarSettings().keyMap == guitar::KeyMap::split);     // the owner's own map, by default
+    CHECK (ParamIDs::notInRigs.contains (ParamIDs::keyMap));            // it belongs to the MIDI parts, not the sound
+    const auto guitarFolder = t.folder.getChildFile ("Mutes");
+    t.p.setGuitarFolder (guitarFolder);
+    REQUIRE (t.p.waitUntilIdle (10000));
+    t.p.startImport (fakeRenderFile (0, t.folder.getChildFile ("Low A mutes.wav"), Articulation::mute), Articulation::mute, 0);
+    REQUIRE (t.p.waitUntilIdle (120000));
+    INFO (t.p.getImportReport (Articulation::mute, 0));
+    CHECK (t.p.getImportReport (Articulation::mute, 0).startsWith ("2000 notes imported, all in tune"));
+    CHECK (t.p.getLibrary()->count (Articulation::mute, 0) == 2000);
+    CHECK (guitarFolder.getChildFile ("Mute/s0_f00_l4_u_r7.wav").existsAsFile());
+    CHECK (t.p.getImportReport (Articulation::sustain, 0).isEmpty());
+
+    // C-1 (latched from the start) at velocity 30: the low A palm-muted; 100: sustain (none imported: the mutes stand in,
+    // at the nearest... as the library finds them).
+    t.play (1, { { 33, 30 } });
+    t.play (4);
+    CHECK (t.p.getGuitar().getSounding (0).muted);
+    CHECK (t.p.getGuitar().getSounding (0).fret == 0);
+
+    // The GUITAR page's RENDERS, on PALM MUTE: the low A's row says what came in.
+    std::unique_ptr<juce::AudioProcessorEditor> editor (t.p.createEditor());
+    auto* view = dynamic_cast<MainView*> (editor->getChildComponent (0));
+    REQUIRE (view != nullptr);
+    auto& page = view->getGuitarPage();
+    page.showArticulation (Articulation::mute);
+    page.refresh();
+    CHECK (page.getRow (0).getStatus().startsWith ("2000 notes imported"));
+    CHECK (page.getRow (1).getStatus() == "Not imported");
+    page.showArticulation (Articulation::sustain);
+    CHECK (page.getRow (0).getStatus() == "Not imported");
 }

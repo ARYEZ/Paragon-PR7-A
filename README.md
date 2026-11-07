@@ -22,7 +22,8 @@ PR7-I is built in stages, each one released:
 |---|---|---|
 | **0** | Its own plugin, from PR7-D's code | **Done (0.1.0)** |
 | **1a** | The playing engine with sustain: strings and frets as a player chooses, one note per string, alternate picking with round-robins, velocity layers; render lists and importing renders; the drums and effects removed | **Done (0.2.0)** |
-| **1b** | Palm mute (by velocity, as the reference does), and the GUITAR page in PR7-D's Tron look with the reference's layout | Next (0.3.0) |
+| **1b** | Palm mute (by velocity, as the reference does), your own key map (C-1 palm mute / sustain by velocity), power chords | **Done (0.3.0)** |
+| **1c** | The GUITAR page in PR7-D's Tron look, laid out like the reference's main page | Next (mock-up first) |
 | **2** | The other articulations: staccato and chugs, pinch and natural harmonics, slides, legato, tremolo picking, fret and pick noises | Planned |
 | **3** | Realism: automatic double-tracking, a little timing and tuning variation | Planned |
 | **4** | The editor and tools: strumming and chords, keyswitch maps | Planned |
@@ -39,8 +40,10 @@ PR7-I is built in stages, each one released:
    Put PR7-G after PR7-I for the amp, cabinet and effects.
 
 **Keyswitches** (the reference instrument's defaults, so parts written for it play the same): force string C-2 (low A)
-to F#-2 (high E), G-2 off; hand position A#-2 (its velocity is the fret), B-2 auto; sustain C-1; picking up / down /
-alternate C7 / C#7 / D7. Note names as in Cubase (middle C = C3); SETTINGS can switch to C4.
+to F#-2 (high E), G-2 off; hand position A#-2 (its velocity is the fret), B-2 auto; picking up / down / alternate C7 /
+C#7 / D7. Articulations by KEY MAP: **Split** (default): C-1 palm mute at velocity 1-59, sustain at 60-119, C#-1 the
+same as power chords; **Factory**: C-1 sustain, C#-1 palm mute, D#-1 / E-1 power chords. Note names as in Cubase
+(middle C = C3); SETTINGS can switch to C4.
 
 ## Download
 

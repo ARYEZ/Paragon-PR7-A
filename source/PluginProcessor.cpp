@@ -28,6 +28,7 @@ ParagonX1AudioProcessor::ParagonX1AudioProcessor()
     releaseValue = find (ParamIDs::release);
     transposeValue = find (ParamIDs::transpose);
     variationValue = find (ParamIDs::variation);
+    keyMapValue = find (ParamIDs::keyMap);
     patchLevelValue = find (ParamIDs::patchLevel);
     outputValue = find (ParamIDs::outputGain);
     bypassValue = find (ParamIDs::bypass);
@@ -108,6 +109,7 @@ guitar::Settings ParagonX1AudioProcessor::getGuitarSettings() const noexcept
     s.releaseSeconds = releaseValue->load();
     s.transpose = juce::roundToInt (transposeValue->load());
     s.variation = variationValue->load();
+    s.keyMap = (guitar::KeyMap) juce::jlimit (0, ParamIDs::keyMapNames.size() - 1, juce::roundToInt (keyMapValue->load()));
     return s;
 }
 
@@ -222,7 +224,8 @@ void ParagonX1AudioProcessor::setGuitarFolder (const juce::File& folder)
     xml.setAttribute ("folder", folder.getFullPathName());
     guitarSettingsFile().getParentDirectory().createDirectory();
     xml.writeTo (guitarSettingsFile());
-    importReports.fill ({});
+    for (auto& r : importReports)
+        r.fill ({});
     reloadGuitar();
 }
 
@@ -288,9 +291,9 @@ bool ParagonX1AudioProcessor::saveRenderList (guitar::Articulation a, int string
 bool ParagonX1AudioProcessor::saveAllRenderLists (const juce::File& folder) const
 {
     auto ok = true;
-    for (int s = 0; s < guitar::numStrings; ++s)
-        ok = saveRenderList (guitar::Articulation::sustain, s,
-                             folder.getChildFile (guitar::renders::fileName (guitar::Articulation::sustain, s) + ".mid")) && ok;
+    for (const auto a : { guitar::Articulation::sustain, guitar::Articulation::mute })
+        for (int s = 0; s < guitar::numStrings; ++s)
+            ok = saveRenderList (a, s, folder.getChildFile (guitar::renders::fileName (a, s) + ".mid")) && ok;
     return ok;
 }
 
@@ -299,6 +302,7 @@ void ParagonX1AudioProcessor::startImport (const juce::File& render, guitar::Art
     if (importingString.load() >= 0)
         return;   // one at a time
     importingString = string;
+    importingArticulation = (int) a;
     importProgress = 0.0f;
     importCancel = false;
     const auto folder = getGuitarFolder();
@@ -307,7 +311,7 @@ void ParagonX1AudioProcessor::startImport (const juce::File& render, guitar::Art
         const auto report = guitar::renders::importFile (render, a, string, folder, &importProgress, &importCancel);
         {
             const std::lock_guard<std::mutex> lock (libraryLock);
-            importReports[(size_t) string] = report.summary();
+            importReports[(size_t) a][(size_t) string] = report.summary();
         }
         importProgress = -1.0f;
         importingString = -1;
@@ -318,10 +322,10 @@ void ParagonX1AudioProcessor::startImport (const juce::File& render, guitar::Art
     });
 }
 
-juce::String ParagonX1AudioProcessor::getImportReport (int string) const
+juce::String ParagonX1AudioProcessor::getImportReport (guitar::Articulation a, int string) const
 {
     const std::lock_guard<std::mutex> lock (libraryLock);
-    return string >= 0 && string < guitar::numStrings ? importReports[(size_t) string] : juce::String();
+    return string >= 0 && string < guitar::numStrings ? importReports[(size_t) a][(size_t) string] : juce::String();
 }
 
 //==============================================================================
@@ -597,7 +601,8 @@ void ParagonX1AudioProcessor::setStateInformation (const void* data, int sizeInB
             const std::lock_guard<std::mutex> lock (libraryLock);
             guitarFolder = juce::File (folder);
         }
-        importReports.fill ({});
+        for (auto& r : importReports)
+        r.fill ({});
         reloadGuitar();
     }
 

@@ -7,7 +7,9 @@
 //   PARAGON_SNAPSHOT_PARAMS=id=value,...   parameters set (real units)
 //   PARAGON_SNAPSHOT_NOTES=1         a guitar of made-up takes (every string, frets 0-24; the low A, E and B strings
 //                                    complete, so RENDERS shows some imported) and a drop A power chord at the 5th fret
-//                                    held, lit on the fretboard; =2 an open power chord and a note up the neck
+//                                    held, lit on the fretboard; =2 an open power chord and a note up the neck; =3 a
+//                                    palm-muted D5 (rings) and an open high E (a dot)
+//   PARAGON_SNAPSHOT_RENDERS=mute    RENDERS on PALM MUTE
 //   PARAGON_SNAPSHOT_FINISH=0|1|2    the plugin's finish (pearl white, pearl black, pearl white + neon)
 //   PARAGON_SNAPSHOT_PROGRESS=1      the progress box: a render import 62% done, with CANCEL
 //   PARAGON_SNAPSHOT_MIDI=1          demo MIDI links and a knob learning (with PAGE=settings: the links list)
@@ -63,12 +65,35 @@ TEST_CASE ("Render the editor to a PNG", "[.][snapshot]")
                             take->frames = (juce::int64) take->head.size();
                             library->add (Articulation::sustain, s, f, l, stroke, rr, take);
                         }
+        // Palm mutes on the low three strings (one take each degree: enough to show them).
+        for (int s = 0; s < 3; ++s)
+            for (int f = 0; f <= numFrets; ++f)
+                for (int l = 0; l < renders::spec (Articulation::mute).layers; ++l)
+                {
+                    auto take = std::make_shared<Take>();
+                    take->sampleRate = 8000.0;
+                    for (int i = 0; i < 8000; ++i)
+                        take->head.push_back (0.2f * (float) std::sin (juce::MathConstants<double>::twoPi * frequencyOf (noteOf (s, f)) * i / 8000.0));
+                    take->frames = (juce::int64) take->head.size();
+                    library->add (Articulation::mute, s, f, l, Stroke::down, 0, take);
+                }
         processor.setLibraryForTest (library);
         REQUIRE (processor.waitUntilIdle (5000));
         juce::AudioBuffer<float> buffer (2, 256);
         juce::MidiBuffer midi;
-        for (const auto n : notes == 1 ? std::vector<int> { 38, 45, 50 } : std::vector<int> { 33, 40, 45, 69 })
-            midi.addEvent (juce::MidiMessage::noteOn (1, n, (juce::uint8) 110), 0);
+        // =3: a palm-muted D5 (the split map: velocity 30) and an open high E rung out: rings and a dot.
+        if (notes == 3)
+        {
+            midi.addEvent (juce::MidiMessage::noteOn (1, 13, (juce::uint8) 100), 0);
+            midi.addEvent (juce::MidiMessage::noteOn (1, 38, (juce::uint8) 30), 1);
+            processor.processBlock (buffer, midi);
+            midi.clear();
+            midi.addEvent (juce::MidiMessage::noteOn (1, 12, (juce::uint8) 100), 0);
+            midi.addEvent (juce::MidiMessage::noteOn (1, 64, (juce::uint8) 100), 1);
+        }
+        else
+            for (const auto n : notes == 1 ? std::vector<int> { 38, 45, 50 } : std::vector<int> { 33, 40, 45, 69 })
+                midi.addEvent (juce::MidiMessage::noteOn (1, n, (juce::uint8) 110), 0);
         processor.processBlock (buffer, midi);
         midi.clear();
         for (int b = 0; b < 8; ++b)
@@ -89,6 +114,8 @@ TEST_CASE ("Render the editor to a PNG", "[.][snapshot]")
     std::unique_ptr<juce::AudioProcessorEditor> editor (processor.createEditor());
     auto* view = dynamic_cast<MainView*> (editor->getChildComponent (0));
     REQUIRE (view != nullptr);
+    if (env ("PARAGON_SNAPSHOT_RENDERS") == "mute")
+        view->getGuitarPage().showArticulation (guitar::Articulation::mute);
     if (page == "presets")
         view->showPage (MainView::Page::presets);
     else if (page == "settings")

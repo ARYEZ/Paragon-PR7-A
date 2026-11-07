@@ -19,6 +19,7 @@ public:
     float fretX (int fret) const;                      // the fret wire's x (0: the nut)
     juce::Point<float> noteCentre (int string, int fret) const;
     int shownFret (int string) const noexcept { return frets[(size_t) string]; }
+    bool shownMuted (int string) const noexcept { return muted[(size_t) string]; }
 
 private:
     void timerCallback() override { refresh(); }
@@ -27,5 +28,6 @@ private:
     ParagonX1AudioProcessor& processor;
     std::array<int, guitar::numStrings> frets {};
     std::array<float, guitar::numStrings> levels {};
+    std::array<bool, guitar::numStrings> muted {};   // 0.3.0: palm-muted notes are drawn as rings
     int hand = 1, forced = -1;
 };

@@ -5,7 +5,7 @@
 
 namespace
 {
-    const int perString = guitar::Library::takesPerString (guitar::Articulation::sustain);   // a string's sustain takes (300)
+    juce::String listName (guitar::Articulation a) { return a == guitar::Articulation::mute ? "palm mute" : "sustain"; }
 
     bool isAudio (const juce::String& path)
     {
@@ -28,7 +28,11 @@ GuitarPage::GuitarPage (ParagonX1AudioProcessor& p)
                  "a touch later into its take, louder or quieter, sharp or flat. Fully down (the default): the takes exactly "
                  "as recorded, in turn."),
       tone (p.getParameters(), ParamIDs::tone, "TONE", "A gentle low-pass on the whole guitar; fully up: open."),
-      level (p.getParameters(), ParamIDs::patchLevel, "LEVEL", "The preset's own level.")
+      level (p.getParameters(), ParamIDs::patchLevel, "LEVEL", "The preset's own level."),
+      keyMap (p.getParameters(), ParamIDs::keyMap, "KEY MAP",
+              "How the articulation keyswitches work. SPLIT (your own map): C-1 plays palm mute at velocities 1-59 and sustain "
+              "at 60-119, each zone spread over all its degrees; C#-1 the same as power chords. FACTORY: C-1 sustain, C#-1 "
+              "palm mute, D#-1 / E-1 power chords. Not part of a preset.")
 {
     for (auto* c : std::initializer_list<juce::Component*> { &playing, &sound, &guitarPanel, &renders })
         addAndMakeVisible (c);
@@ -47,26 +51,35 @@ GuitarPage::GuitarPage (ParagonX1AudioProcessor& p)
     chooseButton.onClick = [this] { chooseFolder(); };
     reloadButton.setTooltip ("Read the folder again (after copying takes into it)");
     reloadButton.onClick = [this] { processor.reloadGuitar(); };
-    for (auto* c : std::initializer_list<juce::Component*> { &folderLabel, &guitarStatus, &chooseButton, &reloadButton })
+    for (auto* c : std::initializer_list<juce::Component*> { &folderLabel, &guitarStatus, &chooseButton, &reloadButton, &keyMap })
         guitarPanel.addAndMakeVisible (c);
 
-    renderHelp.setText ("Render each string's list through your guitar instrument as a DI (its effects off, one guitar, no "
-                        "anti-repetition, ringing or release noises), then import the audio. Each string: 25 frets x 3 dynamics x 2 "
-                        "round-robins of down and up, about 28 minutes.", juce::dontSendNotification);
     renderHelp.setColour (juce::Label::textColourId, ParagonColours::textDim);
     renderHelp.setFont (juce::FontOptions (13.0f));
     renderHelp.setJustificationType (juce::Justification::topLeft);
     renders.addAndMakeVisible (renderHelp);
+    for (auto* tab : { &sustainTab, &muteTab })
+    {
+        tab->setClickingTogglesState (true);
+        tab->setRadioGroupId (310);
+        tab->setColour (juce::TextButton::buttonOnColourId, ParagonColours::accentDim);
+        tab->setColour (juce::TextButton::textColourOnId, ParagonColours::accent);
+        renders.addAndMakeVisible (*tab);
+    }
+    sustainTab.setToggleState (true, juce::dontSendNotification);
+    sustainTab.onClick = [this] { showArticulation (guitar::Articulation::sustain); };
+    muteTab.onClick = [this] { showArticulation (guitar::Articulation::mute); };
     saveAllButton.setTooltip ("Save all seven strings' MIDI files into a folder");
     saveAllButton.onClick = [this] { saveAllLists(); };
     renders.addAndMakeVisible (saveAllButton);
     for (int s = guitar::numStrings - 1; s >= 0; --s)   // high E first, as the fretboard
-        rows.push_back (std::make_unique<StringRow> (processor, s));
+        rows.push_back (std::make_unique<StringRow> (processor, s, [this] { return shown; }));
     std::reverse (rows.begin(), rows.end());           // rows[string]
     for (int s = guitar::numStrings - 1; s >= 0; --s)
         renders.addAndMakeVisible (*rows[(size_t) s]);
 
     processor.guitarBroadcaster.addChangeListener (this);
+    showArticulation (guitar::Articulation::sustain);
     refresh();
     startTimerHz (10);
 }
@@ -89,11 +102,16 @@ void GuitarPage::refresh()
         status = "No takes yet: render the lists below and import them.";
     else
     {
-        auto complete = 0;
-        for (int s = 0; s < guitar::numStrings; ++s)
-            complete += library->count (guitar::Articulation::sustain, s) >= perString ? 1 : 0;
-        status = juce::String (library->total()) + " takes: sustain on " + juce::String (complete) + " of 7 strings complete"
-               + (complete < guitar::numStrings ? " (the rest played by the nearest takes)" : "");
+        // How many strings have each articulation's takes (palm mutes: some of a list's takes may have been copies).
+        const auto strings = [&library] (guitar::Articulation a)
+        {
+            auto n = 0;
+            for (int s = 0; s < guitar::numStrings; ++s)
+                n += library->count (a, s) > 0 ? 1 : 0;
+            return n;
+        };
+        status = juce::String (library->total()) + " takes: sustain on " + juce::String (strings (guitar::Articulation::sustain))
+               + " strings, palm mute on " + juce::String (strings (guitar::Articulation::mute)) + " (the rest played by the nearest takes)";
     }
     guitarStatus.setText (status, juce::dontSendNotification);
     for (auto& row : rows)
@@ -105,6 +123,21 @@ void GuitarPage::timerCallback()
     // While loading or importing, the rows' and status's progress.
     if (processor.getLoadProgress() >= 0.0f || processor.getImportProgress() >= 0.0f)
         refresh();
+}
+
+void GuitarPage::showArticulation (guitar::Articulation a)
+{
+    shown = a;
+    (a == guitar::Articulation::mute ? muteTab : sustainTab).setToggleState (true, juce::dontSendNotification);
+    const auto& spec = guitar::renders::spec (a);
+    const auto minutes = juce::roundToInt ((guitar::renders::lengthSeconds (a, 0)) / 60.0);
+    renderHelp.setText ("Render each string's " + listName (a) + " list through your guitar instrument as a DI (its FACTORY articulation "
+                        "map, effects off, one guitar, no anti-repetition, ringing or release noises), then import the audio. Each "
+                        "string: 25 frets x " + juce::String (spec.layers) + (a == guitar::Articulation::mute ? " degrees of muting" : " dynamics")
+                        + " x " + juce::String (spec.roundRobins) + " takes of each stroke, about " + juce::String (minutes) + " minutes.",
+                        juce::dontSendNotification);
+    for (auto& row : rows)
+        row->refresh();
 }
 
 void GuitarPage::chooseFolder()
@@ -159,22 +192,30 @@ void GuitarPage::resized()
         chooseButton.setBounds (buttons.removeFromLeft (170));
         buttons.removeFromLeft (8);
         reloadButton.setBounds (buttons.removeFromLeft (90));
+        c.removeFromTop (14);
+        keyMap.setBounds (c.removeFromTop (ParamControl::knobHeight - 30).withWidth (240));
     }
     {
         auto c = renders.getContentArea();
+        auto tabs = c.removeFromTop (30);
+        sustainTab.setBounds (tabs.removeFromLeft (120));
+        tabs.removeFromLeft (6);
+        muteTab.setBounds (tabs.removeFromLeft (120));
+        c.removeFromTop (6);
         auto top = c.removeFromTop (54);
         saveAllButton.setBounds (top.removeFromRight (160).withSizeKeepingCentre (160, 30));
         top.removeFromRight (12);
         renderHelp.setBounds (top);
         c.removeFromTop (6);
-        const auto rowHeight = juce::jmin (62, c.getHeight() / guitar::numStrings);
+        const auto rowHeight = juce::jmin (58, c.getHeight() / guitar::numStrings);
         for (int s = guitar::numStrings - 1; s >= 0; --s)
             rows[(size_t) s]->setBounds (c.removeFromTop (rowHeight).reduced (0, 3));
     }
 }
 
 //==============================================================================
-GuitarPage::StringRow::StringRow (ParagonX1AudioProcessor& p, int s) : processor (p), string (s)
+GuitarPage::StringRow::StringRow (ParagonX1AudioProcessor& p, int s, std::function<guitar::Articulation()> a)
+    : processor (p), string (s), articulation (std::move (a))
 {
     name.setText (guitar::stringLabel (string), juce::dontSendNotification);
     name.setFont (juce::FontOptions (14.0f, juce::Font::bold));
@@ -185,14 +226,15 @@ GuitarPage::StringRow::StringRow (ParagonX1AudioProcessor& p, int s) : processor
     midiButton.setTooltip ("This string's render list: click to save the MIDI file, or drag it onto a track in your DAW");
     midiButton.onClick = [this]
     {
+        const auto a = articulation();
         const auto file = juce::File::getSpecialLocation (juce::File::userDocumentsDirectory)
-                              .getChildFile (guitar::renders::fileName (guitar::Articulation::sustain, string) + ".mid");
+                              .getChildFile (guitar::renders::fileName (a, string) + ".mid");
         chooser = std::make_unique<juce::FileChooser> ("Save the render list", file, "*.mid");
         chooser->launchAsync (juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::warnAboutOverwriting,
-                              [this] (const juce::FileChooser& c)
+                              [this, a] (const juce::FileChooser& c)
                               {
                                   if (const auto f = c.getResult(); f != juce::File())
-                                      processor.saveRenderList (guitar::Articulation::sustain, string, f.withFileExtension ("mid"));
+                                      processor.saveRenderList (a, string, f.withFileExtension ("mid"));
                               });
     };
     midiButton.addMouseListener (this, false);
@@ -205,14 +247,15 @@ GuitarPage::StringRow::StringRow (ParagonX1AudioProcessor& p, int s) : processor
 void GuitarPage::StringRow::refresh()
 {
     juce::String text;
-    if (processor.getImportingString() == string)
+    const auto a = articulation();
+    if (processor.getImportingString() == string && processor.getImportingArticulation() == a)
         text = "Importing... " + juce::String (juce::roundToInt (processor.getImportProgress() * 100.0f)) + "%";
-    else if (const auto report = processor.getImportReport (string); report.isNotEmpty())
+    else if (const auto report = processor.getImportReport (a, string); report.isNotEmpty())
         text = report;
     else
     {
-        const auto n = processor.getLibrary()->count (guitar::Articulation::sustain, string);
-        text = n == 0 ? juce::String ("Not imported") : juce::String (n) + " of " + juce::String (perString) + " takes";
+        const auto n = processor.getLibrary()->count (a, string);
+        text = n == 0 ? juce::String ("Not imported") : juce::String (n) + " of " + juce::String (guitar::Library::takesPerString (a)) + " takes";
     }
     if (status.getText() != text)
     {
@@ -224,13 +267,14 @@ void GuitarPage::StringRow::refresh()
 
 void GuitarPage::StringRow::importFile()
 {
-    chooser = std::make_unique<juce::FileChooser> ("The render of " + guitar::renders::fileName (guitar::Articulation::sustain, string),
+    const auto a = articulation();
+    chooser = std::make_unique<juce::FileChooser> ("The render of " + guitar::renders::fileName (a, string),
                                                    juce::File::getSpecialLocation (juce::File::userDocumentsDirectory), "*.wav;*.aif;*.aiff;*.flac");
     chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
-                          [this] (const juce::FileChooser& c)
+                          [this, a] (const juce::FileChooser& c)
                           {
                               if (const auto f = c.getResult(); f.existsAsFile())
-                                  processor.startImport (f, guitar::Articulation::sustain, string);
+                                  processor.startImport (f, a, string);
                           });
 }
 
@@ -239,7 +283,7 @@ void GuitarPage::StringRow::mouseDrag (const juce::MouseEvent& e)
     if (e.eventComponent != &midiButton || e.getDistanceFromDragStart() < 6)
         return;
     if (auto* container = juce::DragAndDropContainer::findParentDragContainerFor (this))
-        container->performExternalDragDropOfFiles ({ processor.renderListFile (guitar::Articulation::sustain, string).getFullPathName() }, false, this);
+        container->performExternalDragDropOfFiles ({ processor.renderListFile (articulation(), string).getFullPathName() }, false, this);
 }
 
 bool GuitarPage::StringRow::isInterestedInFileDrag (const juce::StringArray& files)
@@ -252,7 +296,7 @@ void GuitarPage::StringRow::filesDropped (const juce::StringArray& files, int, i
     dropping = false;
     repaint();
     if (files.size() == 1 && isAudio (files[0]))
-        processor.startImport (juce::File (files[0]), guitar::Articulation::sustain, string);
+        processor.startImport (juce::File (files[0]), articulation(), string);
 }
 
 void GuitarPage::StringRow::paint (juce::Graphics& g)

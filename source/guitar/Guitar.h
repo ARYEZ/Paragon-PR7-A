@@ -24,12 +24,23 @@
 //     VEL > VOL scales the level (0: the take as recorded; 1: fully by velocity).
 //   - KEYSWITCHES, below the guitar's lowest note (A1) and above its highest: the reference's defaults, so MIDI parts
 //     written for it play the same: C-2..F#-2 (notes 0-6) force string low A..high E, G-2 (7) force string off; A#-2
-//     (10) hand position = its velocity, B-2 (11) hand AUTO; C-1 (12) sustain; C7 / C#7 / D7 (108-110) picking up /
-//     down / alternate. A keyswitch overrides the page's setting until that setting is changed.
+//     (10) hand position = its velocity, B-2 (11) hand AUTO; C7 / C#7 / D7 (108-110) picking up / down / alternate. A
+//     keyswitch overrides the page's setting until that setting is changed.
+//   - ARTICULATIONS (0.3.0), latching keyswitches, by the KEY MAP:
+//       SPLIT (the owner's own map, the default): C-1 (12) palm mute at velocities 1-59 and sustain at 60-119 (120-127:
+//       the reference's rake and pinch, not rendered: sustain at its hardest); C#-1 (13) the same for power chords. Each
+//       zone SCALED over its articulation's whole velocity range (the owner's map has SCALING on), so 1-59 reaches all
+//       five degrees of muting and 60-119 all three sustain dynamics.
+//       FACTORY (the reference's own): C-1 sustain, C#-1 palm mute, D#-1 (15) power-chord sustain, E-1 (16) power-chord
+//       mute; velocity as it comes.
+//     PALM MUTE plays the guitar's Mute takes (velocity choosing the degree of muting); a guitar with none yet plays its
+//     softest sustain takes instead. POWER CHORDS (not rendered yet) play the root, the fifth and the octave as three
+//     notes, fretted together (our stand-in, as a player would: drop A's D5 a barre).
 //   - THE HAND (AUTO): follows the notes; back to the bottom of the neck after a second with nothing held.
 namespace guitar
 {
     enum class PickMode { alternate, down, up };   // append only
+    enum class KeyMap { split, factory };           // append only
 
     struct Settings
     {
@@ -40,6 +51,7 @@ namespace guitar
         float velocityToVolume = 0.5f;
         float releaseSeconds = 0.08f;
         float variation = 0.0f;        // 0 to 1
+        KeyMap keyMap = KeyMap::split;
         int transpose = 0;
         const Library* library = nullptr;
         Streamer* streamer = nullptr;
@@ -48,11 +60,18 @@ namespace guitar
 
     namespace keyswitch
     {
-        inline constexpr int forceLowA = 0, forceOff = 7, setHand = 10, handAuto = 11, sustain = 12;
+        inline constexpr int forceLowA = 0, forceOff = 7, setHand = 10, handAuto = 11;
+        inline constexpr int c1 = 12, cSharp1 = 13, dSharp1 = 15, e1 = 16;   // the articulation keys
         inline constexpr int pickUp = 108, pickDown = 109, pickAlternate = 110;
     }
 
     int layerFor (int velocity) noexcept;
+
+    // What a note-on plays under a key map, with the articulation keyswitch `key` latched: the articulation, its velocity
+    // (scaled, in the SPLIT map, from the zone to the articulation's whole range) and whether it's a power chord.
+    struct Played { Articulation articulation = Articulation::sustain; int velocity = 1; bool powerChord = false; };
+    Played playedFor (KeyMap, int key, int velocity) noexcept;
+    bool isArticulationKey (KeyMap, int note) noexcept;
 
     class Guitar
     {
@@ -67,8 +86,12 @@ namespace guitar
         void process (float* left, float* right, int numSamples, const juce::MidiBuffer& midi, int midiOffset, const Settings&) noexcept;
 
         // What's sounding, for the page (any thread): each string's fret (-1: none) and how loud.
-        struct Sounding { int fret = -1; float level = 0.0f; };
-        Sounding getSounding (int string) const noexcept { return { soundingFret[(size_t) string].load(), soundingLevel[(size_t) string].load() }; }
+        struct Sounding { int fret = -1; float level = 0.0f; bool muted = false; };
+        Sounding getSounding (int string) const noexcept
+        {
+            return { soundingFret[(size_t) string].load(), soundingLevel[(size_t) string].load(), soundingMuted[(size_t) string].load() };
+        }
+        int getArticulationKey() const noexcept { return articulationKey; }
         int getHand() const noexcept { return shownHand.load(); }
         int getActiveVoices() const noexcept { return activeVoices.load(); }
         int getForcedString (const Settings&) const noexcept;   // as a keyswitch or the setting leaves it
@@ -80,7 +103,8 @@ namespace guitar
         struct Voice
         {
             bool active = false, held = false;
-            int string = -1, note = -1;
+            int string = -1, note = -1, sourceNote = -1;   // sourceNote: the MIDI note that started it (a power chord: its root)
+            bool muted = false;
             const Take* take = nullptr;
             double position = 0.0, step = 1.0;
             float gain = 1.0f, fade = 1.0f, fadeStep = 0.0f;
@@ -94,7 +118,8 @@ namespace guitar
         int autoHand = 1;
         double idleSamples = 0.0;
         Stroke nextStroke = Stroke::down;
-        std::array<int, 2> nextRoundRobin {};                         // by stroke
+        std::array<std::array<int, 2>, numArticulations> nextRoundRobin {};   // by articulation and stroke
+        int articulationKey = keyswitch::c1;                                  // the articulation keyswitch latched
         std::array<std::array<const Take*, 2>, numStrings> lastByStroke {};   // the take each stroke played last on each string
         juce::Random random { 0x7072 };
         int ksForce = -2;           // -2: no keyswitch (the setting), -1: off, else a string
@@ -108,9 +133,15 @@ namespace guitar
         const Take* lastTakePlayed = nullptr;
         std::array<std::atomic<int>, numStrings> soundingFret {};
         std::array<std::atomic<float>, numStrings> soundingLevel {};
+        std::array<std::atomic<bool>, numStrings> soundingMuted {};
         std::atomic<int> shownHand { 1 }, activeVoices { 0 };
 
-        struct Chord { std::array<int, maxChord> notes {}, velocities {}; int count = 0; };
+        struct Chord
+        {
+            std::array<int, maxChord> notes {}, velocities {}, sources {};
+            std::array<Articulation, maxChord> articulations {};
+            int count = 0;
+        };
         void handle (const juce::MidiMessage&, const Settings&, Chord&) noexcept;
         void strike (const Chord&, const Settings&) noexcept;
         void stopVoice (Voice&, double seconds) noexcept;

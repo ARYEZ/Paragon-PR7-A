@@ -6,9 +6,10 @@
 // THE GUITAR page (PR7-I 0.2.0, plain: 0.3.0 gives it the Tron look and the reference instrument's layout):
 //   - PLAYING: FRETTING MODE, PICKING MODE, FORCE STRING, HAND POSITION, TRANSPOSE;
 //   - SOUND: VEL > VOL, RELEASE, TONE, the preset's LEVEL;
-//   - THE GUITAR: the folder of takes it plays, and how much of it there is;
-//   - RENDERS: a row per string: its render list (click to save the MIDI file; drag it onto a DAW track), IMPORT... (or
-//     drop the rendered audio on the row), and what's been imported for it.
+//   - THE GUITAR: the folder of takes it plays, and how much of it there is; KEY MAP (0.3.0: how the articulation
+//     keyswitches work);
+//   - RENDERS: SUSTAIN or PALM MUTE (0.3.0), then a row per string: its render list (click to save the MIDI file; drag
+//     it onto a DAW track), IMPORT... (or drop the rendered audio on the row), and what's been imported for it.
 class GuitarPage final : public juce::Component,
                          private juce::ChangeListener,
                          private juce::Timer
@@ -21,6 +22,8 @@ public:
 
     class StringRow;
     StringRow& getRow (int string) noexcept { return *rows[(size_t) string]; }
+    void showArticulation (guitar::Articulation);   // which lists RENDERS shows
+    guitar::Articulation getShownArticulation() const noexcept { return shown; }
     juce::String getGuitarStatus() const { return guitarStatus.getText(); }
     void refresh();   // the folder, counts and reports, now (the broadcaster's; tests)
 
@@ -32,7 +35,9 @@ private:
 
     ParagonX1AudioProcessor& processor;
     SynthPanel playing { "PLAYING" }, sound { "SOUND" }, guitarPanel { "THE GUITAR" }, renders { "RENDERS" };
-    ParamControl fretMode, pickMode, forceString, hand, transpose, velToVol, release, variation, tone, level;
+    ParamControl fretMode, pickMode, forceString, hand, transpose, velToVol, release, variation, tone, level, keyMap;
+    juce::TextButton sustainTab { "SUSTAIN" }, muteTab { "PALM MUTE" };
+    guitar::Articulation shown = guitar::Articulation::sustain;
     juce::Label folderLabel, guitarStatus, renderHelp;
     juce::TextButton chooseButton { "CHOOSE FOLDER..." }, reloadButton { "RELOAD" }, saveAllButton { "SAVE ALL LISTS..." };
     std::vector<std::unique_ptr<StringRow>> rows;
@@ -44,7 +49,7 @@ class GuitarPage::StringRow final : public juce::Component,
                                     public juce::FileDragAndDropTarget
 {
 public:
-    StringRow (ParagonX1AudioProcessor&, int string);
+    StringRow (ParagonX1AudioProcessor&, int string, std::function<guitar::Articulation()> articulation);
     void paint (juce::Graphics&) override;
     void resized() override;
     void mouseDrag (const juce::MouseEvent&) override;   // from the MIDI button: the list as a file
@@ -60,6 +65,7 @@ private:
     void importFile();
     ParagonX1AudioProcessor& processor;
     int string;
+    std::function<guitar::Articulation()> articulation;
     bool dropping = false;
     juce::Label name, status;
     juce::TextButton midiButton { "MIDI" }, importButton { "IMPORT..." };

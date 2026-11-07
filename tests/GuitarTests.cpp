@@ -55,9 +55,27 @@ namespace
 
     // A guitar of tones in memory: every string and fret, every dynamic and stroke, each take a tone at its pitch, its
     // level the dynamic's (0.25, 0.5, 1) times the stroke's (down 1, up 0.5), `seconds` long, all of it in memory.
-    std::shared_ptr<Library> toneGuitar (double rate = 8000.0, double seconds = 3.0)
+    std::shared_ptr<Library> toneGuitar (double rate = 8000.0, double seconds = 3.0, bool withMutes = false)
     {
         auto library = std::make_shared<Library>();
+        // PALM MUTES (the low three strings): 0.3 s each (gone well before a sustain), level 0.1 x (degree + 1) times
+        // the stroke's (down 1, up 0.5).
+        if (withMutes)
+            for (int s = 0; s < 3; ++s)
+                for (int f = 0; f <= numFrets; ++f)
+                    for (int l = 0; l < renders::spec (Articulation::mute).layers; ++l)
+                        for (const auto stroke : { Stroke::down, Stroke::up })
+                            for (int rr = 0; rr < renders::spec (Articulation::mute).roundRobins; ++rr)
+                            {
+                                auto take = std::make_shared<Take>();
+                                take->sampleRate = rate;
+                                const auto level = 0.1f * (float) (l + 1) * (stroke == Stroke::down ? 1.0f : 0.5f);
+                                const auto hz = guitar::frequencyOf (noteOf (s, f));
+                                for (int i = 0; i < (int) (0.3 * rate); ++i)
+                                    take->head.push_back (level * (float) std::sin (juce::MathConstants<double>::twoPi * hz * i / rate + rr));
+                                take->frames = (juce::int64) take->head.size();
+                                library->add (Articulation::mute, s, f, l, stroke, rr, take);
+                            }
         for (int s = 0; s < numStrings; ++s)
             for (int f = 0; f <= numFrets; ++f)
                 for (int l = 0; l < renders::spec (Articulation::sustain).layers; ++l)
@@ -82,11 +100,14 @@ namespace
         Settings settings;
         std::shared_ptr<Library> library = toneGuitar();
         std::vector<float> left, right;
-        Player()
+        explicit Player (bool withMutes = false)
         {
+            if (withMutes)
+                library = toneGuitar (8000.0, 3.0, true);
             guitar.prepare (sampleRate);
             settings.library = library.get();
             settings.velocityToVolume = 0.0f;
+            settings.keyMap = KeyMap::factory;   // velocity as it comes (the split map has tests of its own)
         }
         // Plays `seconds`, `events` (message, at sample) in it, appending to left / right.
         void play (double seconds, std::vector<std::pair<juce::MidiMessage, int>> events = {})
@@ -711,4 +732,97 @@ TEST_CASE ("RENDER LISTS 0.3.0: sustain's exactly as the owner rendered them; pa
     CHECK (library->count (Articulation::mute, 2) == 25 * mute.layers * 2 * 3);
     CHECK (library->count (Articulation::sustain, 2) == 0);
     folder.getParentDirectory().deleteRecursively();
+}
+
+TEST_CASE ("ARTICULATIONS 0.3.0: the owner's SPLIT map (C-1 palm mute 1-59 / sustain 60-119, scaled), the FACTORY map", "[guitar][engine]")
+{
+    // The zones spread over each articulation's whole range (the owner's map has SCALING on).
+    CHECK (playedFor (KeyMap::split, 12, 1).articulation == Articulation::mute);
+    CHECK (playedFor (KeyMap::split, 12, 1).velocity == 1);
+    CHECK (playedFor (KeyMap::split, 12, 59).velocity == 127);
+    CHECK (playedFor (KeyMap::split, 12, 30).velocity == 64);
+    CHECK (playedFor (KeyMap::split, 12, 60).articulation == Articulation::sustain);
+    CHECK (playedFor (KeyMap::split, 12, 60).velocity == 1);
+    CHECK (playedFor (KeyMap::split, 12, 119).velocity == 127);
+    CHECK (playedFor (KeyMap::split, 12, 125).articulation == Articulation::sustain);   // the reference's rake: not rendered
+    CHECK (playedFor (KeyMap::split, 13, 100).powerChord);
+    CHECK_FALSE (playedFor (KeyMap::split, 12, 100).powerChord);
+    CHECK (playedFor (KeyMap::factory, 13, 30).articulation == Articulation::mute);
+    CHECK (playedFor (KeyMap::factory, 13, 30).velocity == 30);
+    CHECK (playedFor (KeyMap::factory, 12, 30).articulation == Articulation::sustain);
+    CHECK (playedFor (KeyMap::factory, 16, 30).powerChord);
+    CHECK (playedFor (KeyMap::factory, 16, 30).articulation == Articulation::mute);
+    CHECK (isArticulationKey (KeyMap::split, 12));
+    CHECK_FALSE (isArticulationKey (KeyMap::split, 15));
+    CHECK (isArticulationKey (KeyMap::factory, 16));
+
+    // SPLIT, as a new instance starts (C-1 latched): velocity 30 a palm mute of the middle degree, 59 the least muted,
+    // 1 the most; 60 the softest sustain, 119 the hardest. The palm mutes are gone in 0.3 s here, the sustains ring.
+    Player p (true);
+    p.settings.keyMap = KeyMap::split;
+    p.settings.pick = PickMode::down;
+    const auto play = [&p] (int velocity)
+    {
+        p.left.clear();
+        p.play (0.5, { { Player::off (45), 0 }, { Player::on (45, velocity), 1 } });
+        return std::pair { levelAt (p.left, 110.0, 4800, 4800), rms (p.left, (size_t) (0.4 * sampleRate), (size_t) (0.5 * sampleRate)) };
+    };
+    auto [mid, midTail] = play (30);
+    CHECK_THAT (mid, WithinAbs (0.3, 0.01));
+    CHECK (midTail < 1.0e-4);
+    CHECK_THAT (play (59).first, WithinAbs (0.5, 0.01));
+    CHECK_THAT (play (1).first, WithinAbs (0.1, 0.01));
+    auto [soft, softTail] = play (60);
+    CHECK_THAT (soft, WithinAbs (0.25, 0.01));
+    CHECK (softTail > 0.1);
+    CHECK_THAT (play (119).first, WithinAbs (1.0, 0.02));
+    p.play (0.1, { { Player::off (45), 0 }, { Player::on (45, 30), 1 } });
+    CHECK (p.guitar.getSounding (2).muted);
+
+    // FACTORY: C#-1 (13) palm mute, velocity as it comes (30: the second degree); C-1 back to sustain.
+    p.settings.keyMap = KeyMap::factory;
+    p.play (0.05, { { Player::off (45), 0 }, { Player::on (13, 100), 1 } });
+    CHECK_THAT (play (30).first, WithinAbs (0.2, 0.01));
+    p.play (0.05, { { Player::off (45), 0 }, { Player::on (12, 100), 1 } });
+    CHECK_THAT (play (30).first, WithinAbs (0.25, 0.01));
+}
+
+TEST_CASE ("PALM MUTE 0.3.0: its eight takes a stroke in turn; power chords as three strings; no palm mutes: sustain stands in", "[guitar][engine]")
+{
+    // Alternate picking, palm-muted (SPLIT, velocity 30): down 1, up 1 ... down 8, up 8, then again.
+    Player p (true);
+    p.settings.keyMap = KeyMap::split;
+    std::vector<const Take*> order;
+    for (int i = 0; i < 32; ++i)
+    {
+        p.play (0.01, { { Player::off (45), 0 }, { Player::on (45, 30), 1 } });
+        order.push_back (p.guitar.lastTake());
+    }
+    CHECK (std::set<const Take*> (order.begin(), order.begin() + 16).size() == 16);
+    for (size_t i = 16; i < order.size(); ++i)
+        CHECK (order[i] == order[i - 16]);
+
+    // A power chord (C#-1, SPLIT): D2 played as D5, a barre on the low three strings; its note-off stops all three.
+    p.play (1.2, { { Player::off (45), 0 } });   // (a second's rest: the hand goes home)
+    p.play (0.3, { { Player::on (13, 100), 1 }, { Player::on (38, 100), 2 } });
+    for (int s = 0; s < 3; ++s)
+    {
+        CHECK (p.guitar.getSounding (s).fret == 5);
+        CHECK_FALSE (p.guitar.getSounding (s).muted);
+    }
+    p.play (0.3, { { Player::off (38), 0 } });
+    for (int s = 0; s < 3; ++s)
+        CHECK (p.guitar.getSounding (s).fret == -1);
+    // ... and palm-muted (velocity 30).
+    p.play (0.1, { { Player::on (38, 30), 0 } });
+    for (int s = 0; s < 3; ++s)
+        CHECK (p.guitar.getSounding (s).muted);
+
+    // A guitar with no palm mutes yet: velocity 30 plays its softest sustain takes instead (and rings).
+    Player q;
+    q.settings.keyMap = KeyMap::split;
+    q.play (0.5, { { Player::on (45, 30), 0 } });
+    CHECK_THAT (levelAt (q.left, 110.0, 4800, 4800), WithinAbs (0.25, 0.01));
+    CHECK_FALSE (q.guitar.getSounding (2).muted);
+    CHECK (q.guitar.getSounding (2).fret == 0);
 }

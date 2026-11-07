@@ -166,7 +166,8 @@ void SettingsPage::paint (juce::Graphics& g)
             { note (7), "Force string off" },
             { note (10), "Hand position: the fret is the key's velocity" },
             { note (11), "Hand position AUTO" },
-            { note (12), "Sustain (the only articulation yet; palm mute comes next)" },
+            { note (12) + " / " + note (13), "SPLIT map (your own): palm mute at velocity 1-59, sustain at 60-119 (C#-1: as power chords)" },
+            { note (12) + " / " + note (13), "FACTORY map: C-1 sustain, C#-1 palm mute (D#-1 / E-1: power chords)" },
             { note (108) + " / " + note (109) + " / " + note (110), "Picking mode: up / down / alternate" },
             { note (guitar::lowestNote) + " to " + note (guitar::highestNote), "The notes: low A open to the high E's 24th fret" } };
         g.setFont (juce::FontOptions (13.5f));

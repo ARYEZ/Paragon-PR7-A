@@ -55,10 +55,11 @@ void Fretboard::refresh()
     for (int s = 0; s < guitar::numStrings; ++s)
     {
         const auto sounding = g.getSounding (s);
-        if (sounding.fret != frets[(size_t) s] || std::abs (sounding.level - levels[(size_t) s]) > 0.02f)
+        if (sounding.fret != frets[(size_t) s] || std::abs (sounding.level - levels[(size_t) s]) > 0.02f || sounding.muted != muted[(size_t) s])
         {
             frets[(size_t) s] = sounding.fret;
             levels[(size_t) s] = sounding.level;
+            muted[(size_t) s] = sounding.muted;
             changed = true;
         }
     }
@@ -139,8 +140,19 @@ void Fretboard::paint (juce::Graphics& g)
             g.setColour (colour.withAlpha (0.25f * level));
             g.fillEllipse (juce::Rectangle<float> (r * 4.0f, r * 4.0f).withCentre (centre));
             g.setColour (colour.withMultipliedBrightness (0.6f + 0.4f * level));
-            g.fillEllipse (juce::Rectangle<float> (r * 2.0f, r * 2.0f).withCentre (centre));
-            g.setColour (ParagonColours::background);
+            if (muted[(size_t) s])
+            {
+                // A palm mute: a ring (the string damped), the fret number in the string's colour.
+                g.setColour (ParagonColours::background);
+                g.fillEllipse (juce::Rectangle<float> (r * 2.0f, r * 2.0f).withCentre (centre));
+                g.setColour (colour.withMultipliedBrightness (0.6f + 0.4f * level));
+                g.drawEllipse (juce::Rectangle<float> (r * 2.0f, r * 2.0f).withCentre (centre).reduced (1.0f), 2.0f);
+            }
+            else
+            {
+                g.fillEllipse (juce::Rectangle<float> (r * 2.0f, r * 2.0f).withCentre (centre));
+                g.setColour (ParagonColours::background);
+            }
             g.setFont (juce::FontOptions (r * 1.15f, juce::Font::bold));
             g.drawText (juce::String (f), juce::Rectangle<float> (r * 2.0f, r * 2.0f).withCentre (centre), juce::Justification::centred);
         }

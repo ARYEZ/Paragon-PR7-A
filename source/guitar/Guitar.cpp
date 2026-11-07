@@ -8,6 +8,33 @@ namespace guitar
         return renders::layerFor (Articulation::sustain, velocity);
     }
 
+    bool isArticulationKey (KeyMap map, int note) noexcept
+    {
+        using namespace keyswitch;
+        return map == KeyMap::split ? (note == c1 || note == cSharp1)
+                                    : (note == c1 || note == cSharp1 || note == dSharp1 || note == e1);
+    }
+
+    Played playedFor (KeyMap map, int key, int velocity) noexcept
+    {
+        using namespace keyswitch;
+        velocity = juce::jlimit (1, 127, velocity);
+        // A zone [lo, hi] spread over 1-127 (the owner's SCALING).
+        const auto scaled = [velocity] (int lo, int hi) { return juce::jlimit (1, 127, 1 + juce::roundToInt ((velocity - lo) * 126.0 / (double) (hi - lo))); };
+        if (map == KeyMap::split)
+        {
+            const auto power = key == cSharp1;
+            if (velocity <= 59)
+                return { Articulation::mute, scaled (1, 59), power };
+            if (velocity <= 119)
+                return { Articulation::sustain, scaled (60, 119), power };
+            return { Articulation::sustain, 127, power };   // the reference's rake / pinch: not rendered
+        }
+        if (key == cSharp1 || key == e1)
+            return { Articulation::mute, velocity, key == e1 };
+        return { Articulation::sustain, juce::jmin (119, velocity), key == dSharp1 };
+    }
+
     void Guitar::prepare (double sampleRate)
     {
         rate = sampleRate > 0.0 ? sampleRate : 48000.0;
@@ -22,6 +49,7 @@ namespace guitar
         for (int s = 0; s < numStrings; ++s)
         {
             soundingFret[(size_t) s] = -1;
+            soundingMuted[(size_t) s] = false;
             soundingLevel[(size_t) s] = 0.0f;
         }
         activeVoices = 0;
@@ -83,20 +111,31 @@ namespace guitar
                 else if (n == keyswitch::pickUp) ksPick = (int) PickMode::up;
                 else if (n == keyswitch::pickDown) ksPick = (int) PickMode::down;
                 else if (n == keyswitch::pickAlternate) ksPick = (int) PickMode::alternate;
-                return;   // (C-1, sustain: the only articulation yet)
+                else if (isArticulationKey (s.keyMap, n)) articulationKey = n;
+                return;
             }
             const auto note = n + s.transpose;
-            if (note >= lowestNote && note <= highestNote && chord.count < maxChord)
+            const auto played = playedFor (s.keyMap, articulationKey, velocity);
+            // A power chord: the root, the fifth and the octave (as far as the guitar goes), fretted together.
+            for (const auto interval : { 0, 7, 12 })
             {
-                chord.notes[(size_t) chord.count] = note;
-                chord.velocities[(size_t) chord.count++] = velocity;
+                if (interval > 0 && ! played.powerChord)
+                    break;
+                const auto each = note + interval;
+                if (each >= lowestNote && each <= highestNote && chord.count < maxChord)
+                {
+                    chord.notes[(size_t) chord.count] = each;
+                    chord.velocities[(size_t) chord.count] = played.velocity;
+                    chord.sources[(size_t) chord.count] = note;
+                    chord.articulations[(size_t) chord.count++] = played.articulation;
+                }
             }
         }
         else if (m.isNoteOff())
         {
             const auto note = m.getNoteNumber() + s.transpose;
             for (auto& v : voices)
-                if (v.active && v.held && v.note == note)
+                if (v.active && v.held && v.sourceNote == note)
                     stopVoice (v, s.releaseSeconds);
         }
         else if (m.isAllNotesOff() || m.isAllSoundOff())
@@ -122,9 +161,19 @@ namespace guitar
         const auto stroke = pick == PickMode::down ? Stroke::down : pick == PickMode::up ? Stroke::up : nextStroke;
         nextStroke = stroke == Stroke::down ? Stroke::up : Stroke::down;
         lastStrokePlayed = stroke;
-        auto& rrCounter = nextRoundRobin[stroke == Stroke::down ? 0u : 1u];
-        const auto roundRobin = rrCounter;
-        rrCounter = (rrCounter + 1) % renders::spec (Articulation::sustain).roundRobins;
+        // Each articulation's round-robins in turn (as 0.2.0), once per stroke for the whole chord.
+        std::array<int, numArticulations> roundRobins { -1, -1 };
+        const auto roundRobinFor = [&] (Articulation a)
+        {
+            auto& r = roundRobins[(size_t) a];
+            if (r < 0)
+            {
+                auto& counter = nextRoundRobin[(size_t) a][stroke == Stroke::down ? 0u : 1u];
+                r = counter;
+                counter = (counter + 1) % renders::spec (a).roundRobins;
+            }
+            return r;
+        };
 
         for (size_t i = 0; i < (size_t) chord.count; ++i)
         {
@@ -134,23 +183,32 @@ namespace guitar
             last = p;
             if (const auto old = onString[(size_t) p.string]; old >= 0)
                 stopVoice (voices[(size_t) old], stopSeconds);
-            const auto velocity = chord.velocities[i];
-            const auto layer = layerFor (velocity);
+            auto articulation = chord.articulations[i];
+            auto velocity = chord.velocities[i];
+            auto layer = renders::layerFor (articulation, velocity);
             // Which take: the stroke's round-robin in turn (as 0.2.0); with VARIATION, now and then a borrowed one instead.
-            auto found = library != nullptr ? library->find (Articulation::sustain, p.string, p.fret, layer, stroke, roundRobin) : Library::Found {};
+            auto found = library != nullptr ? library->find (articulation, p.string, p.fret, layer, stroke, roundRobinFor (articulation)) : Library::Found {};
+            if (found.take == nullptr && articulation == Articulation::mute && library != nullptr)
+            {
+                // No palm mutes imported yet: the softest sustain takes stand in.
+                articulation = Articulation::sustain;
+                layer = 0;
+                velocity = renders::spec (articulation).velocities[0];
+                found = library->find (articulation, p.string, p.fret, layer, stroke, roundRobinFor (articulation));
+            }
             auto borrowedGain = 1.0f;
             auto& lastTake = lastByStroke[(size_t) p.string][stroke == Stroke::down ? 0u : 1u];
             if (library != nullptr && found.take != nullptr && found.exact && s.variation > 0.0f
                 && random.nextFloat() < 0.35f * s.variation)
             {
                 struct Candidate { const Take* take; double ratio; float gain; };
-                std::array<Candidate, 8> candidates {};
+                std::array<Candidate, 24> candidates {};
                 auto count = 0;
                 const auto own = found.take->loudness;
                 const auto borrow = [&] (int fret, int fromLayer)
                 {
-                    for (int rr = 0; rr < renders::spec (Articulation::sustain).roundRobins && count < (int) candidates.size(); ++rr)
-                        if (const auto* t = library->exact (Articulation::sustain, p.string, fret, fromLayer, stroke, rr);
+                    for (int rr = 0; rr < renders::spec (articulation).roundRobins && count < (int) candidates.size(); ++rr)
+                        if (const auto* t = library->exact (articulation, p.string, fret, fromLayer, stroke, rr);
                             t != nullptr && t != lastTake && t->loudness > 0.0f && own > 0.0f)
                             candidates[(size_t) count++] = { t, std::pow (2.0, (p.fret - fret) / 12.0), juce::jlimit (0.25f, 4.0f, own / t->loudness) };
                 };
@@ -174,9 +232,11 @@ namespace guitar
             v.active = v.held = true;   // (VARIATION below may start it a little in)
             v.string = p.string;
             v.note = chord.notes[i];
+            v.sourceNote = chord.sources[i];
+            v.muted = articulation == Articulation::mute;
             v.take = found.take;
             v.step = found.take->sampleRate / rate * found.pitchRatio;
-            const auto ratio = (double) velocity / (double) renders::spec (Articulation::sustain).velocities[(size_t) layer];
+            const auto ratio = (double) velocity / (double) renders::spec (articulation).velocities[(size_t) layer];
             v.gain = (float) juce::jlimit (0.05, 2.0, std::pow (ratio, 1.5 * (double) s.velocityToVolume)) * borrowedGain;
             if (s.variation > 0.0f)
             {
@@ -304,6 +364,7 @@ namespace guitar
             const auto* v = index >= 0 ? &voices[(size_t) index] : nullptr;
             soundingFret[(size_t) st] = v != nullptr && v->active ? v->note - openNotes[(size_t) st] : -1;
             soundingLevel[(size_t) st] = v != nullptr && v->active ? v->gain * v->fade : 0.0f;
+            soundingMuted[(size_t) st] = v != nullptr && v->active && v->muted;
         }
         shownHand = handNow (s);
         activeVoices = any;

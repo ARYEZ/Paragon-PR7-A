@@ -7,7 +7,8 @@ namespace
     using ToText = std::function<juce::String (float, int)>;
 
     constexpr int firstVersion = 1;   // PR7-I 0.2.0
-    constexpr int v030 = 2;           // PR7-I 0.3.0: VARIATION
+    constexpr int v030 = 2;           // PR7-I 0.2.1: VARIATION
+    constexpr int v030b = 3;          // PR7-I 0.3.0: KEY MAP
 
     const ToText asDb = [] (float value, int) { return juce::String (value, 1) + " dB"; };
     const ToText asPercent = [] (float value, int) { return juce::String (juce::roundToInt (value * 100.0f)) + "%"; };
@@ -54,6 +55,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
     add (layout, outputGain, "Output", { ParamRanges::gainMinDb, ParamRanges::gainMaxDb, 0.1f }, ParamRanges::outputDefaultDb, asDb);
     addSwitch (layout, bypass, "Bypass", false);
     addChoice (layout, noteNames, "Note Names", notenames::choiceNames, 0);
+    addChoice (layout, keyMap, "Key Map", keyMapNames, 0, v030b);
     add (layout, patchLevel, "Preset Level", { ParamRanges::gainMinDb, ParamRanges::gainMaxDb, 0.1f }, 0.0f, asDb);
 
     // THE GUITAR.

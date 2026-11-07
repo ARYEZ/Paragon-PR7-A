@@ -2,6 +2,22 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.3.0
+
+**Palm mute.** Import your palm-mute renders and play them the way your own map works: C-1 at velocities 1-59 plays palm mute, 60-119 plays sustain.
+
+- **Importing palm mutes.** RENDERS on the GUITAR page now has **SUSTAIN** and **PALM MUTE**. Choose PALM MUTE, then drop each string's palm-mute WAV on its row. Each string's list has 2,000 notes: every fret, Jupiter's five degrees of muting, and eight takes each of a down and an up stroke. Copies of the same take are left out (Jupiter has 6 different up strokes), and the row says how many.
+- **Velocity sets how muted the note is**, as in your guitar instrument. Velocity picks one of the five degrees, from very muted to half muted.
+- **KEY MAP** (under THE GUITAR):
+  - **Split** (the default, your own map): C-1 plays palm mute at 1-59 and sustain at 60-119. Each zone is spread over its whole range, the way your SCALING setting does, so 1-59 reaches all five degrees of muting and 60-119 all three sustain dynamics. Velocities 120-127 play the hardest sustain, because rake and pinch harmonics aren't rendered yet. C#-1 does the same as power chords.
+  - **Factory:** C-1 sustain, C#-1 palm mute, D#-1 and E-1 power chords.
+- **Power chords** (C#-1 in your map) play the root, the fifth and the octave as three strings fretted together, so D5 is a barre. This is our stand-in until power chords are rendered.
+- **Palm mutes in turn.** Each stroke's palm-mute takes play in turn, just as sustain's do: down 1, up 1, through to down 8, up 8.
+- **The fretboard** shows palm-muted notes as rings and sustained notes as solid dots.
+- **Until a string's palm mutes are imported,** its palm-muted notes play the softest sustain takes instead.
+- **SETTINGS** lists the keyswitches for both maps. SAVE ALL LISTS saves the palm-mute lists too.
+- **What can't be checked here:** how your real palm mutes sound in PR7-I. Everything was tested with made-up tones; the first listen is yours. The Tron-look GUITAR page comes next, after you approve a mock-up.
+
 ## 0.2.2
 
 **0.2.0's sound back: the takes in turn again.** You heard 0.2.1 as all machine gun and 0.2.0 as far better. You were right, and this explains why and puts it back.

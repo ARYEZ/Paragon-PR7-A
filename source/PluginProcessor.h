@@ -129,7 +129,8 @@ public:
     float getImportProgress() const noexcept { return importProgress.load(); }   // -1: not importing
     void cancelImport() noexcept { importCancel = true; }
     int getImportingString() const noexcept { return importingString.load(); }   // -1: none
-    juce::String getImportReport (int string) const;   // the last import's for that string (this session)
+    guitar::Articulation getImportingArticulation() const noexcept { return (guitar::Articulation) importingArticulation.load(); }
+    juce::String getImportReport (guitar::Articulation, int string) const;   // the last import's for that list (this session)
 
     juce::AudioProcessorValueTreeState& getParameters() noexcept { return parameters; }
     LevelMeterSource& getOutputMeter() noexcept { return outputMeter; }
@@ -185,8 +186,8 @@ private:
     juce::File guitarSettingsFile() const;
     std::atomic<float> loadProgress { -1.0f }, importProgress { -1.0f };
     std::atomic<bool> loadCancel { false }, importCancel { false };
-    std::atomic<int> importingString { -1 };
-    std::array<juce::String, guitar::numStrings> importReports;
+    std::atomic<int> importingString { -1 }, importingArticulation { 0 };
+    std::array<std::array<juce::String, guitar::numStrings>, guitar::numArticulations> importReports;
     juce::ThreadPool jobs { juce::ThreadPoolOptions().withThreadName ("PR7-I guitar").withNumberOfThreads (1) };
 
     // The audio thread's parameters.
@@ -199,6 +200,7 @@ private:
     std::atomic<float>* releaseValue = nullptr;
     std::atomic<float>* transposeValue = nullptr;
     std::atomic<float>* variationValue = nullptr;
+    std::atomic<float>* keyMapValue = nullptr;
     std::atomic<float>* patchLevelValue = nullptr;
     std::atomic<float>* outputValue = nullptr;
     std::atomic<float>* bypassValue = nullptr;
