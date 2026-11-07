@@ -70,6 +70,11 @@ public:
     float getHologramLevel() const noexcept { return holoLevel; }   // restLevel, up to 1.35 just after a kick
     int getScanPhase() const noexcept { return scanPhase; }
     void setHologramsShown (bool shown) { hologramsShown = shown; repaint(); }   // (tests: the kit alone)
+    // 0.60.0: the holograms' clock fixed at `seconds` (tests and snapshots: the glitch and the rolling band at a known
+    // moment); < 0 back to the real clock. Takes effect at the next updateLights.
+    void setHologramTime (double seconds) { fixedHoloTime = seconds; }
+    bool isGlitching (int side) const;   // breaking up now (its strips shifted)
+    bool isRolling (int side) const;     // the bright band rolling through it now
     float getGlow (int piece) const noexcept { return glow[(size_t) piece]; }
 
     void paint (juce::Graphics&) override;
@@ -105,6 +110,8 @@ private:
     void paintHolograms (juce::Graphics&, std::function<juce::AffineTransform (juce::Point<int>)> place, float scale);
     float holoLevel = restLevel;
     int scanPhase = 0;
+    double holoTime = 0.0, fixedHoloTime = -1.0;
+    std::array<int, numHolograms> shownGlitch { -2, -2 };
     bool hologramsShown = true;
 
     ParagonX1AudioProcessor& processor;

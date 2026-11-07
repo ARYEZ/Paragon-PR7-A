@@ -320,6 +320,8 @@ TEST_CASE ("KIT VIEW 0.57.0: the holograms are drawn in the family's colours, br
     DrumPage page (p.processor);
     page.setSize (1476, 672);
     auto& view = page.getKitView();
+    view.setHologramTime (1.0);   // (0.60.0: a moment with no glitch or rolling band)
+    page.updateLights();
     const auto draw = [&view] (bool shown)
     {
         view.setHologramsShown (shown);
@@ -385,15 +387,23 @@ TEST_CASE ("KIT VIEW 0.57.0: the holograms are drawn in the family's colours, br
     const auto restLight = brightness (with, area) - brightness (without, area);
     const auto kickLight = brightness (kicked, area) - brightness (without, area);
     INFO ("light at rest " << restLight << ", on a kick " << kickLight);
-    CHECK (kickLight > restLight * 1.1);   // (less than the level: its brightest parts are near white already)
+    CHECK (kickLight > restLight * 1.05);   // (less than the level: its brightest parts are near white already, 0.60.0 more so)
 
-    // The scanlines move a line every quarter second.
+    // The scanlines move a line every quarter second (0.60.0: at moments with no glitch or rolling band).
     p.run (0.5);
-    page.updateLights();
+    const auto calm = [&view] (double t)
+    {
+        view.setHologramTime (t);
+        view.updateLights();
+        return ! view.isGlitching (0) && ! view.isRolling (0) && ! view.isGlitching (1) && ! view.isRolling (1);
+    };
+    auto t = 1.0;
+    while (! (calm (t) && calm (t + 0.25)))
+        t += 0.05;
+    calm (t);
     const auto phase = view.getScanPhase();
     const auto before = draw (true);
-    juce::Thread::sleep (300);
-    page.updateLights();
+    calm (t + 0.25);
     CHECK (view.getScanPhase() != phase);
     const auto after = draw (true);
     const auto icon = view.hologramIconArea (0);
@@ -402,4 +412,71 @@ TEST_CASE ("KIT VIEW 0.57.0: the holograms are drawn in the family's colours, br
     for (int y = icon.getY(); y < icon.getBottom(); ++y)
         changed += before.getPixelAt (icon.getCentreX(), y) != after.getPixelAt (icon.getCentreX(), y) ? 1 : 0;
     CHECK (changed > 10);
+}
+
+TEST_CASE ("KIT VIEW 0.60.0: the holograms glitch now and then: strips shifted, about every two seconds, each side on its own", "[kitview][hologram]")
+{
+    TempFolder temp;
+    Plugin p (temp.folder);
+    DrumPage page (p.processor);
+    page.setSize (1476, 672);
+    auto& view = page.getKitView();
+    // Over a minute: break-ups (0.14 s each) about one every 2 s on each side; the rolling band every 4 s for 0.9 s.
+    std::array<int, 2> breakUps {}, rolling {};
+    std::array<bool, 2> was {};
+    int together = 0;
+    for (int f = 0; f < 60 * 100; ++f)
+    {
+        view.setHologramTime (f / 100.0);
+        view.updateLights();
+        for (int side = 0; side < 2; ++side)
+        {
+            const auto now = view.isGlitching (side);
+            breakUps[(size_t) side] += now && ! was[(size_t) side] ? 1 : 0;
+            was[(size_t) side] = now;
+            rolling[(size_t) side] += view.isRolling (side) ? 1 : 0;
+        }
+        together += view.isGlitching (0) && view.isGlitching (1) ? 1 : 0;
+    }
+    for (int side = 0; side < 2; ++side)
+    {
+        INFO ("side " << side);
+        CHECK (breakUps[(size_t) side] >= 15);
+        CHECK (breakUps[(size_t) side] <= 45);
+        CHECK_THAT ((double) rolling[(size_t) side], Catch::Matchers::WithinAbs (60 * 100 * 0.9 / 4.0, 100.0));
+    }
+    CHECK (together < 60);   // (their own timings: seldom both at once)
+
+    // A break-up shifts strips of the icon: it looks different from a calm moment's at the same scanline step.
+    const auto drawAt = [&view] (double t)
+    {
+        view.setHologramTime (t);
+        view.updateLights();
+        return view.createComponentSnapshot (view.getLocalBounds(), true, 1.0f);
+    };
+    auto t = 0.0;
+    while (! view.isGlitching (0) || view.isRolling (0))
+    {
+        t += 0.01;
+        view.setHologramTime (t);
+        view.updateLights();
+    }
+    const auto glitched = drawAt (t);
+    const auto phase = view.getScanPhase();
+    auto u = t + 1.0;   // a calm moment on the same scanline step
+    for (;; u += 0.01)
+    {
+        view.setHologramTime (u);
+        view.updateLights();
+        if (! view.isGlitching (0) && ! view.isRolling (0) && view.getScanPhase() == phase
+            && std::abs (view.getHologramLevel() - KitView::restLevel) < 1.0e-6f)
+            break;
+    }
+    const auto calm = drawAt (u);
+    const auto icon = view.hologramIconArea (0);
+    int differ = 0;
+    for (int y = icon.getY(); y < icon.getBottom(); ++y)
+        for (int x = icon.getX(); x < icon.getRight(); ++x)
+            differ += glitched.getPixelAt (x, y) != calm.getPixelAt (x, y) ? 1 : 0;
+    CHECK (differ > icon.getWidth() * icon.getHeight() / 50);
 }

@@ -205,6 +205,69 @@ const KitView::Pictures& KitView::pictures()
     return loaded;
 }
 
+namespace
+{
+    namespace holo
+    {
+        // 0.60.0: THE GLITCH. Worked out from the time alone (the same moment always looks the same: tests, redraws).
+        //   - every half second, one time in four, a hologram breaks up for 0.14 s: 1-3 strips of it jump sideways
+        //     6-18% of its width (new strips every 35 ms), a faint copy of it shows beside it, and it flickers;
+        //   - every 4 s a brighter band rolls down through it over 0.9 s;
+        //   - each side on its own timing.
+        inline std::uint32_t mix (std::uint32_t x) noexcept
+        {
+            x ^= x >> 16; x *= 0x7feb352du; x ^= x >> 15; x *= 0x846ca68bu; x ^= x >> 16;
+            return x;
+        }
+        struct Band { float top, height, shift; };   // fractions of the icon's height, shift of its width
+        struct Glitch
+        {
+            int key = -1;              // which break-up frame (-1: none)
+            std::array<Band, 3> bands {};
+            int numBands = 0;
+            float flicker = 1.0f;
+            float ghost = 0.0f;        // a faint copy of the whole icon this far aside (a fraction of its width)
+            int rollStep = -1;         // the rolling band's step (-1: none)
+            float rollTop = 0.0f;      // its top, a fraction of the icon's height
+        };
+        inline Glitch glitchAt (int side, double t)
+        {
+            Glitch g;
+            const auto slot = (std::int64_t) std::floor (t / 0.5);
+            const auto h = mix ((std::uint32_t) (slot * 2 + side) * 2654435761u + 12345u);
+            if (h % 4u == 0u)
+            {
+                const auto start = (double) slot * 0.5 + (double) ((h >> 8) % 1000u) / 1000.0 * 0.35;
+                if (t >= start && t < start + 0.14)
+                {
+                    const auto frame = (int) ((t - start) / 0.035);
+                    g.key = (int) ((slot & 0xffffff) * 8 + frame);
+                    auto r = mix (h + (std::uint32_t) frame * 0x9e3779b9u);
+                    g.numBands = 1 + (int) (r % 3u);
+                    for (int b = 0; b < g.numBands; ++b)
+                    {
+                        r = mix (r + 0x68e31da4u);
+                        const auto bandHeight = 0.05f + (float) (r % 100u) / 100.0f * 0.13f;
+                        const auto top = (float) ((r >> 8) % 1000u) / 1000.0f * (1.0f - bandHeight);
+                        const auto shift = (0.06f + (float) ((r >> 18) % 100u) / 100.0f * 0.12f) * ((r >> 30) & 1u ? 1.0f : -1.0f);
+                        g.bands[(size_t) b] = { top, bandHeight, shift };
+                    }
+                    g.flicker = frame % 2 == 0 ? 0.55f : 1.0f;
+                    g.ghost = (((r >> 7) & 1u) ? 1.0f : -1.0f) * (0.04f + (float) ((r >> 11) % 100u) / 100.0f * 0.05f);
+                }
+            }
+            const auto roll = std::fmod (t + side * 1.7, 4.0) / 0.9;
+            if (roll < 1.0)
+            {
+                g.rollStep = (int) (roll * 27.0);
+                g.rollTop = (float) (-0.18 + 1.18 * ((double) g.rollStep / 27.0));
+            }
+            return g;
+        }
+
+    }
+}
+
 KitView::KitView (ParagonX1AudioProcessor& p) : processor (p)
 {
     setRepaintsOnMouseActivity (false);
@@ -426,7 +489,7 @@ void KitView::updateLights()
         }
 
     // The holograms: brighter for a moment with each kick (half as bright again, fading over a third of a second), the scanlines a line further up
-    // every quarter second. Repainted only when either changes.
+    // every quarter second, the glitch and the rolling band (0.60.0). Repainted only when something changes.
     if (highlight.on)
         return;
     auto kick = 0.0f;
@@ -435,16 +498,25 @@ void KitView::updateLights()
             if (const auto age = kit.getHitAge (slot); age >= 0.0f && age < 0.35f)
                 kick = juce::jmax (kick, (1.0f - age / 0.35f) * (1.0f - age / 0.35f));
     const auto level = restLevel + 0.45f * kick;
-    const auto phase = (int) (juce::Time::getMillisecondCounter() / 250u % 3u);
+    holoTime = fixedHoloTime >= 0.0 ? fixedHoloTime : juce::Time::getMillisecondCounterHiRes() / 1000.0;
+    const auto phase = (int) (std::fmod (holoTime * 4.0, 4.0));
     // (In steps of 0.06: about seven redraws a kick, not one every frame.)
     const auto brighter = std::abs (level - holoLevel) > 0.06f || (juce::exactlyEqual (level, restLevel) && ! juce::exactlyEqual (holoLevel, restLevel));
-    if (brighter || phase != scanPhase)
+    if (brighter)
+        holoLevel = level;
+    const auto moved = phase != scanPhase;
+    scanPhase = phase;
+    for (int side = 0; side < numHolograms; ++side)
     {
+        // 0.60.0: the glitch and the rolling band redraw the icon (and its strips' room to the sides) while they last.
+        const auto glitch = holo::glitchAt (side, holoTime);
+        const auto state = glitch.key * 64 + glitch.rollStep;
+        const auto changed = state != shownGlitch[(size_t) side];
+        shownGlitch[(size_t) side] = state;
         if (brighter)
-            holoLevel = level;
-        scanPhase = phase;
-        for (int side = 0; side < numHolograms; ++side)
-            repaint (brighter ? hologramPulseArea (side) : hologramIconArea (side).expanded (1));
+            repaint (hologramPulseArea (side).expanded (hologramIconArea (side).getWidth() / 4, 0));
+        else if (moved || changed)
+            repaint (hologramIconArea (side).expanded (hologramIconArea (side).getWidth() / 4, 1));
     }
 }
 
@@ -675,7 +747,8 @@ namespace
         };
         const Camera& camera() { static const Camera c; return c; }
 
-        constexpr double ringRadius = 0.2, ringWidth = 0.018, iconHeight = 0.56, lift = 0.22, beamBase = 0.4;
+        // (0.60.0: the ring two thirds the size it was, 0.2 m; the beam's foot with it.)
+        constexpr double ringRadius = 0.133, ringWidth = 0.013, iconHeight = 0.56, lift = 0.22, beamBase = 0.27;
         const juce::Point<double> floorPixel[KitView::numHolograms] = { { 245.0, 380.0 }, { 1655.0, 385.0 } };
         // Each side's colour: the kit's glow there (pink by the hi-hat, orange by the ride).
         const juce::Colour tint[KitView::numHolograms] = { juce::Colour (0xffff2d6e), juce::Colour (0xffff6a24) };
@@ -958,6 +1031,9 @@ juce::Rectangle<int> KitView::hologramArea (int side) const
     return (holo::placeOf (side).all * (double) k).toFloat().translated (area.getX(), area.getY()).getSmallestIntegerContainer().expanded (1);
 }
 
+bool KitView::isGlitching (int side) const { return holo::glitchAt (side, holoTime).key >= 0; }
+bool KitView::isRolling (int side) const { return holo::glitchAt (side, holoTime).rollStep >= 0; }
+
 juce::Rectangle<int> KitView::hologramPulseArea (int side) const
 {
     const auto area = pictureArea();
@@ -995,20 +1071,59 @@ void KitView::paintHolograms (juce::Graphics& g, std::function<juce::AffineTrans
         };
         draw (h.glow, h.glowAt, restLevel);   // (always as bright: a kick redraws only what it brightens)
         draw (h.ring, h.ringAt, holoLevel);
-        draw (h.icon, h.iconAt, holoLevel * 0.7f);
-
-        // The scanlines: every third line of the view again at 30%, moving up a line every quarter second.
-        const auto top = (int) std::floor ((float) (shownAt.area.getY() + (float) h.iconAt.y / scale));
-        const auto bottom = (int) std::ceil ((float) (shownAt.area.getY() + (float) (h.iconAt.y + h.icon.getHeight()) / scale));
-        const auto left = (int) std::floor (shownAt.area.getX() + (float) h.iconAt.x / scale);
-        const auto right = (int) std::ceil (shownAt.area.getX() + (float) (h.iconAt.x + h.icon.getWidth()) / scale);
+        // The icon (0.60.0, made bolder: "a glitched hologram"): at 25%, every other pair of lines again at 75% (the
+        // scanlines, two on, two off, a line further up every quarter second), the rolling band 30% more (45% more
+        // again on its scanlines); while it breaks up, its strips drawn shifted sideways, a faint copy of it aside,
+        // the whole flickering.
+        const auto side = (int) (&h - holograms.data());
+        const auto glitch = holo::glitchAt (side, holoTime);
+        const auto level = holoLevel * glitch.flicker;
+        const auto iconArea = juce::Rectangle<float> (shownAt.area.getX() + (float) h.iconAt.x / scale, shownAt.area.getY() + (float) h.iconAt.y / scale,
+                                                      (float) h.icon.getWidth() / scale, (float) h.icon.getHeight() / scale);
+        const auto box = iconArea.getSmallestIntegerContainer();
+        const auto iconTall = (float) hologramIconArea (side).getHeight();   // the icon itself (the image also holds the beam)
+        const auto iconTop = (float) hologramIconArea (side).getY();
+        const auto iconWide = (float) hologramIconArea (side).getWidth();
+        const auto bandRect = [&] (const holo::Band& b)
+        {
+            return juce::Rectangle<int> (box.getX() - 1, (int) std::floor (iconTop + b.top * iconTall), box.getWidth() + 2,
+                                         juce::jmax (1, (int) std::ceil (b.height * iconTall)));
+        };
+        const auto pass = [&] (float lvl, const juce::RectangleList<int>* clip)
+        {
+            {
+                juce::Graphics::ScopedSaveState saved (g);
+                if (clip == nullptr || g.reduceClipRegion (*clip))
+                {
+                    for (int b = 0; b < glitch.numBands; ++b)
+                        g.excludeClipRegion (bandRect (glitch.bands[(size_t) b]));
+                    draw (h.icon, h.iconAt, lvl);
+                }
+            }
+            for (int b = 0; b < glitch.numBands; ++b)
+            {
+                juce::Graphics::ScopedSaveState saved (g);
+                if ((clip == nullptr || g.reduceClipRegion (*clip)) && g.reduceClipRegion (bandRect (glitch.bands[(size_t) b])))
+                    draw (h.icon, h.iconAt + juce::Point<int> (juce::roundToInt (glitch.bands[(size_t) b].shift * iconWide * scale), 0), lvl);
+            }
+        };
+        pass (level * 0.25f, nullptr);
         juce::RectangleList<int> lines;
-        for (int y = top; y < bottom; ++y)
-            if ((((y + scanPhase) % 3) + 3) % 3 == 0)
-                lines.addWithoutMerging ({ left, y, right - left, 1 });
-        juce::Graphics::ScopedSaveState saved (g);
-        if (g.reduceClipRegion (lines))
-            draw (h.icon, h.iconAt, holoLevel * 0.3f);
+        for (int y = box.getY(); y < box.getBottom(); ++y)
+            if ((((y + scanPhase) % 4) + 4) % 4 < 2)
+                lines.addWithoutMerging ({ box.getX() - 8, y, box.getWidth() + 16, 1 });
+        pass (level * 0.75f, &lines);
+        if (glitch.rollStep >= 0)
+        {
+            const auto rollTop = (int) std::floor (iconTop + glitch.rollTop * iconTall);
+            juce::RectangleList<int> roll;
+            roll.add ({ box.getX() - 8, rollTop, box.getWidth() + 16, juce::roundToInt (0.18f * iconTall) });
+            pass (level * 0.3f, &roll);
+            roll.clipTo (lines);   // (brighter still on its scanlines: a sweep, not a block)
+            pass (level * 0.45f, &roll);
+        }
+        if (! juce::exactlyEqual (glitch.ghost, 0.0f))
+            draw (h.icon, h.iconAt + juce::Point<int> (juce::roundToInt (glitch.ghost * iconWide * scale), 0), level * 0.22f);
     }
     g.setOpacity (1.0f);
 }
