@@ -87,12 +87,14 @@ MainView::MainView (ParagonX1AudioProcessor& processorToShow)
     guitarTab.setToggleState (true, juce::dontSendNotification);
     guitarTab.setComponentID ("guitarTab");
     rendersTab.setComponentID ("rendersTab");
-    rendersTab.onClick = [this] { showPage (Page::renders); };
+    // (A tab's onClick also fires when it's switched OFF by another tab in its radio group: act only on the one switched on,
+    // or the old page's tab comes back on beside the new one, as 0.4.0 showed: GUITAR and RENDERS both lit.)
+    rendersTab.onClick = [this] { if (rendersTab.getToggleState()) showPage (Page::renders); };
     presetsTab.setComponentID ("presetsTab");
     settingsTab.setComponentID ("settingsTab");
-    guitarTab.onClick = [this] { showPage (Page::guitar); };
-    presetsTab.onClick = [this] { showPage (Page::presets); };
-    settingsTab.onClick = [this] { showPage (Page::settings); };
+    guitarTab.onClick = [this] { if (guitarTab.getToggleState()) showPage (Page::guitar); };
+    presetsTab.onClick = [this] { if (presetsTab.getToggleState()) showPage (Page::presets); };
+    settingsTab.onClick = [this] { if (settingsTab.getToggleState()) showPage (Page::settings); };
 
     previousRig.onClick = [this] { audioProcessor.stepRig (-1); };
     nextRig.onClick = [this] { audioProcessor.stepRig (1); };
@@ -132,7 +134,8 @@ void MainView::showPage (Page newPage)
 {
     page = newPage;
     auto& tab = newPage == Page::presets ? presetsTab : newPage == Page::settings ? settingsTab : newPage == Page::renders ? rendersTab : guitarTab;
-    tab.setToggleState (true, juce::dontSendNotification);
+    for (auto* t : { &guitarTab, &rendersTab, &presetsTab, &settingsTab })
+        t->setToggleState (t == &tab, juce::dontSendNotification);
     guitarView.setVisible (newPage == Page::guitar);
     rendersPage.setVisible (newPage == Page::renders);
     outputColumn.setVisible (newPage != Page::guitar);

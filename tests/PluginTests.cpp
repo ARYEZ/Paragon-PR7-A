@@ -555,3 +555,25 @@ TEST_CASE ("0.4.0: BITE (less low-mid, more top); POLY WINDOW reported as latenc
     CHECK_FALSE (t.p.getGuitarSettings().mono);
     CHECK (t.p.getGuitarSettings().fretMode == FretMode::polyphonic);
 }
+
+TEST_CASE ("0.4.1: clicking a tab lights only that tab (the old page's stayed lit too)", "[ui]")
+{
+    Plugin t;
+    std::unique_ptr<juce::AudioProcessorEditor> editor (t.p.createEditor());
+    editor->setSize (1600, 900);
+    auto* view = dynamic_cast<MainView*> (editor->getChildComponent (0));
+    REQUIRE (view != nullptr);
+    std::vector<juce::Button*> tabs;
+    for (const auto* id : { "guitarTab", "rendersTab", "presetsTab", "settingsTab" })
+        tabs.push_back (dynamic_cast<juce::Button*> (view->findChildWithID (id)));
+    const MainView::Page pages[] = { MainView::Page::guitar, MainView::Page::renders, MainView::Page::presets, MainView::Page::settings };
+    for (const auto [from, to] : { std::pair { 0, 1 }, std::pair { 1, 2 }, std::pair { 2, 0 }, std::pair { 0, 3 }, std::pair { 3, 1 } })
+    {
+        view->showPage (pages[from]);
+        tabs[(size_t) to]->setToggleState (true, juce::sendNotificationSync);   // what a click does (Button::internalClickCallback)
+        INFO (from << " -> " << to);
+        CHECK (view->getPage() == pages[to]);
+        for (int i = 0; i < 4; ++i)
+            CHECK (tabs[(size_t) i]->getToggleState() == (i == to));
+    }
+}

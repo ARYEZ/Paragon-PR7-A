@@ -2,6 +2,13 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.4.1
+
+**A fix for the tabs.** Clicking a tab could leave the page you came from lit as well, as in your screenshot where GUITAR and RENDERS were both lit on the RENDERS page.
+
+- **Why:** when you click a tab, the old tab is switched off, and the plugin counted that as a click on the old tab too. So it briefly went back to the old page, and that tab stayed lit next to the new one. It's been there since the first tabs.
+- **Now** only the tab you clicked lights up, and a test checks every switch between the four tabs.
+
 ## 0.4.0
 
 **The new GUITAR page.** The guitar fills the window in the same Tron look as PR7-D's drums, laid out the way your guitar instrument's main page works, mirrored: headstock on the right, heaviest string on top. Every note lights up on its string and fret as you play.
