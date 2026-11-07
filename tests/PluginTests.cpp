@@ -345,3 +345,32 @@ TEST_CASE ("THE WINDOW: GUITAR, PRESETS and SETTINGS tabs; the GUITAR page; the 
         CHECK ((hue >= 318.0f || hue <= 42.0f));
     }
 }
+
+TEST_CASE ("0.2.2: VARIATION off by default, and in projects and presets saved before (0.2.1's 50% was never chosen)", "[plugin]")
+{
+    Plugin t;
+    CHECK (t.p.getGuitarSettings().variation == 0.0f);
+    // A 0.2.1 project: VARIATION stored at 50%, no state version.
+    t.p.setParameterNow (ParamIDs::variation, 0.5f);
+    juce::MemoryBlock state;
+    t.p.getStateInformation (state);
+    auto xml = juce::AudioProcessor::getXmlFromBinary (state.getData(), (int) state.getSize());
+    REQUIRE (xml != nullptr);
+    xml->removeAttribute ("stateVersion");
+    juce::MemoryBlock old;
+    juce::AudioProcessor::copyXmlToBinary (*xml, old);
+    Plugin again;
+    again.p.setStateInformation (old.getData(), (int) old.getSize());
+    CHECK (again.p.getGuitarSettings().variation == 0.0f);
+    // A 0.2.2 project keeps what was chosen.
+    Plugin third;
+    third.p.setStateInformation (state.getData(), (int) state.getSize());
+    CHECK_THAT (third.p.getGuitarSettings().variation, WithinAbs (0.5, 0.001));
+    // A preset saved by 0.2.1 (parameter version 1): VARIATION off.
+    Rig rig;
+    rig.parameters[ParamIDs::variation] = 0.5f;
+    auto rigXml = rig.toXml();
+    rigXml->setAttribute ("parameterVersion", 1);
+    CHECK (Rig::fromXml (*rigXml)->parameters.at (ParamIDs::variation) == 0.0f);
+    CHECK (Rig::fromXml (*rig.toXml())->parameters.at (ParamIDs::variation) == 0.5f);
+}

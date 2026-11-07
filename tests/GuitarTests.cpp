@@ -339,19 +339,32 @@ TEST_CASE ("THE ENGINE: alternate picking; DOWN / UP; velocity picks the dynamic
     CHECK_THAT (levelAt (p.left, 110.0, 4800, 4800) / down, WithinAbs (0.5, 0.02));
     CHECK_THAT (down, WithinAbs (1.0, 0.02));
 
-    // DOWN: every stroke a down stroke, its round-robins at random but never the take just played (a chug of 32 downs:
-    // no take twice running, all four used); the soft and medium dynamics by velocity.
+    // ALTERNATE's takes IN TURN (0.2.0's order, back in 0.2.2): down 1, up 1, down 2, up 2, again: the same recording no
+    // sooner than every fourth note (0.2.1's random choice often played one every other note: a machine gun).
+    {
+        Player q;
+        std::vector<const Take*> order;
+        for (int i = 0; i < 16; ++i)
+        {
+            q.play (0.01, { { Player::off (45), 0 }, { Player::on (45, 120), 1 } });
+            order.push_back (q.guitar.lastTake());
+        }
+        CHECK (std::set<const Take*> (order.begin(), order.begin() + 4).size() == 4);
+        for (size_t i = 4; i < order.size(); ++i)
+            CHECK (order[i] == order[i - 4]);
+    }
+    // DOWN: every stroke a down stroke, its two takes in turn; the soft and medium dynamics by velocity.
     p.settings.pick = PickMode::down;
-    std::set<const Take*> used;
-    const Take* previous = nullptr;
-    for (int i = 0; i < 32; ++i)
+    std::vector<const Take*> downs;
+    for (int i = 0; i < 8; ++i)
     {
         p.play (0.01, { { Player::off (45), 0 }, { Player::on (45, 120), 1 } });
-        CHECK (p.guitar.lastTake() != previous);
-        previous = p.guitar.lastTake();
-        used.insert (previous);
+        downs.push_back (p.guitar.lastTake());
     }
-    CHECK (used.size() == (size_t) renders::numRoundRobins);
+    for (size_t i = 1; i < downs.size(); ++i)
+        CHECK (downs[i] != downs[i - 1]);
+    for (size_t i = 2; i < downs.size(); ++i)
+        CHECK (downs[i] == downs[i - 2]);
     p.left.clear();
     p.play (0.2, { { Player::off (45), 0 }, { Player::on (45, 40), 1 } });
     CHECK (p.guitar.lastStroke() == Stroke::down);
@@ -579,19 +592,19 @@ TEST_CASE ("THE ENGINE 0.3.0: VARIATION: each note a touch different in level, s
         {
             p.left.clear();
             p.play (0.25, { { Player::off (45), 0 }, { Player::on (45, 120), 1 } });
-            result.push_back (levelAt (p.left, 110.0, 2400, 9600));
+            result.push_back (levelAt (p.left, 110.0, 4800, 4800));   // (after the last note's 80 ms release)
         }
         return result;
     };
     // Off: every note the take's own level (1.0: the hard dynamic's down takes here).
     for (const auto l : levels (0.0f))
         CHECK_THAT (l, WithinAbs (1.0, 0.01));
-    // Full: within half a dB either way, and not all alike.
+    // Full: within about half a dB either way (borrowed takes matched to the note's level), and not all alike.
     const auto varied = levels (1.0f);
     auto lowest = 10.0, highest = 0.0;
     for (const auto l : varied)
     {
-        CHECK (std::abs (db (l)) < 0.55);
+        CHECK (std::abs (db (l)) < 0.7);
         lowest = std::min (lowest, l);
         highest = std::max (highest, l);
     }
@@ -610,26 +623,26 @@ TEST_CASE ("THE ENGINE 0.3.0: BORROWING: with VARIATION, the neighbouring dynami
         for (int i = 0; i < 64; ++i)
         {
             p.left.clear();
-            p.play (0.12, { { Player::off (50), 0 }, { Player::on (50, 85), 1 } });
+            p.play (0.2, { { Player::off (50), 0 }, { Player::on (50, 85), 1 } });
             CHECK (p.guitar.lastTake() != previous);   // never the same take twice running
             previous = p.guitar.lastTake();
             used.insert (previous);
-            levels.push_back (levelAt (p.left, guitar::frequencyOf (50), 1200, 4800));
+            levels.push_back (levelAt (p.left, guitar::frequencyOf (50), 4800, 4800));   // (after the last note's release)
         }
     };
-    // VARIATION 0: only its own two takes, at the medium dynamic's level (0.5 here).
+    // VARIATION 0: only its own two takes, in turn, at the medium dynamic's level (0.5 here).
     std::set<const Take*> own;
     std::vector<double> ownLevels;
     chug (0.0f, own, ownLevels);
     CHECK (own.size() == 2);
     for (const auto l : ownLevels)
         CHECK_THAT (l, WithinAbs (0.5, 0.01));
-    // Full: the soft and hard dynamics' takes and the 4th and 6th frets' join in, each at the note's own level and pitch
-    // (the borrowed dynamics, made at 0.25 and 1.0, matched to 0.5; within VARIATION's half a dB).
+    // Full: now and then (about a third of the notes) the soft and hard dynamics' takes and the 4th and 6th frets' instead,
+    // each at the note's own level and pitch (the borrowed dynamics, made at 0.25 and 1.0, matched to 0.5).
     std::set<const Take*> varied;
     std::vector<double> variedLevels;
     chug (1.0f, varied, variedLevels);
-    CHECK (varied.size() >= 6);
+    CHECK (varied.size() >= 4);
     for (const auto l : variedLevels)
         CHECK (std::abs (db (l / 0.5)) < 0.7);
 }

@@ -2,6 +2,17 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.2.2
+
+**0.2.0's sound back: the takes in turn again.** You heard 0.2.1 as all machine gun and 0.2.0 as far better. You were right, and this explains why and puts it back.
+
+- **Why 0.2.1 machine-gunned.** Your guitar instrument has two takes of each stroke. 0.2.0 plays them in turn: down 1, up 1, down 2, up 2. That's the widest spacing two takes allow, so the same recording comes back no sooner than every fourth note. 0.2.1 picked them at random instead, and a coin toss between two often gives the same take every other note. Its rule against repeats compared each note with the last note on the string, which with alternate picking is always the other stroke, so it never did anything.
+- **The takes in turn again**, exactly as 0.2.0 played them. A test now holds that order, so it can't change unnoticed.
+- **A released note rings out under the next one again**, as in 0.2.0. 0.2.1 cut it short when the string was picked again.
+- **VARIATION is off (0%) by default**, which gives you exactly 0.2.0's sound. Projects and presets saved with 0.2.1 load with it off too, because 0.2.1's 50% was never something you chose.
+- **VARIATION is now an experiment to judge by ear.** Turned up, it now and then swaps the in-turn take for a neighbouring dynamic's take (turned to the note's level) or a neighbouring fret's take (a semitone away, played at the note's pitch). It never repeats the take that stroke played last on that string. It also makes each note a touch different in timing, level and tuning. If it doesn't help, leave it at 0.
+- Still in from 0.2.1: imports leave out takes that are copies of other takes.
+
 ## 0.2.1
 
 **Ready for your renders: more variety from the two takes per stroke, and imports that leave out copies.** Your guitar instrument turned out to have two different sustain takes per stroke (the round-robin check you rendered), so PR7-I now makes the most of them.

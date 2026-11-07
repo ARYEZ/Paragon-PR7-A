@@ -9,17 +9,17 @@
 // way the owner's reference guitar instrument does:
 //
 //   - Each note gets a string and fret (Fretting.h): notes struck at the same moment are a chord, fretted together.
-//   - ONE NOTE PER STRING: a new note on a string stops whatever it's still doing (5 ms), held or ringing out its release,
-//     as picking it again does; a NOTE-OFF damps the string over RELEASE. Notes on other strings ring on.
-//   - PICKING: ALTERNATE (down, up, down... one stroke per chord), DOWN or UP: which stroke's take plays; its ROUND-ROBIN
-//     chosen at random but never the take that played last on that string (0.3.0; 0.2.0 went round them in turn), so
-//     a chugged note has no pattern to hear.
-//   - BORROWING (0.3.0, with VARIATION): the reference instrument has only two takes of each stroke, so a note may also
-//     play the neighbouring dynamic's takes (their level matched to its own: `Take::loudness`) or the neighbouring frets'
-//     on its string (a semitone up or down, played back at its pitch), as the reference's "anti-repetition" uses
-//     neighbouring samples: up to ten recordings per stroke instead of two. Its own takes stay the likeliest.
-//   - VARIATION (0.3.0): each note a little different, as no two picks are alike: up to 3 ms further into its take, up to
-//     half a dB louder or quieter, up to 3 cents sharp or flat, all times VARIATION (0: the takes exactly as recorded).
+//   - ONE NOTE PER STRING: a new note on a sounding string stops its held note (5 ms), as picking it again does; a NOTE-OFF
+//     damps the string over RELEASE (a note already let go rings out its release under the next: 0.2.1 cut it, and the
+//     owner heard 0.2.0's way as better). Notes on other strings ring on.
+//   - PICKING: ALTERNATE (down, up, down... one stroke per chord), DOWN or UP: which stroke's take plays; each stroke's
+//     ROUND-ROBINS IN TURN (down 1, up 1, down 2, up 2: with two takes a stroke, the widest spacing there is). 0.2.1 chose
+//     them at random, which with two takes often played the same one every other note: the machine gun the owner heard.
+//   - VARIATION (0 by default: exactly the above): now and then (up to a third of the notes, times VARIATION) the in-turn
+//     take is swapped for a BORROWED one: the neighbouring dynamic's (level matched by `Take::loudness`) or a neighbouring
+//     fret's (a semitone off, played back at the note's pitch), never the take that stroke played last on that string;
+//     and each note up to 3 ms further into its take, +/-0.5 dB, +/-3 cents (times VARIATION). An experiment: to be
+//     judged by ear.
 //   - VELOCITY picks the dynamic (the render list's three: below 65 soft, below 102 medium, then hard), and within it
 //     VEL > VOL scales the level (0: the take as recorded; 1: fully by velocity).
 //   - KEYSWITCHES, below the guitar's lowest note (A1) and above its highest: the reference's defaults, so MIDI parts
@@ -94,7 +94,8 @@ namespace guitar
         int autoHand = 1;
         double idleSamples = 0.0;
         Stroke nextStroke = Stroke::down;
-        std::array<const Take*, numStrings> lastOnString {};   // the take started last on each string
+        std::array<int, 2> nextRoundRobin {};                         // by stroke
+        std::array<std::array<const Take*, 2>, numStrings> lastByStroke {};   // the take each stroke played last on each string
         juce::Random random { 0x7072 };
         int ksForce = -2;           // -2: no keyswitch (the setting), -1: off, else a string
         int ksHand = -1;            // -1: no keyswitch, 0: AUTO, else a fret

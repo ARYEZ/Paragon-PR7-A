@@ -8,8 +8,9 @@ namespace
     constexpr int fileVersion = 1;
 
     // Which plugin version's parameters the preset was saved with, for the occasional parameter whose default changes
-    // (older plugins ignore it). PR7-I counts afresh: 1 = PR7-I 0.2.0 (the guitar's parameters).
-    constexpr int parameterVersion = 1;
+    // (older plugins ignore it). PR7-I counts afresh: 1 = PR7-I 0.2.0 (the guitar's parameters) and 0.2.1;
+    // 2 = 0.2.2 (VARIATION off by default: 0.2.1's 50% was never chosen, so older presets load with it off).
+    constexpr int parameterVersion = 2;
     const juce::Identifier rigTag { "ParagonRig" };
     const juce::Identifier parameterTag { "Param" };
 }
@@ -69,5 +70,7 @@ std::optional<Rig> Rig::fromXml (const juce::XmlElement& xml)
         if (const auto id = parameter->getStringAttribute ("id"); id.isNotEmpty())
             rig.parameters[id] = (float) parameter->getDoubleAttribute ("value");
 
+    if (xml.getIntAttribute ("parameterVersion", 1) < 2)
+        rig.parameters[ParamIDs::variation] = 0.0f;
     return rig;
 }

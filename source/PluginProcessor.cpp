@@ -4,7 +4,8 @@
 namespace
 {
     const juce::Identifier rigNameKey { "rigName" }, rigFileKey { "rigFile" }, rigFactoryKey { "rigFactory" },
-                           rigModifiedKey { "rigModified" }, guitarFolderKey { "guitarFolder" };
+                           rigModifiedKey { "rigModified" }, guitarFolderKey { "guitarFolder" }, stateVersionKey { "stateVersion" };
+    constexpr int stateVersion = 2;   // 2: PR7-I 0.2.2 (older projects: VARIATION off, as 0.2.1's 50% was never chosen)
     constexpr double retiredMs = 2000.0;
 }
 
@@ -561,6 +562,7 @@ void ParagonX1AudioProcessor::getStateInformation (juce::MemoryBlock& destData)
     state.setProperty (rigFactoryKey, currentRig.factoryName, nullptr);
     state.setProperty (rigModifiedKey, rigModified.load(), nullptr);
     state.setProperty (guitarFolderKey, getGuitarFolder().getFullPathName(), nullptr);
+    state.setProperty (stateVersionKey, stateVersion, nullptr);
     if (! midiLinks.isEmpty())
         state.appendChild (juce::ValueTree::fromXml (*midiLinks.toXml()), nullptr);
     if (auto xml = state.createXml())
@@ -582,7 +584,11 @@ void ParagonX1AudioProcessor::setStateInformation (const void* data, int sizeInB
     else
         setMidiLinks ({});
     const auto folder = state[guitarFolderKey].toString();
+    const auto savedVersion = (int) state.getProperty (stateVersionKey, 1);
     parameters.replaceState (state);
+    if (savedVersion < 2)
+        if (auto* p = parameters.getParameter (ParamIDs::variation))
+            p->setValueNotifyingHost (0.0f);
 
     // THE GUITAR: the project's folder (as it was saved), not necessarily the one chosen last.
     if (juce::File::isAbsolutePath (folder) && juce::File (folder) != getGuitarFolder())

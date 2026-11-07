@@ -24,8 +24,9 @@ GuitarPage::GuitarPage (ParagonX1AudioProcessor& p)
       velToVol (p.getParameters(), ParamIDs::velocityToVolume, "VEL > VOL", "How much velocity changes the level within a dynamic (velocity always picks the dynamic)."),
       release (p.getParameters(), ParamIDs::release, "RELEASE", "How quickly a string stops when its note ends."),
       variation (p.getParameters(), ParamIDs::variation, "VARIATION",
-                 "Each note a little different, as no two picks are: a touch later into its take, a touch louder or quieter, "
-                 "a few cents sharp or flat. Fully down: the takes exactly as recorded."),
+                 "An experiment: now and then a neighbouring dynamic's or fret's take instead of the note's own, and each note "
+                 "a touch later into its take, louder or quieter, sharp or flat. Fully down (the default): the takes exactly "
+                 "as recorded, in turn."),
       tone (p.getParameters(), ParamIDs::tone, "TONE", "A gentle low-pass on the whole guitar; fully up: open."),
       level (p.getParameters(), ParamIDs::patchLevel, "LEVEL", "The preset's own level.")
 {

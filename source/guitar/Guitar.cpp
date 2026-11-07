@@ -122,6 +122,9 @@ namespace guitar
         const auto stroke = pick == PickMode::down ? Stroke::down : pick == PickMode::up ? Stroke::up : nextStroke;
         nextStroke = stroke == Stroke::down ? Stroke::up : Stroke::down;
         lastStrokePlayed = stroke;
+        auto& rrCounter = nextRoundRobin[stroke == Stroke::down ? 0u : 1u];
+        const auto roundRobin = rrCounter;
+        rrCounter = (rrCounter + 1) % renders::numRoundRobins;
 
         for (size_t i = 0; i < (size_t) chord.count; ++i)
         {
@@ -129,69 +132,42 @@ namespace guitar
             if (! p.valid())
                 continue;
             last = p;
-            // The string picked again: whatever it was still doing stops (held, or still ringing out its release).
-            for (auto& other : voices)
-                if (other.active && other.string == p.string)
-                    stopVoice (other, stopSeconds);
+            if (const auto old = onString[(size_t) p.string]; old >= 0)
+                stopVoice (voices[(size_t) old], stopSeconds);
             const auto velocity = chord.velocities[i];
             const auto layer = layerFor (velocity);
-            // Which take: its own round-robins and, with VARIATION, borrowed ones (the neighbouring dynamics', level matched;
-            // the neighbouring frets', played at its pitch); one at random, by weight, never the take played last on this
-            // string. A note without takes of its own: the library's nearest stand-in.
-            Library::Found found;
+            // Which take: the stroke's round-robin in turn (as 0.2.0); with VARIATION, now and then a borrowed one instead.
+            auto found = library != nullptr ? library->find (Articulation::sustain, p.string, p.fret, layer, stroke, roundRobin) : Library::Found {};
             auto borrowedGain = 1.0f;
-            if (library != nullptr)
+            auto& lastTake = lastByStroke[(size_t) p.string][stroke == Stroke::down ? 0u : 1u];
+            if (library != nullptr && found.take != nullptr && found.exact && s.variation > 0.0f
+                && random.nextFloat() < 0.35f * s.variation)
             {
-                struct Candidate { const Take* take; double ratio; float gain; float weight; };
-                std::array<Candidate, 12> candidates {};
+                struct Candidate { const Take* take; double ratio; float gain; };
+                std::array<Candidate, 8> candidates {};
                 auto count = 0;
-                auto ownLoudness = 0.0f;
-                for (int rr = 0; rr < renders::numRoundRobins; ++rr)
-                    if (const auto* t = library->exact (Articulation::sustain, p.string, p.fret, layer, stroke, rr))
-                    {
-                        candidates[(size_t) count++] = { t, 1.0, 1.0f, 2.0f };
-                        ownLoudness += t->loudness;
-                    }
-                if (count > 0 && s.variation > 0.0f)
+                const auto own = found.take->loudness;
+                const auto borrow = [&] (int fret, int fromLayer)
                 {
-                    ownLoudness /= (float) count;
-                    const auto borrow = [&] (int fret, int fromLayer, float weight)
-                    {
-                        for (int rr = 0; rr < renders::numRoundRobins && count < (int) candidates.size(); ++rr)
-                            if (const auto* t = library->exact (Articulation::sustain, p.string, fret, fromLayer, stroke, rr); t != nullptr && t->loudness > 0.0f)
-                                candidates[(size_t) count++] = { t, std::pow (2.0, (p.fret - fret) / 12.0),
-                                                                 juce::jlimit (0.25f, 4.0f, ownLoudness / t->loudness), weight * s.variation };
-                    };
-                    borrow (p.fret, layer - 1, 0.5f);
-                    borrow (p.fret, layer + 1, 0.5f);
-                    borrow (p.fret - 1, layer, 0.35f);
-                    borrow (p.fret + 1, layer, 0.35f);
-                }
+                    for (int rr = 0; rr < renders::numRoundRobins && count < (int) candidates.size(); ++rr)
+                        if (const auto* t = library->exact (Articulation::sustain, p.string, fret, fromLayer, stroke, rr);
+                            t != nullptr && t != lastTake && t->loudness > 0.0f && own > 0.0f)
+                            candidates[(size_t) count++] = { t, std::pow (2.0, (p.fret - fret) / 12.0), juce::jlimit (0.25f, 4.0f, own / t->loudness) };
+                };
+                borrow (p.fret, layer - 1);
+                borrow (p.fret, layer + 1);
+                borrow (p.fret - 1, layer);
+                borrow (p.fret + 1, layer);
                 if (count > 0)
                 {
-                    auto total = 0.0f;
-                    for (int c = 0; c < count; ++c)
-                        if (candidates[(size_t) c].take != lastOnString[(size_t) p.string] || count == 1)
-                            total += candidates[(size_t) c].weight;
-                    auto pick = random.nextFloat() * total;
-                    auto chosen = 0;
-                    for (int c = 0; c < count; ++c)
-                    {
-                        if (candidates[(size_t) c].take == lastOnString[(size_t) p.string] && count > 1)
-                            continue;
-                        chosen = c;
-                        if ((pick -= candidates[(size_t) c].weight) <= 0.0f)
-                            break;
-                    }
-                    found = { candidates[(size_t) chosen].take, candidates[(size_t) chosen].ratio, true };
-                    borrowedGain = candidates[(size_t) chosen].gain;
+                    const auto& chosen = candidates[(size_t) random.nextInt (count)];
+                    found = { chosen.take, chosen.ratio, false };
+                    borrowedGain = chosen.gain;
                 }
-                else
-                    found = library->find (Articulation::sustain, p.string, p.fret, layer, stroke, random.nextInt (renders::numRoundRobins));
             }
             if (found.take == nullptr)
                 continue;
-            lastOnString[(size_t) p.string] = found.take;
+            lastTake = found.take;
             lastTakePlayed = found.take;
             auto& v = freeVoice();
             v = {};
