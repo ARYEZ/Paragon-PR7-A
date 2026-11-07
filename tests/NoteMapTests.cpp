@@ -11,37 +11,40 @@ namespace
 {
     using namespace synth::drums::notemap;
 
-    // The owner's map (from that software's published layout), drum by drum, as given: the layout must play each note
-    // on the drum written here. 0.17.0 split the articulations out: the ride's edge (59), the hat's openness steps
-    // (24 open 1, 25 open 2, 26 open 3) and its pedal note (7: the openness CC 4 sets, closed with no pedal).
+    // The owner's map (0.58.0: their screenshots of that software's full MIDI mapping for a big progressive kit, every
+    // note 0-127), as each named articulation reaches our drums: the layout must play each note on the drum written
+    // here, and the notes the map leaves empty (0-5) play nothing.
     struct Expected { std::int8_t slot; std::vector<int> notes; };
     std::vector<Expected> ownersMap()
     {
-        std::vector<int> ride { 29, 30, 51, 52, 54 };
-        for (int n = 83; n <= 93; ++n) if (n != 86) ride.push_back (n);
-        for (int n = 96; n <= 105; ++n) ride.push_back (n);
-        for (int n = 108; n <= 118; ++n) ride.push_back (n);
         return {
-            { BD, { 34, 35, 36 } },
-            { SD, { 6, 33, 38, 39, 66, 68, 69, 70, 125 } },
-            { SD2, { 40, 71, 126 } },
-            { RIM, { 37, 67, 76, 127 } },
-            { CH, { 8, 9, 11, 18, 19, 20, 22, 42, 61, 62, 63, 64, 65, 119, 122 } },
-            { PEDAL, { 7 } },
-            { PH, { 10, 21, 23, 44 } },
-            { OH, { 12, 13, 14, 15, 16, 17, 46, 60, 120, 121, 123, 124 } },
-            { HO1, { 24 } },
-            { HH, { 25 } },
-            { HO3, { 26 } },
-            { RE, { 59 } },
-            { HT, { 47, 48, 79, 80, 81, 82 } },
-            { MT, { 43, 45, 74, 75, 77, 78 } },
-            { LT, { 41, 72, 73 } },
-            { CY, { 27, 28, 31, 32, 49, 50, 55, 56, 57, 58, 86, 94, 95, 106, 107 } },
-            { RD, ride },
-            { RB, { 53 } },
-            { TMB, { 3 } },
-            { SHK, { 2 } },
+            { BD, { 34, 35, 36 } },                                   // Kick: Open, Hit, Hit
+            { SD, { 6, 33, 38, 39, 66, 68, 69, 70, 125 } },           // Zone Trigger, Edge, Center, Ruffs, Center, Flams...
+            { SD2, { 40, 126 } },                                     // Rimshot
+            { RIM, { 37, 67, 71, 127 } },                             // Sidestick, Rim Only
+            { PEDAL, { 7, 8, 9, 18, 19, 20 } },                       // Hats: Edge / Tip Trigger
+            { PH, { 10, 21, 23, 44 } },                               // Closed Pedal, Open Pedal
+            { HSH, { 11, 22, 62, 122 } },                             // Closed / Tight Edge
+            { CH, { 42, 61, 63, 65, 119 } },                          // Closed / Tight Tip, Seq Hits
+            { HO1, { 12, 13, 24, 64, 120, 123 } },                    // Open 0, Open 1
+            { HH, { 14, 25, 46 } },                                   // Open 2
+            { HO3, { 15, 26, 121 } },                                 // Open 3
+            { OH, { 16, 17, 60, 124 } },                              // Open 4, Open 5
+            { HT, { 48, 81, 82 } },                                   // Racktom 1
+            { MT, { 47, 79, 80 } },                                   // Racktom 2
+            { LT, { 45, 77, 78 } },                                   // Racktom 3
+            { T4, { 43, 74, 75 } },                                   // Floortom 1
+            { T5, { 41, 72, 73 } },                                   // Floortom 2
+            { CY, { 28 } }, { C1C, { 94 } },                          // Cymbal 1: Crash, Mute Hit
+            { CR2, { 49 } }, { C2C, { 50 } },                         // Cymbal 2
+            { C3, { 30, 95 } }, { C4, { 31, 106 } }, { C5, { 57, 58 } }, { C6, { 32, 107 } },
+            { CHN, { 27 } }, { CHC, { 83 } },                         // China 1
+            { CH2, { 52, 54 } },                                      // China 2
+            { SPL, { 55 } }, { SPC, { 56 } },                         // Splash
+            { CFX, { 29, 76 } },                                      // the holed cymbal ("Spock")
+            { RD, { 51, 84, 87, 89, 92, 96, 99, 101, 104, 108, 111, 113, 116, 118 } },   // Bow Tip / Shank, Mute Hit
+            { RB, { 53, 85, 88, 90, 93, 97, 100, 102, 105, 109, 112, 114, 117 } },       // Bell Tip / Shank
+            { RE, { 59, 86, 91, 98, 103, 110, 115 } },                                    // Edge
         };
     }
 
@@ -88,7 +91,7 @@ TEST_CASE ("NOTE MAP: the groove libraries' layout plays every note of the owner
         if (! listed.contains (n))
         {
             INFO ("note " << n);
-            CHECK (map[(size_t) n] == -1);   // 0, 1 (the one-shot), 4 and 5: nothing
+            CHECK (map[(size_t) n] == -1);   // 0 to 5: nothing
         }
 }
 
@@ -118,16 +121,24 @@ TEST_CASE ("NOTE MAP in the plugin: each layout's notes play their drums; ROOT a
     CHECK (p.sounding (22).empty());
 
     p.layout (Layout::grooveLibrary);
-    CHECK (p.sounding (22) == std::vector<int> { CH });
+    CHECK (p.sounding (22) == std::vector<int> { HSH });   // 0.58.0: the owner's map's closed edge (our SHOULDER)
+    CHECK (p.sounding (42) == std::vector<int> { CH });    // closed tip
     CHECK (p.sounding (24) == std::vector<int> { HO1 });   // 0.17.0: the hat's openness steps
     CHECK (p.sounding (25) == std::vector<int> { HH });
     CHECK (p.sounding (26) == std::vector<int> { HO3 });
-    CHECK (p.sounding (46) == std::vector<int> { OH });
+    CHECK (p.sounding (46) == std::vector<int> { HH });    // 0.58.0: Hats: Open 2
+    CHECK (p.sounding (60) == std::vector<int> { OH });    // Hats: Open 4
+    CHECK (p.sounding (28) == std::vector<int> { CY });    // Cymbal 1
+    CHECK (p.sounding (49) == std::vector<int> { CR2 });   // Cymbal 2
+    CHECK (p.sounding (48) == std::vector<int> { HT });    // Racktom 1
+    CHECK (p.sounding (47) == std::vector<int> { MT });    // Racktom 2
+    CHECK (p.sounding (43) == std::vector<int> { T4 });    // Floortom 1
+    CHECK (p.sounding (41) == std::vector<int> { T5 });    // Floortom 2
     CHECK (p.sounding (59) == std::vector<int> { RE });    // the ride's edge
     CHECK (p.sounding (7) == std::vector<int> { CH });     // HI-HAT (PEDAL), no pedal heard: closed
     CHECK (p.sounding (53) == std::vector<int> { RB });
     CHECK (p.sounding (40) == std::vector<int> { SD2 });   // the rimshot
-    CHECK (p.sounding (3) == std::vector<int> { TMB });
+    CHECK (p.sounding (3).empty());   // 0.58.0: nothing on 0-5 (the tambourine and shaker had 3 and 2)
     CHECK (p.sounding (4).empty());
 
     p.layout (Layout::generalMidi);
@@ -158,7 +169,7 @@ TEST_CASE ("NOTE MAP: CUSTOM: a change copies the layout you're on, chooses CUST
         p.processor.mapNote (4, HH);   // the half-open hat on 4 (nothing there in the layout)
         CHECK (p.processor.getMapLayout() == Layout::custom);
         CHECK (p.processor.getNoteMap()[4] == HH);
-        CHECK (p.processor.getNoteMap()[22] == CH);   // the rest of the layout kept
+        CHECK (p.processor.getNoteMap()[22] == HSH);   // the rest of the layout kept
         CHECK (p.sounding (4) == std::vector<int> { HH });
         p.processor.mapNote (22, -1);
         CHECK (p.sounding (22).empty());
@@ -219,7 +230,7 @@ TEST_CASE ("NOTE MAP: MIDI EXPORT writes each drum on its note in the map, so th
     };
     CHECK (notesIn() == std::set<int> { 36 + BD, 36 + CH, 36 + RB, 36 + TMB, 36 + CLP });   // ROOT: root + row
     p.layout (Layout::grooveLibrary);
-    CHECK (notesIn() == std::set<int> { 36, 42, 53, 3 });   // the clap has no note in this layout: left out
+    CHECK (notesIn() == std::set<int> { 36, 42, 53 });   // the clap and (0.58.0) the tambourine have no note in this layout: left out
     p.layout (Layout::generalMidi);
     CHECK (notesIn() == std::set<int> { 36, 42, 53, 54, 39 });
     // Each played back through the map hits the drum it was written for.
@@ -271,4 +282,38 @@ TEST_CASE ("NOTE NAMES 0.35.1: middle C as C3 (Cubase, the default) or C4; only 
     const auto map = p.getNoteMap();
     names->setValueNotifyingHost (1.0f);
     CHECK (p.getNoteMap() == map);
+}
+
+TEST_CASE ("NOTE MAP 0.58.0: the groove libraries' layout keeps the owner's map's name for each note; home notes", "[notemap]")
+{
+    CHECK (juce::String (grooveLibraryName (36)) == "Kick: Hit (Stack)");
+    CHECK (juce::String (grooveLibraryName (38)) == "Snare: Center (Stack)");
+    CHECK (juce::String (grooveLibraryName (34)) == "Kick: Open");
+    CHECK (juce::String (grooveLibraryName (7)) == "Hats: Edge Trigger");
+    CHECK (juce::String (grooveLibraryName (29)) == "Spock: Crash");
+    CHECK (juce::String (grooveLibraryName (118)) == "Ride: Mute Hit");
+    CHECK (juce::String (grooveLibraryName (127)) == "Snare: Sidestick");
+    for (int n = 0; n <= 5; ++n)
+        CHECK (juce::String (grooveLibraryName (n)).isEmpty());
+    // Every note from 6 up named and played.
+    const auto map = grooveLibrary();
+    for (int n = 6; n < 128; ++n)
+    {
+        INFO ("note " << n);
+        CHECK (juce::String (grooveLibraryName (n)).isNotEmpty());
+        CHECK (map[(size_t) n] >= 0);
+    }
+    // Each drum's export note is the map's first-octave note for it.
+    const std::pair<int, int> home[] = { { BD, 36 }, { SD, 38 }, { CH, 42 }, { OH, 60 }, { HH, 25 }, { CY, 28 }, { CR2, 49 },
+                                         { HT, 48 }, { MT, 47 }, { LT, 45 }, { T4, 43 }, { T5, 41 }, { RD, 51 }, { RB, 53 },
+                                         { RE, 59 }, { HSH, 22 }, { CFX, 29 }, { C1C, 94 }, { CLP, -1 }, { TMB, -1 } };
+    for (const auto& [slot, note] : home)
+    {
+        INFO ("slot " << slot);
+        CHECK (homeNote (map, Layout::grooveLibrary, slot, 36) == note);
+    }
+    // General MIDI's as before.
+    CHECK (homeNote (generalMidi(), Layout::generalMidi, MT, 36) == 45);
+    CHECK (homeNote (generalMidi(), Layout::generalMidi, LT, 36) == 43);
+    CHECK (homeNote (generalMidi(), Layout::generalMidi, T4, 36) == 41);
 }

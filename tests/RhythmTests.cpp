@@ -118,7 +118,7 @@ TEST_CASE ("TAP: a groove's rhythm through its map, kept as text to the twelfth 
     const auto r = grooves::rhythmOf (g, synth::drums::notemap::grooveLibrary());
     CHECK (r.beats[(size_t) Lane::kick] == std::vector<double> { 0.0 });   // the one past 32 beats left out
     CHECK (r.beats[(size_t) Lane::snare] == std::vector<double> { 1.0 });
-    CHECK (r.beats[(size_t) Lane::hats].size() == 1);                        // 22: the closed hat; 44 (pedal) not a lane
+    CHECK (r.beats[(size_t) Lane::hats].size() == 1);                        // 22: the hats (closed edge); 44 (pedal) not a lane
     CHECK (r.beats[(size_t) Lane::ride] == std::vector<double> { 2.0 });
     CHECK (r.beats[(size_t) Lane::crash] == std::vector<double> { 3.0 });
     const auto back = Rhythm::decode (r.encode());

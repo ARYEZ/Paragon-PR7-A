@@ -59,6 +59,10 @@ NoteMapList::NoteMapList (ParagonX1AudioProcessor& p) : processor (p)
             }
         };
         row->note.setInterceptsMouseClicks (false, false);
+        row->source.setFont (juce::FontOptions (12.0f));
+        row->source.setColour (juce::Label::textColourId, ParagonColours::textDim);
+        row->source.setInterceptsMouseClicks (false, false);
+        row->addAndMakeVisible (row->source);
         row->onClick = [this, n] { select (n); if (onSelect) onSelect (n); };
         row->chosen = n == selected;
         row->addAndMakeVisible (row->note);
@@ -73,9 +77,23 @@ NoteMapList::NoteMapList (ParagonX1AudioProcessor& p) : processor (p)
 void NoteMapList::refresh()
 {
     const auto map = processor.getNoteMap();
-    if (map == shown && notenames::middleCOctave.load() == shownOctave)
+    const auto layout = (int) processor.getMapLayout();
+    if (map == shown && notenames::middleCOctave.load() == shownOctave && layout == shownLayout)
         return;
     shown = map;
+    if (layout != shownLayout)
+    {
+        // 0.58.0: on GROOVE LIBRARY each note's name in the map it follows ("Hats: Open 2"), beside the drum we play.
+        shownLayout = layout;
+        const auto library = layout == (int) synth::drums::notemap::Layout::grooveLibrary;
+        for (size_t n = 0; n < rows.size(); ++n)
+        {
+            rows[n]->source.setText (library ? juce::String (synth::drums::notemap::grooveLibraryName ((int) n)) : juce::String(),
+                                     juce::dontSendNotification);
+            rows[n]->showsNames = library;
+            rows[n]->resized();
+        }
+    }
     if (const auto octave = notenames::middleCOctave.load(); octave != shownOctave)
     {
         shownOctave = octave;   // 0.35.1: the names follow NOTE NAMES
@@ -126,8 +144,19 @@ void NoteMapList::Row::paint (juce::Graphics& g)
 void NoteMapList::Row::resized()
 {
     auto area = getLocalBounds();
-    note.setBounds (area.removeFromLeft (110));
-    box->setBounds (area.removeFromLeft (220).reduced (0, 1));
+    // 0.58.0: with the layout's own names (GROOVE LIBRARY) the note column narrows and the name sits before the drum.
+    if (showsNames)
+    {
+        note.setBounds (area.removeFromLeft (64));
+        source.setBounds (area.removeFromLeft (122));
+        box->setBounds (area.reduced (0, 1));
+    }
+    else
+    {
+        source.setBounds ({});
+        note.setBounds (area.removeFromLeft (110));
+        box->setBounds (area.removeFromLeft (220).reduced (0, 1));
+    }
 }
 
 //==============================================================================

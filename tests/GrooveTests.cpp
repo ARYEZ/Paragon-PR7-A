@@ -127,11 +127,11 @@ TEST_CASE ("GROOVES: the power hand is what the riding hand plays most, through 
 {
     using grooves::PowerHand;
     CHECK (readBlock (midiFile (rockBeat (42)))->hand == PowerHand::closedHat);
-    CHECK (readBlock (midiFile (rockBeat (22)))->hand == PowerHand::closedHat);   // the layout's tight-tip closed hat
+    CHECK (readBlock (midiFile (rockBeat (22)))->hand == PowerHand::closedHat);   // the layout's closed edge (the shoulder)
     CHECK (readBlock (midiFile (rockBeat (46)))->hand == PowerHand::openHat);
     CHECK (readBlock (midiFile (rockBeat (51)))->hand == PowerHand::ride);
     CHECK (readBlock (midiFile (rockBeat (49)))->hand == PowerHand::crash);
-    CHECK (readBlock (midiFile (rockBeat (3)))->hand == PowerHand::percussion);   // the tambourine
+    CHECK (readBlock (midiFile (rockBeat (54)), "/x/Verse.mid", generalMidi())->hand == PowerHand::percussion);   // GM's tambourine
     // Through General MIDI, 22 is nothing: the hand isn't known.
     CHECK (readBlock (midiFile (rockBeat (22)), "/x/Verse.mid", generalMidi())->hand == PowerHand::none);
     // Kick and snare only: none.

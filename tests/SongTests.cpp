@@ -239,7 +239,7 @@ TEST_CASE ("SONG: a groove as a block (through the folder's map, the factor and 
     g.name = "Chorus 01";
     g.file = juce::File ("/grooves/Rock/Chorus 01.mid");
     g.lengthBeats = 4.0;
-    g.hits = { { 0.0, 36, 1.0f }, { 1.0, 22, 0.5f }, { 2.0, 4, 1.0f } };   // 22: closed hat in the groove library map; 4: no drum
+    g.hits = { { 0.0, 36, 1.0f }, { 1.0, 42, 0.5f }, { 2.0, 4, 1.0f } };   // 42: closed hat in the groove library map; 4: no drum
     const auto b = song::blockFrom (g, grooveLibrary(), grooves::TempoFactor::twice, 0.8f);
     CHECK (b.name == "Chorus 01");
     CHECK (b.part == grooves::Part::chorus);
@@ -1569,10 +1569,10 @@ TEST_CASE ("SEQUENCER DROP: a groove replaces the pattern shown; ticked parts or
     using grooves::DrumPart;
     Plugin t;
     const auto pack = t.folder.getChildFile ("Pack");
-    // A one-bar groove: kick on 1 and 3, snare on 2 and 4, eighth hats (the groove library map: 22 closed hat).
+    // A one-bar groove: kick on 1 and 3, snare on 2 and 4, eighth hats (the groove library map: 42 closed hat).
     std::vector<std::pair<double, int>> notes { { 0.0, 36 }, { 2.0, 36 }, { 1.0, 38 }, { 3.0, 38 } };
     for (int e = 0; e < 8; ++e)
-        notes.push_back ({ e * 0.5, 22 });
+        notes.push_back ({ e * 0.5, 42 });
     writeMidi (pack.getChildFile ("Rock/Verse 01.mid"), notes);
     writeMidi (pack.getChildFile ("Rock/Chorus 01.mid"), { { 0.0, 36 }, { 0.5, 36 } });
     REQUIRE (t.p.getGrooveLibrary().addFolder (pack));

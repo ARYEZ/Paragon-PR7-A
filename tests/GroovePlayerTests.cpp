@@ -165,7 +165,7 @@ TEST_CASE ("GROOVE PREVIEW: the velocity scale, and STOP", "[grooves][groove-pla
     CHECK (t.p.getGroovePosition() < 0.0);
 }
 
-TEST_CASE ("GROOVE PREVIEW: notes through the folder's map: 22 is the closed hat in a groove library's files, nothing in GM's", "[grooves][groove-player]")
+TEST_CASE ("GROOVE PREVIEW: notes through the folder's map: 22 is the hats' closed edge in a groove library's files, nothing in GM's", "[grooves][groove-player]")
 {
     Plugin t;
     const auto pack = t.folder.getChildFile ("Pack"), gm = t.folder.getChildFile ("GM Pack");
@@ -177,7 +177,7 @@ TEST_CASE ("GROOVE PREVIEW: notes through the folder's map: 22 is the closed hat
     library.setLayout (1, Layout::generalMidi);
     t.p.playGroove (groove ({ { 0.0, 22 } }), 0, false);
     t.p.processBlock (*std::make_unique<juce::AudioBuffer<float>> (2, blockSize), *std::make_unique<juce::MidiBuffer>());
-    CHECK (t.p.getDrumKit().isSounding (CH));
+    CHECK (t.p.getDrumKit().isSounding (HSH));   // 0.58.0: the closed edge (our SHOULDER)
     Plugin u;   // (the same temporary folder, made afresh)
     gm.createDirectory();
     REQUIRE (u.p.getGrooveLibrary().addFolder (gm));
@@ -196,7 +196,7 @@ TEST_CASE ("GROOVE DRAG: the file on this kit's notes, or as written; velocity a
     const auto pack = t.folder.getChildFile ("Pack");
     pack.createDirectory();
     REQUIRE (t.p.getGrooveLibrary().addFolder (pack));
-    const auto g = groove ({ { 0.0, 36 }, { 1.0, 22 }, { 2.0, 53 }, { 3.0, 3 } });
+    const auto g = groove ({ { 0.0, 36 }, { 1.0, 42 }, { 2.0, 53 }, { 3.0, 55 } });
     const auto notesIn = [&t, &g]
     {
         const auto file = t.p.grooveDragFile (g, 0);
@@ -205,18 +205,18 @@ TEST_CASE ("GROOVE DRAG: the file on this kit's notes, or as written; velocity a
         REQUIRE (read.has_value());
         return read;
     };
-    // The kit on ROOT (C2): each drum on its key there: kick 36, closed hat 42, ride bell 49, tambourine 54.
+    // The kit on ROOT (C2): each drum on its key there: kick 36, closed hat 42, ride bell 49, splash 52.
     auto r = notesIn();
     REQUIRE (r->hits.size() == 4);
     CHECK (r->hits[0].note == 36);
     CHECK (r->hits[1].note == 36 + CH);
     CHECK (r->hits[2].note == 36 + RB);
-    CHECK (r->hits[3].note == 36 + TMB);
+    CHECK (r->hits[3].note == 36 + SPL);
     // The kit on the groove libraries' map, as the folder: as written (every note kept as it is).
     testkit::set (t.p, ParamIDs::drumsMap, (float) Layout::grooveLibrary);
     r = notesIn();
-    CHECK (r->hits[1].note == 22);
-    CHECK (r->hits[3].note == 3);
+    CHECK (r->hits[1].note == 42);
+    CHECK (r->hits[3].note == 55);
     // 2x and half velocity: the notes twice as close, half as hard.
     testkit::set (t.p, ParamIDs::drumsMap, (float) Layout::root);
     t.preview (true, grooves::TempoFactor::twice, 0.5f);
@@ -228,7 +228,7 @@ TEST_CASE ("GROOVE DRAG: the file on this kit's notes, or as written; velocity a
     auto s = t.p.getGrooveLibrary().getPreview();
     s.forThisKit = false;
     t.p.getGrooveLibrary().setPreview (s);
-    CHECK (notesIn()->hits[1].note == 22);
+    CHECK (notesIn()->hits[1].note == 42);
 }
 
 TEST_CASE ("GROOVES page: the browser's columns lead to the folder chosen, which filters the list; back and forward retrace it", "[grooves][groove-player][ui]")
@@ -493,7 +493,7 @@ TEST_CASE ("GROOVE INTO THE SEQUENCER: a pattern with the groove's notes, played
 {
     Plugin t;
     // A one-bar groove with an off-grid hit (a laid-back snare: 1.06 beats), soft hats, and a note no drum has (4).
-    auto g = groove ({ { 0.0, 36 }, { 1.06, 36 }, { 2.5, 22 }, { 3.0, 4 } }, 90.0, 1, 0.8f);
+    auto g = groove ({ { 0.0, 36 }, { 1.06, 36 }, { 2.5, 42 }, { 3.0, 4 } }, 90.0, 1, 0.8f);
     auto& library = t.p.getGrooveLibrary();
     const auto pack = t.folder.getChildFile ("Pack");
     pack.createDirectory();
@@ -507,7 +507,7 @@ TEST_CASE ("GROOVE INTO THE SEQUENCER: a pattern with the groove's notes, played
     const auto& made = t.p.getModMatrix().drumPatterns[1];
     REQUIRE (made.notes.size() == 3);
     CHECK (made.notes[0].row == BD);
-    CHECK (made.notes[2].row == CH);   // 22: the closed hat, through the folder's map
+    CHECK (made.notes[2].row == CH);   // 42: the closed hat, through the folder's map
     CHECK_THAT (made.notes[1].start, WithinAbs (1.06 * 4.0, 1e-9));   // in sixteenths, off the grid as played
     CHECK_THAT (made.notes[0].velocity, WithinAbs (0.8, 1e-6));
     const auto value = [&t] (const char* id) { return t.p.getParameters().getRawParameterValue (id)->load(); };
@@ -976,7 +976,7 @@ TEST_CASE ("GROOVE PARTS: dragged out, only the parts chosen", "[parts][groove-p
     const auto pack = t.folder.getChildFile ("Pack");
     pack.createDirectory();
     REQUIRE (t.p.getGrooveLibrary().addFolder (pack));
-    const auto g = groove ({ { 0.0, 36 }, { 1.0, 38 }, { 0.5, 42 }, { 1.5, 46 }, { 2.0, 51 } });
+    const auto g = groove ({ { 0.0, 36 }, { 1.0, 38 }, { 0.5, 42 }, { 1.5, 60 }, { 2.0, 51 } });   // (0.58.0: 60 the open hat; 46 is OPEN 2)
     const auto file = t.p.grooveDragFile (g, 0, (1u << (int) grooves::DrumPart::hats) | (1u << (int) grooves::DrumPart::ride));
     CHECK (file.getFileNameWithoutExtension().endsWith ("HI-HAT RIDE"));
     const auto read = grooves::read (file, synth::drums::notemap::grooveLibrary());
@@ -1035,7 +1035,7 @@ TEST_CASE ("GROOVE PARTS page: the chosen groove's parts counted; ticking; the p
     const auto pack = t.folder.getChildFile ("Pack");
     {
         juce::MidiMessageSequence track;
-        for (const auto& [beat, note] : std::vector<std::pair<double, int>> { { 0, 36 }, { 2, 36 }, { 1, 38 }, { 3, 38 }, { 0, 42 }, { 1, 42 }, { 2, 42 }, { 3, 46 } })
+        for (const auto& [beat, note] : std::vector<std::pair<double, int>> { { 0, 36 }, { 2, 36 }, { 1, 38 }, { 3, 38 }, { 0, 42 }, { 1, 42 }, { 2, 42 }, { 3, 60 } })   // (0.58.0: 60 the open hat)
         {
             track.addEvent (juce::MidiMessage::noteOn (10, note, (juce::uint8) 100).withTimeStamp (beat * 480));
             track.addEvent (juce::MidiMessage::noteOff (10, note).withTimeStamp (beat * 480 + 60));

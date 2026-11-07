@@ -36,9 +36,9 @@ public:
 private:
     struct Row final : public juce::Component
     {
-        juce::Label note;
+        juce::Label note, source;   // 0.58.0: `source`, the name GROOVE LIBRARY's map gives the note
         std::unique_ptr<juce::ComboBox> box;
-        bool mapped = false, chosen = false;
+        bool mapped = false, chosen = false, showsNames = false;
         std::function<void()> onClick;
         void paint (juce::Graphics&) override;
         void resized() override;
@@ -49,6 +49,7 @@ private:
     std::vector<std::unique_ptr<Row>> rows;
     synth::drums::notemap::Map shown {};
     int shownOctave = 0;   // (0.35.1) the NOTE NAMES the rows are written with
+    int shownLayout = -1;  // (0.58.0) the layout the rows' names are for
 };
 
 //==============================================================================

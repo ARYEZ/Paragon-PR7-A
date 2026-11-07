@@ -16,8 +16,9 @@ namespace grooves
         // the clap as a snare, 0.31.0; anything older is read again, once).
         juce::String stamp (const juce::File& f, Layout layout)
         {
+            // (0.58.0: GROOVE LIBRARY's notes became the owner's full map: its folders read again once, ":2".)
             return "4:" + juce::String (f.getSize()) + ":" + juce::String (f.getLastModificationTime().toMilliseconds()) + ":"
-                   + juce::String ((int) layout);
+                   + juce::String ((int) layout) + (layout == Layout::grooveLibrary ? ":2" : "");
         }
 
         std::unique_ptr<juce::XmlElement> toXml (const Entry& e, const juce::String& key)

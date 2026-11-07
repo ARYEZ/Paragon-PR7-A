@@ -10,9 +10,9 @@
 //   ROOT          the 36 keys from ROOT play the slots in order (C the kick ... the first 12 as on General MIDI kits'
 //                 octave, as PR7-K played them); the four keys under ROOT start the sequencer's patterns on KEY.
 //   GROOVE LIBRARY  the extended layout of popular drum software's groove libraries, so their MIDI grooves play as
-//                 written: several notes per drum (its articulations), from note 1 to 127. Inspired by that layout,
-//                 checked against the owner's copy of one maker's published map and an open-source drum-map table;
-//                 our own reading where they're silent (which ride notes are bow, bell or edge).
+//                 written: several notes per drum (its articulations), from note 6 to 127. Since 0.58.0 the owner's
+//                 full map of that software's big progressive kit, note for note (each note's name kept), our
+//                 nearest drum where we have no such articulation.
 //   GENERAL MIDI  the General MIDI percussion map (35 to 81).
 //   CUSTOM        the player's own, edited note by note (and saved as their default).
 //
@@ -73,46 +73,81 @@ namespace synth::drums::notemap
         }
     }
 
-    // The groove libraries' layout: the owner's map (sent from that software's manual) as drums. Each articulation goes
-    // to the slot that plays it: center hits to the snare (SD), rimshots to SD2, sidesticks to RIM; the three tom
-    // pieces to HT (rack), MT (floor 1) and LT (floor 2); every crash note to CY except 86, which an open-source map
-    // of the same layout calls a crash too; ride notes to RD but 53, the bell (General MIDI's ride bell, kept there by
-    // the same open-source map). Its hat openness levels go to CH (closed), PH (pedal) and OH (open); HH, CR2, CHN and
-    // SPL are left for CUSTOM until a real groove file shows which notes they are.
-    //
-    // 0.17.0, articulations: 59 is the ride's edge (the owner's packs use it in their "ride crash" grooves); the hat's
-    // 24, 25 and 26 are its openness steps OPEN 1, OPEN 2 (HH) and OPEN 3 (OUR GUESS at their order: the rock pack's
-    // open-hat grooves ride mostly on 25, 24 next, 26 least); the rest of its open notes play OPEN 4 (OH). Note 7 is
-    // the HI-HAT (PEDAL) note, as that software's default "edge trigger": the openness the pedal (CC 4) is at, closed
-    // when no pedal is sending, which is how it played before.
+    // The groove libraries' layout. 0.58.0: the owner's full map, note for note, from their screenshots of a big
+    // progressive-metal kit's MIDI mapping in that software (0.2.0-0.57.0 had our reading of a shorter list). Each
+    // note keeps the name that map gives it (`grooveLibraryName`, shown beside the note in SETTINGS), and plays our
+    // nearest slot where we have no such articulation (OUR CHOICES, said so in the table):
+    //   - the hats' TIP / EDGE TRIGGER notes (meant to follow the pedal) play HI-HAT (PEDAL); CLOSED / TIGHT EDGE the
+    //     SHOULDER (HSH); OPEN 0 plays OPEN 1 and OPEN 5 OPEN 4 (we have four open steps, it has six); OPEN PEDAL (the
+    //     foot splash) the PEDAL (PH); SEQ HITS closed;
+    //   - the snare's EDGE, FLAMS, RUFFS and ZONE TRIGGER the snare; RIM ONLY the sidestick (RIM: a rim click);
+    //   - every tom's RIMSHOT and RIM ONLY that tom; KICK OPEN the kick;
+    //   - the ride's BOW TIP / SHANK the bow (RD), BELL TIP / SHANK the bell (RB), MUTE HIT the bow;
+    //   - MUTE HITs: cymbal 1, cymbal 2, china 1 and the splash their CHOKE slots; cymbals 3-6, china 2 and the
+    //     holed cymbal (its "Spock", our FX CRASH) have no choke: their crash.
+    // Cymbal 1 is CRASH (CY), cymbal 2 CRASH 2, cymbals 3-6 CRASH 3-6; racktom 1-3 TOM 1-3 (HT MT LT), floortom 1-2
+    // FLOOR (T4) and FLOOR 2 (T5). Notes 0-5 play nothing (as in that map).
+    struct LibraryNote { int note; std::int8_t slot; const char* name; };
+    inline constexpr LibraryNote libraryNotes[] = {
+        { 6, SD, "Snare: Zone Trigger" },      { 7, PEDAL, "Hats: Edge Trigger" },   { 8, PEDAL, "Hats: Tip Trigger" },
+        { 9, PEDAL, "Hats: Tip Trigger" },     { 10, PH, "Hats: Closed Pedal" },     { 11, HSH, "Hats: Closed Edge" },
+        { 12, HO1, "Hats: Open 0" },           { 13, HO1, "Hats: Open 1" },          { 14, HH, "Hats: Open 2" },
+        { 15, HO3, "Hats: Open 3" },           { 16, OH, "Hats: Open 4" },           { 17, OH, "Hats: Open 5" },
+        { 18, PEDAL, "Hats: Edge Trigger" },   { 19, PEDAL, "Hats: Tip Trigger" },   { 20, PEDAL, "Hats: Tip Trigger" },
+        { 21, PH, "Hats: Closed Pedal" },      { 22, HSH, "Hats: Closed Edge" },     { 23, PH, "Hats: Open Pedal" },
+        { 24, HO1, "Hats: Open 1" },           { 25, HH, "Hats: Open 2" },           { 26, HO3, "Hats: Open 3" },
+        { 27, CHN, "China 1: Crash" },         { 28, CY, "Cymbal 1: Crash" },        { 29, CFX, "Spock: Crash" },
+        { 30, C3, "Cymbal 3: Crash" },         { 31, C4, "Cymbal 4: Crash" },        { 32, C6, "Cymbal 6: Crash" },
+        { 33, SD, "Snare: Edge" },             { 34, BD, "Kick: Open" },             { 35, BD, "Kick: Hit (Stack)" },
+        { 36, BD, "Kick: Hit (Stack)" },               { 37, RIM, "Snare: Sidestick" },      { 38, SD, "Snare: Center (Stack)" },
+        { 39, SD, "Snare: Ruffs" },            { 40, SD2, "Snare: Rimshot" },        { 41, T5, "Floortom 2: Center" },
+        { 42, CH, "Hats: Closed Tip" },        { 43, T4, "Floortom 1: Center" },     { 44, PH, "Hats: Closed Pedal" },
+        { 45, LT, "Racktom 3: Center" },       { 46, HH, "Hats: Open 2" },           { 47, MT, "Racktom 2: Center" },
+        { 48, HT, "Racktom 1: Center" },       { 49, CR2, "Cymbal 2: Crash" },       { 50, C2C, "Cymbal 2: Mute Hit" },
+        { 51, RD, "Ride: Bow Tip" },           { 52, CH2, "China 2: Crash" },        { 53, RB, "Ride: Bell Shank" },
+        { 54, CH2, "China 2: Mute Hit" },      { 55, SPL, "Splash: Crash" },         { 56, SPC, "Splash: Mute Hit" },
+        { 57, C5, "Cymbal 5: Crash" },         { 58, C5, "Cymbal 5: Mute Hit" },     { 59, RE, "Ride: Edge" },
+        { 60, OH, "Hats: Open 4" },            { 61, CH, "Hats: Closed Tip" },       { 62, HSH, "Hats: Tight Edge" },
+        { 63, CH, "Hats: Tight Tip" },         { 64, HO1, "Hats: Open 0" },          { 65, CH, "Hats: Seq Hits" },
+        { 66, SD, "Snare: Center (Stack)" },           { 67, RIM, "Snare: Sidestick" },      { 68, SD, "Snare: Center (Stack)" },
+        { 69, SD, "Snare: Flams" },            { 70, SD, "Snare: Center (Stack)" },          { 71, RIM, "Snare: Rim Only" },
+        { 72, T5, "Floortom 2: Rim Only" },    { 73, T5, "Floortom 2: Rimshot" },    { 74, T4, "Floortom 1: Rim Only" },
+        { 75, T4, "Floortom 1: Rimshot" },     { 76, CFX, "Spock: Mute Hit" },       { 77, LT, "Racktom 3: Rim Only" },
+        { 78, LT, "Racktom 3: Rimshot" },      { 79, MT, "Racktom 2: Rim Only" },    { 80, MT, "Racktom 2: Rimshot" },
+        { 81, HT, "Racktom 1: Rim Only" },     { 82, HT, "Racktom 1: Rimshot" },     { 83, CHC, "China 1: Mute Hit" },
+        { 84, RD, "Ride: Bow Shank" },         { 85, RB, "Ride: Bell Shank" },       { 86, RE, "Ride: Edge" },
+        { 87, RD, "Ride: Bow Tip" },           { 88, RB, "Ride: Bell Tip" },         { 89, RD, "Ride: Bow Shank" },
+        { 90, RB, "Ride: Bell Shank" },        { 91, RE, "Ride: Edge" },             { 92, RD, "Ride: Bow Tip" },
+        { 93, RB, "Ride: Bell Tip" },          { 94, C1C, "Cymbal 1: Mute Hit" },    { 95, C3, "Cymbal 3: Mute Hit" },
+        { 96, RD, "Ride: Bow Shank" },         { 97, RB, "Ride: Bell Shank" },       { 98, RE, "Ride: Edge" },
+        { 99, RD, "Ride: Bow Tip" },           { 100, RB, "Ride: Bell Tip" },        { 101, RD, "Ride: Bow Tip" },
+        { 102, RB, "Ride: Bell Shank" },       { 103, RE, "Ride: Edge" },            { 104, RD, "Ride: Bow Shank" },
+        { 105, RB, "Ride: Bell Tip" },         { 106, C4, "Cymbal 4: Mute Hit" },    { 107, C6, "Cymbal 6: Mute Hit" },
+        { 108, RD, "Ride: Bow Tip" },          { 109, RB, "Ride: Bell Shank" },      { 110, RE, "Ride: Edge" },
+        { 111, RD, "Ride: Bow Shank" },        { 112, RB, "Ride: Bell Tip" },        { 113, RD, "Ride: Bow Tip" },
+        { 114, RB, "Ride: Bell Shank" },       { 115, RE, "Ride: Edge" },            { 116, RD, "Ride: Bow Shank" },
+        { 117, RB, "Ride: Bell Tip" },         { 118, RD, "Ride: Mute Hit" },        { 119, CH, "Hats: Closed Tip" },
+        { 120, HO1, "Hats: Open 1" },          { 121, HO3, "Hats: Open 3" },         { 122, HSH, "Hats: Closed Edge" },
+        { 123, HO1, "Hats: Open 0" },          { 124, OH, "Hats: Open 5" },          { 125, SD, "Snare: Center (Stack)" },
+        { 126, SD2, "Snare: Rimshot" },        { 127, RIM, "Snare: Sidestick" },
+    };
+    static_assert (std::size (libraryNotes) == 122);
+
     inline Map grooveLibrary()
     {
-        using namespace detail;
         auto m = empty();
-        set (m, SHK, { 2 });
-        set (m, TMB, { 3 });
-        range (m, BD, 34, 36);
-        set (m, SD, { 6, 33, 38, 39, 66, 68, 69, 70, 125 });
-        set (m, SD2, { 40, 71, 126 });
-        set (m, RIM, { 37, 67, 76, 127 });
-        set (m, CH, { 8, 9, 11, 18, 19, 20, 22, 42, 61, 62, 63, 64, 65, 119, 122 });
-        set (m, PEDAL, { 7 });
-        set (m, PH, { 10, 21, 23, 44 });
-        set (m, OH, { 12, 13, 14, 15, 16, 17, 46, 60, 120, 121, 123, 124 });
-        set (m, HO1, { 24 });
-        set (m, HH, { 25 });
-        set (m, HO3, { 26 });
-        set (m, HT, { 47, 48, 79, 80, 81, 82 });
-        set (m, MT, { 43, 45, 74, 75, 77, 78 });
-        set (m, LT, { 41, 72, 73 });
-        set (m, RD, { 29, 30, 51, 52, 54 });
-        set (m, RE, { 59 });
-        range (m, RD, 83, 93);
-        range (m, RD, 96, 105);
-        range (m, RD, 108, 118);
-        set (m, RB, { 53 });
-        set (m, CY, { 27, 28, 31, 32, 49, 50, 55, 56, 57, 58, 86, 94, 95, 106, 107 });
+        for (const auto& n : libraryNotes)
+            m[(size_t) n.note] = n.slot;
         return m;
+    }
+
+    // The name the groove libraries' map gives a note ("" for a note it leaves empty).
+    inline const char* grooveLibraryName (int note) noexcept
+    {
+        for (const auto& n : libraryNotes)
+            if (n.note == note)
+                return n.name;
+        return "";
     }
 
     // General MIDI's percussion map, on the slots nearest each sound (no slot for the cowbell, the bongos and the
@@ -152,10 +187,15 @@ namespace synth::drums::notemap
             return root + slot >= 0 && root + slot < 128 ? root + slot : -1;
         if (layout == Layout::grooveLibrary || layout == Layout::generalMidi)
         {
-            constexpr std::array<int, numSlots> preferred { 36, 37, 38, 39, 40, 41, 42, 45, 44, 48, 46, 49, 51, 53, 57, 52, 55, 25, 54, 69,
-                                                            59, 24, 26 };
+            // Each slot's main note: General MIDI's where it has one; GROOVE LIBRARY's (0.58.0) the owner's map's
+            // first-octave note for that drum (its crashes and toms are numbered differently from General MIDI's).
+            constexpr std::array<int, numSlots> gm { 36, 37, 38, 39, 40, 43, 42, 45, 44, 48, 46, 49, 51, 53, 57, 52, 55, -1, 54, 69,
+                                                     -1, -1, -1, 41, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };
+            constexpr std::array<int, numSlots> library { 36, 37, 38, -1, 40, 45, 42, 47, 44, 48, 60, 28, 51, 53, 49, 27, 55, 25, -1, -1,
+                                                          59, 24, 26, 43, 22, 94, 50, 83, 56, 30, 31, 57, 32, 29, 52, 41 };
+            const auto& preferred = layout == Layout::grooveLibrary ? library : gm;
             const auto n = preferred[(size_t) juce::jlimit (0, numSlots - 1, slot)];
-            if (n >= 0 && m[(size_t) n] == slot)
+            if (n >= 0 && n < 128 && m[(size_t) n] == slot)
                 return n;
         }
         for (int n = 0; n < 128; ++n)

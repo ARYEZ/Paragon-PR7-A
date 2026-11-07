@@ -2,6 +2,28 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.58.0
+
+**GROOVE LIBRARY is now your full map, note for note** (you sent the complete MIDI mapping of your big progressive kit, notes 0 to 127, and asked for ours to match exactly). Choose **Groove Library** under SETTINGS > MIDI IN / E-DRUMS > MAP.
+
+- **Every note from 6 to 127 now plays what your map says it plays.** Notes 0 to 5 play nothing, as in your map. Each note's name in your map ("Hats: Open 2", "Racktom 1: Rimshot"...) is shown beside it in the SETTINGS list, between the note and the drum we play, so you can check them line by line against your screenshots.
+- **What changed from before:**
+  - **Toms:** 48 Racktom 1 = TOM 1, 47 Racktom 2 = TOM 2, 45 Racktom 3 = TOM 3, 43 Floortom 1 = FLOOR (T4), 41 Floortom 2 = FLOOR 2 (T5). Before, 47 and 48 were both TOM 1, and the floor toms were on TOM 2 / TOM 3.
+  - **Cymbals each on their own drum:** Cymbal 1 (28) = CRASH, Cymbal 2 (49) = CRASH 2, Cymbals 3-6 (30, 31, 57, 32) = CRASH 3-6, China 1 (27) = CHINA, China 2 (52) = CHINA 2, Splash (55) = SPLASH, the holed cymbal (29) = FX CRASH. Before, almost every crash note played CRASH.
+  - **Mute hits:** Cymbal 1, Cymbal 2, China 1 and the Splash play their CHOKE drums (94, 50, 83, 56).
+  - **Hats:** Closed Edge and Tight Edge (11, 22, 62, 122) play the SHOULDER. Open 0-5 play OPEN 1 to OPEN 4 by name. Edge / Tip Trigger (7-9, 18-20) follow the pedal (CC 4). Note 46 is Open 2, so it plays OPEN 2 now, not OPEN 4.
+  - **Ride:** every Edge note plays RIDE EDGE (86 was a crash before). Bow Tip / Shank play the bow, Bell Tip / Shank the bell.
+  - **2 and 3 play nothing now** (they were the shaker and tambourine).
+- **Where we have no such articulation, the nearest drum plays it** (our choices):
+  - **Kick:** Kick Open plays the kick.
+  - **Snare:** Snare Edge, Flams, Ruffs and Zone Trigger play the snare. Snare Rim Only plays the sidestick, since both are a rim click (a guess).
+  - **Toms:** every tom's Rimshot and Rim Only play that tom.
+  - **Hats:** Open 0 plays OPEN 1 and Open 5 plays OPEN 4 (your map has six open steps, we have four). Open Pedal plays the PEDAL. Seq Hits plays the closed hat.
+  - **Ride:** Ride Mute Hit plays the bow.
+  - **Cymbals with no choke drum:** Cymbals 3-6, China 2 and the holed cymbal play their own crash on a Mute Hit.
+- **Grooves in GROOVE LIBRARY folders are read again once** the next time GROOVES opens, since what their notes play changed.
+- **Your saved CUSTOM map isn't touched.** It's your own copy. Choose Groove Library to use the new one.
+
 ## 0.57.0
 
 **The PR7-D hologram on the KIT VIEW's floor** (the mock-up you chose, B, with the scanlines drifting and a pulse on the kick). On each side of the kit, where the floor was empty, the PR7-D icon now floats over a glowing ring on the grid, with a beam of light running from the ring up to it. The left one is pink, the hi-hat side's glow colour. The right one is orange, the ride side's.
