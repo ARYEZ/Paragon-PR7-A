@@ -10,9 +10,12 @@ with a red grid. Not built into the plugin yet: the owner is approving the mock-
   the neck, so mostly off the window with only its horns showing. 3000 px a metre at the plugin's 1x, the scale 91% of
   a real 26.5" so the frets fit as the reference's do.
 - **View:** the owner's choice: the headstock to the right, the low A on top (as a guitar seen from the front).
-- **Body:** a superstrat (offset double cutaway, pointed horns), our own outline, no maker's name or logo; the owner
-  turned down a first body drawn from another guitar's photo. Its points are in `OUTLINE_PARTS`, in millimetres from
-  the bridge. `GUITAR_VIEW=full` renders the whole guitar, to check its shape.
+- **Body:** traced off a photo of a 7-string superstrat at the owner's ask, after two drawn bodies didn't convince
+  them (no maker's name or logo used anywhere; the photo itself is not in the repository). `body-outline.json` holds
+  the outline in millimetres from the fretboard's end and the neck's centre line (traced with OpenCV: everything not
+  joined to the photo's white background, the neck cut off down to the board's end, strap buttons smoothed off,
+  simplified to 121 points, scaled so the photo's neck is our 64 mm). Only the horns and the top of the body show
+  in the window. `GUITAR_VIEW=full` renders the whole guitar, to check its shape.
 - `blender -b -P guitar3d.py -- <out.png> [samples] [width] [height] [geometry.json]` (Blender 4.0). 1600 x 900 is
   the window at 1x; the plugin's picture is 3200 x 1800 (about 8 minutes at 64 samples on 4 cores). `geometry.json`
   says where each string meets the nut and the bridge, each fret and the board's edges land, in window pixels, for the

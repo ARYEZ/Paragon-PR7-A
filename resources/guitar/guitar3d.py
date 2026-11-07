@@ -242,9 +242,11 @@ OUTLINE_PARTS = [
      (-35, -174), (-92, -162), (-132, -128), (-152, -72), (-157, 0), (-150, 66), (-126, 118), (-84, 150),
      (-26, 160), (30, 150), (80, 132), (125, 124), (170, 124), (215, 124), (255, 120), (278, 112), (285, 104)],
 ]
-outline = []
-for part in OUTLINE_PARTS:
-    outline += catmull([B(*p) for p in part])
+# 0.4.0 mock-up 3: the outline traced off a photo of a 7-string superstrat at the owner's ask (body-outline.json, in mm
+# from the fretboard's end and the neck's centre line); OUTLINE_PARTS above is the drawn one it replaced
+BOARD_END = X_BRIDGE + L * 2 ** (-24 / 12) - 0.007
+with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "body-outline.json")) as f:
+    outline = [(BOARD_END + x / 1000.0, y / 1000.0) for x, y in json.load(f)["points"]]
 # the outline as a slab: one flat face on top and one below (n-gons, so the lacquer shades clean), the edge rounded
 # by a bevel
 n_out = len(outline)
