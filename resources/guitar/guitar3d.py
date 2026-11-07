@@ -91,7 +91,7 @@ def grid_floor():
     sep = nt.nodes.new("ShaderNodeSeparateXYZ")
     nt.links.new(coords.outputs["Object"], sep.inputs["Vector"])
     def line(axis):
-        a = nt.nodes.new("ShaderNodeMath"); a.operation = "MULTIPLY"; a.inputs[1].default_value = 1 / (48 / 2774.0)
+        a = nt.nodes.new("ShaderNodeMath"); a.operation = "MULTIPLY"; a.inputs[1].default_value = 3000.0 / 48   # a line every 48 px at 1x (PX_PER_M below)
         f = nt.nodes.new("ShaderNodeMath"); f.operation = "FRACT"
         c = nt.nodes.new("ShaderNodeMath"); c.operation = "SUBTRACT"; c.inputs[1].default_value = 0.5
         ab = nt.nodes.new("ShaderNodeMath"); ab.operation = "ABSOLUTE"
@@ -192,17 +192,17 @@ def tube(name, pts, r, mat, closed=False):
     return o
 
 # ================================================================ dimensions (metres)
-PX_PER_M = 2774.0                # the plugin's 1x pixels per metre
+PX_PER_M = 3000.0                # the plugin's 1x pixels per metre
 WIDTH_1X, HEIGHT_1X = 1600, 900   # the plugin window this picture fills (rendered at 2x for the plugin)
-NECK_Y_1X = 500                  # the neck's centre line, pixels from the window's top
-L = 0.673                        # scale length (26.5")
-X_BRIDGE = -337 / 2774.0                # where the strings break over the saddles; the stage's left edge is x = 0
+NECK_Y_1X = 550                  # the neck's centre line, pixels from the window's top
+L = 0.613                        # scale length: 91% of a real 26.5", so frets 0-24 fit the window as the reference's do
+X_BRIDGE = (1560 - L * PX_PER_M) / PX_PER_M   # the nut at x = 1560 px; the bridge off the left edge               # where the strings break over the saddles; the stage's left edge is x = 0
 X_NUT = X_BRIDGE + L
-WIDE = 1.05                      # the neck and string spread drawn a quarter wider than a real 7-string, so notes fit
-NUT_SPREAD, BRIDGE_SPREAD = 0.040 * WIDE, 0.063 * WIDE   # low A to high E
-NECK_NUT, NECK_END = 0.048 * WIDE, 0.066 * WIDE
+# the neck nearly parallel, as the reference draws it (a real 7-string tapers more): the strings evenly spaced
+NUT_SPREAD, BRIDGE_SPREAD = 0.051, 0.057  # low A to high E
+NECK_NUT, NECK_END = 0.059, 0.064
 TOP = 0.022                      # body top (the body is 44 mm thick, centred on z = 0)
-BEVEL = 0.006
+BEVEL = 0.009
 
 def fret_x(n):
     return X_BRIDGE + L * 2 ** (-n / 12)
@@ -218,10 +218,10 @@ def neck_half(x):
     return (NECK_NUT + (NECK_END - NECK_NUT) * t) / 2
 
 # ================================================================ the body
-UNIT = 0.032                     # the outline's units: half the reference guitar's neck width at the body
-def B(X, Y):
-    # outline units (measured off the reference photo: the neck toward +X, the bass side at -Y) -> world
-    return (X_BRIDGE + (X + 7.0) * UNIT, -Y * UNIT)
+# A superstrat (offset double cutaway, pointed horns, the bass side's horn longer), our own outline, in millimetres
+# from the bridge (x toward the neck, y toward the low strings: up in the picture).
+def B(x, y):
+    return (X_BRIDGE + x / 1000.0, y / 1000.0)
 
 def catmull(pts, n=14):
     out = []
@@ -235,12 +235,12 @@ def catmull(pts, n=14):
     return out
 
 OUTLINE_PARTS = [
-    [(2.7, -3.1), (1.7, -2.45), (0.6, -1.75), (-0.4, -1.35)],                     # the long horn's inner curve, to the neck
-    [(-0.4, -1.35), (0.2, 0.0), (0.8, 1.35)],                                        # (under the neck)
-    [(0.8, 1.35), (1.3, 1.95), (1.75, 2.65)],                                       # the deep lower cutaway, short horn
-    [(1.75, 2.65), (0.6, 3.3), (-0.8, 3.8), (-3.8, 4.85), (-7.8, 5.25), (-10.6, 4.25), (-11.6, 1.0),
-     (-11.2, -2.4), (-9.6, -4.0), (-7.8, -4.45), (-5.6, -4.05), (-3.2, -3.45), (-1.4, -3.65), (0.4, -3.8),
-     (1.8, -3.6), (2.7, -3.1)],                                                       # round the outside, back to the tip
+    [(285, 104), (270, 98), (245, 86), (215, 68), (192, 50), (177, 36), (171, 32)],    # upper horn's inner curve, to the neck
+    [(171, 32), (173, 0), (176, -32)],                                                  # (under the neck)
+    [(176, -32), (184, -48), (200, -66), (222, -80), (245, -88)],                       # lower cutaway, to the horn's tip
+    [(245, -88), (238, -98), (215, -104), (185, -106), (150, -112), (115, -128), (75, -152), (25, -170),
+     (-35, -174), (-92, -162), (-132, -128), (-152, -72), (-157, 0), (-150, 66), (-126, 118), (-84, 150),
+     (-26, 160), (30, 150), (80, 132), (125, 124), (170, 124), (215, 124), (255, 120), (278, 112), (285, 104)],
 ]
 outline = []
 for part in OUTLINE_PARTS:
@@ -260,28 +260,6 @@ mod.angle_limit = math.radians(60)
 bpy.context.view_layer.objects.active = body
 bpy.ops.object.modifier_apply(modifier="round")
 smooth(body, 50)
-# carved facets: a dart-shaped scoop on each side of the pickups, its floor sloping down toward the body's edge
-def scoop(name, darts, depths):
-    a, b, c = [B(*p) for p in darts]
-    top = TOP + 0.05
-    verts = [(a[0], a[1], TOP - depths[0]), (b[0], b[1], TOP - depths[1]), (c[0], c[1], TOP - depths[2]),
-             (a[0], a[1], top), (b[0], b[1], top), (c[0], c[1], top)]
-    faces = [(0, 2, 1), (3, 4, 5), (0, 1, 4, 3), (1, 2, 5, 4), (2, 0, 3, 5)]
-    cutter = mesh_from(name, verts, faces, FACET)
-    mod = body.modifiers.new(name, "BOOLEAN")
-    mod.operation = "DIFFERENCE"
-    mod.solver = "EXACT"
-    mod.object = cutter
-    mod.material_mode = "TRANSFER"
-    bpy.context.view_layer.objects.active = body
-    bpy.ops.object.modifier_apply(modifier=name)
-    bpy.data.objects.remove(cutter)
-    # a soft neon line along the facet's rims
-    tube(name + " rim", [(a[0], a[1], TOP - depths[0] + 0.0004), (b[0], b[1], TOP + 0.0004), (c[0], c[1], TOP + 0.0004),
-                         (a[0], a[1], TOP - depths[0] + 0.0004)], 0.0005, NEON_SOFT, closed=True)
-# depths: (narrow tip, the wide end's edge side, the wide end's pickup side); the tip runs out at the surface
-scoop("upper facet", [(-6.6, -1.95), (-1.5, -2.9), (-1.15, -1.95)], (0.0, 0.009, 0.0025))
-scoop("lower facet", [(-5.6, 2.55), (-2.0, 1.75), (-2.45, 2.5)], (0.0, 0.0025, 0.008))
 # body faces after the cut: the facet floors keep the lacquer but read as lighter through their angle
 # the neon edge: a thin tube round the body's widest line (its rounded side), lighting the floor and the edge
 tube("edge glow", [(p[0], p[1], 0.0) for p in outline], 0.0011, NEON, closed=True)
@@ -295,7 +273,7 @@ for i in range(n):
     tx, ty = r[0] - p[0], r[1] - p[1]
     ln = math.hypot(tx, ty) or 1
     nx, ny = (ty / ln, -tx / ln) if area > 0 else (-ty / ln, tx / ln)
-    pts[i].co = (q[0] + nx * 0.0009, q[1] + ny * 0.0009, TOP - 0.004, 1)
+    pts[i].co = (q[0] + nx * 0.0012, q[1] + ny * 0.0012, 0.0, 1)
 
 # ================================================================ the neck
 x_end = fret_x(24) - 0.007
@@ -347,11 +325,11 @@ tube("headstock edge", [(p[0], p[1], neck_top - 0.002) for p in hv[1:] + hv[:1]]
 # ================================================================ pickups, bridge, controls
 def humbucker(name, X):
     x, _ = B(X, 0)
-    w, h = 0.023, 0.092
+    w, h = 0.036, 0.080
     box(name, (w, h, 0.007), (x, 0, TOP + 0.0025), PICKUP, bevel=0.0025, segs=4)
     for s in range(7):
         y = string_y(s, x)
-        for dx in (-0.0055, 0.0055):
+        for dx in (-0.0085, 0.0085):
             cylinder(name + " pole", 0.0016, 0.002, (x + dx, y, TOP + 0.0062), POLE, verts=16)
     # a glowing ring round the pickup (the kit's rim light)
     r = 0.0035
@@ -361,19 +339,19 @@ def humbucker(name, X):
         cxp, cyp = (w / 2 - r + 0.0015) * (1 if math.cos(a) >= 0 else -1), (h / 2 - r + 0.0015) * (1 if math.sin(a) >= 0 else -1)
         ring.append((x + cxp + r * math.cos(a), cyp + r * math.sin(a), TOP + 0.0006))
     tube(name + " ring", ring, 0.0006, NEON, closed=True)
-humbucker("neck pickup", -2.5)
-humbucker("bridge pickup", -5.1)
+humbucker("neck pickup", 126)
+humbucker("bridge pickup", 42)
 # fixed bridge: a black chrome plate, a saddle per string where the string breaks
 box("bridge plate", (0.034, 0.094, 0.003), (X_BRIDGE - 0.010, 0, TOP + 0.0015), CHROME, bevel=0.0012)
 for s in range(7):
     y = string_y(s, X_BRIDGE)
     box("saddle %d" % s, (0.014, 0.0085, 0.013), (X_BRIDGE - 0.004, y, TOP + 0.0075), CHROME, bevel=0.0012)
 # a volume knob and the pickup switch
-kx, ky = B(-7.0, 3.8)
+kx, ky = B(-62, -118)
 cylinder("knob", 0.010, 0.016, (kx, ky, TOP + 0.008), CHROME, verts=48)
 bpy.ops.mesh.primitive_torus_add(major_radius=0.0085, minor_radius=0.0006, location=(kx, ky, TOP + 0.0162))
 assign(bpy.context.object, NEON)
-sx, sy_ = B(-4.7, 2.9)
+sx, sy_ = B(14, -112)
 cylinder("switch base", 0.0045, 0.003, (sx, sy_, TOP + 0.0015), CHROME)
 cylinder("switch tip", 0.0022, 0.012, (sx + 0.003, sy_ - 0.003, TOP + 0.007), PEARL, rot=(0.5, 0.5, 0))
 
@@ -388,7 +366,7 @@ def string_colour(s):
 z_string = fb_top + 0.0025
 for s in range(7):
     m = material("string %d" % s, srgb("6a6266"), metallic=1.0, rough=0.25, emission=srgb(string_colour(s)), strength=3.0)
-    r = 0.00042 - s * 0.000035
+    r = 0.00034 - s * 0.00003
     a = Vector((X_BRIDGE - 0.004, string_y(s, X_BRIDGE), TOP + 0.0145))
     b = Vector((X_NUT + 0.03, string_y(s, X_NUT) * 0.9, z_string))
     d = b - a
@@ -457,12 +435,16 @@ cam_data.ortho_scale = WIDTH / 2000.0 * (1576 / WIDTH) if WIDTH else 0.788    # 
 cam_data.ortho_scale = WIDTH_1X / PX_PER_M
 cam = link(bpy.data.objects.new("camera", cam_data))
 # straight down over the stage's centre, tilted a few degrees toward the player so the sides show
-TILT = math.radians(float(os.environ.get("GUITAR_TILT", "8")))
+TILT = math.radians(float(os.environ.get("GUITAR_TILT", "5")))
 centre = Vector((0.5 * WIDTH_1X / PX_PER_M, (NECK_Y_1X - 0.5 * HEIGHT_1X) / PX_PER_M / math.cos(TILT), 0.0))
 cam.location = centre + Vector((0, -math.sin(TILT), math.cos(TILT))) * 1.5
 cam.rotation_euler = (TILT, 0, 0)
 cam_data.clip_end = 10
 scene.camera = cam
+if os.environ.get("GUITAR_VIEW") == "full":    # the whole guitar, for checking its shape
+    cam_data.ortho_scale = 1.15
+    cam.location.x = X_BRIDGE + 0.33
+    cam.location.y -= (NECK_Y_1X - 0.5 * HEIGHT_1X) / PX_PER_M
 
 scene.render.engine = "CYCLES"
 scene.cycles.device = "CPU"
