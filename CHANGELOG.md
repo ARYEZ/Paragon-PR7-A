@@ -2,6 +2,14 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.4.4
+
+**The GUITAR page is black again, not grey.** You were right that it looked greyer than PR7-D, so I measured both.
+
+- **What was wrong:** the floor and the body in the guitar picture sat at a brightness of about 27 out of 255. The same parts of PR7-D's drum kit picture sit at about 5. The glowing parts matched; only the blacks had come out dark grey.
+- **Why:** the lights in the guitar's 3D scene were about five times brighter than they needed to be, and the light that gives the body its gloss was also lighting the floor.
+- **Now** the lights are at a fifth of what they were, and the gloss light only touches the guitar. The floor is black (about 1, the kit's is 3), and the body keeps a faint gloss (about 24, a kit drum shell is about 30). The neon edges, frets, strings and grid are unchanged.
+
 ## 0.4.3
 
 **Notes land on time.** Your A/B render showed PR7-I's picks landing about 15 ms after your guitar instrument's. This fixes it.
