@@ -2,6 +2,13 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.1.1
+
+**A clean join where the body meets the neck** (as PR7-I 0.4.6). The body's glowing edge met the neck at a slant; now the long horn curves straight down onto the neck at the 17th fret, and the edge runs parallel to the fretboard.
+
+- **Why it slanted:** the trace followed the neck in your photo, which leans slightly and has fanned frets. So beside our straight neck, the body's edge ran at a shallow angle over several frets.
+- **Now** along the neck, the body follows our own neck's edge, tucked just under the fretboard.
+
 ## 0.1.0
 
 **Paragon PR7-A: your second guitar instrument.** Everything works exactly as PR7-I 0.4.4 does: the same page,
