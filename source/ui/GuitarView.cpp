@@ -1,6 +1,7 @@
 #include "GuitarView.h"
 
 #include "NoteNames.h"
+#include "ui/Finish.h"
 #include "ui/Fretboard.h"
 #include "ui/Logo.h"
 #include "ui/ParagonLookAndFeel.h"
@@ -217,7 +218,7 @@ GuitarView::GuitarView (ParagonX1AudioProcessor& p)
       polyWindow (p.getParameters(), ParamIDs::polyWindow, "POLY WINDOW",
                   "Notes played this close together are fretted as one chord. It delays the guitar by the same amount, which "
                   "the DAW makes up for. 0: off"),
-      variation (p.getParameters(), ParamIDs::variation, "AMOUNT",
+      variation (p.getParameters(), ParamIDs::variation, "VARIATION",
                  "Each note a touch different (now and then a neighbouring take; a little start, level and tuning). 0: "
                  "every take exactly as it was rendered"),
       level (p.getParameters(), ParamIDs::patchLevel, "LEVEL", "The preset's own level"),
@@ -228,14 +229,16 @@ GuitarView::GuitarView (ParagonX1AudioProcessor& p)
       fretMode (p.getParameters(), ParamIDs::fretMode, "FRETTING MODE",
                 "Natural: the hand follows the notes, 4 frets wide. Polyphonic: 5 wide, chords over as many strings as notes"),
       forceAttachment (p.getParameters(), ParamIDs::forceString, forceKnob),
-      handAttachment (p.getParameters(), ParamIDs::handPosition, handKnob),
-      meter (p.getOutputMeter())
+      handAttachment (p.getParameters(), ParamIDs::handPosition, handKnob)
 {
+    addAndMakeVisible (rack);
+    Finish::paintAs (Finish::Type::pearlBlack);   // (the rack is always pearl black: its lettering's ink)
     for (auto* c : { &tone, &bite, &attack, &transpose, &velToVol, &release, &polyWindow, &variation, &level, &output })
     {
-        c->setLabelBelow (true);
-        addAndMakeVisible (*c);
+        c->setRack (true);
+        rack.addAndMakeVisible (*c);
     }
+    Finish::paintAs (std::nullopt);
     for (auto* c : { &pickMode, &fretMode })
     {
         c->setCompact (true);
@@ -283,7 +286,7 @@ GuitarView::GuitarView (ParagonX1AudioProcessor& p)
             lastVariation = current;
         processor.setParameterNow (ParamIDs::variation, current > 0.0f ? 0.0f : lastVariation);
     };
-    addAndMakeVisible (variationOn);
+    rack.addAndMakeVisible (variationOn);
 
     auto* keyMap = p.getParameters().getParameter (ParamIDs::keyMap);
     keyMapAttachment = std::make_unique<juce::ParameterAttachment> (*keyMap, [this] (float v)
@@ -298,9 +301,9 @@ GuitarView::GuitarView (ParagonX1AudioProcessor& p)
     factoryMap.onClick = [this] { keyMapAttachment->setValueAsCompleteGesture (1.0f); };
     keyMapAttachment->sendInitialUpdate();
     for (auto* b : { &splitMap, &factoryMap, &variationOn })
-        b->setColour (juce::ToggleButton::textColourId, ParagonColours::text.withAlpha (0.9f));
-    addAndMakeVisible (splitMap);
-    addAndMakeVisible (factoryMap);
+        b->getProperties().set (ParagonLookAndFeel::pedalButtonProperty, true);   // a small key, only its stripe lettered
+    rack.addAndMakeVisible (splitMap);
+    rack.addAndMakeVisible (factoryMap);
 
     auto& state = p.getParameters();
     boxes.push_back (std::make_unique<ValueBox> (state, ParamIDs::capo, "CAPO",
@@ -313,7 +316,6 @@ GuitarView::GuitarView (ParagonX1AudioProcessor& p)
     boxes.push_back (std::make_unique<ValueBox> (state, ParamIDs::mono, "MONO", "One note at a time: a new note stops the others"));
     for (auto& b : boxes)
         addAndMakeVisible (*b);
-    addAndMakeVisible (meter);
 
     setMouseCursor (juce::MouseCursor::NormalCursor);
     refresh();
@@ -325,17 +327,15 @@ GuitarView::~GuitarView() = default;
 void GuitarView::resized()
 {
     // Knob row 1 (where the reference has its tone knobs), row 2, the OUTPUT box: as the approved mock-up.
-    ParamControl* row1[] = { &tone, &bite, &attack, &transpose, &velToVol, &release };
-    for (int i = 0; i < 6; ++i)
-        row1[i]->setBounds (at (532 + juce::roundToInt (i * 112.5) - 50, 126, 100, 96));
-    polyWindow.setBounds (at (482, 303, 100, 96));
-    variationOn.setBounds (at (1034, 271, 150, 24));
-    variation.setBounds (at (1044, 305, 100, 96));
-    level.setBounds (at (1400, 116, 100, 108));
-    output.setBounds (at (1405, 232, 90, 104));
-    meter.setBounds (at (1286, 138, 46, 196));
-    splitMap.setBounds (at (1282, 352, 300, 24));
-    factoryMap.setBounds (at (1282, 378, 300, 24));
+    rack.setBounds (at (636, 80, 958, 334));
+    ParamControl* knobs[] = { &tone, &bite, &attack, &transpose, &velToVol, &release, &polyWindow, &variation };
+    for (int i = 0; i < 8; ++i)
+        knobs[i]->setBounds (rack.knobCell (i / GuitarRack::knobColumns, i % GuitarRack::knobColumns));
+    level.setBounds (rack.sideKnobCell (0));
+    output.setBounds (rack.sideKnobCell (1));
+    splitMap.setBounds (rack.keyCell (0));
+    factoryMap.setBounds (rack.keyCell (1));
+    variationOn.setBounds (rack.keyCell (2));
 
     // Under the neck: the menus, the two knobs, the value boxes.
     pickMode.setBounds (at (600, 688, 130, 28));
@@ -450,6 +450,30 @@ void GuitarView::refresh()
         repaint (nowBox.getSmallestIntegerContainer());
     }
 
+    // The rack's screen: the key map and what's latched, then the last note; its meter; its status bar (off while bypassed).
+    {
+        const auto split = settings.keyMap == guitar::KeyMap::split;
+        using namespace guitar::keyswitch;
+        const auto power = split ? latchedKey == cSharp1 : (latchedKey == dSharp1 || latchedKey == e1);
+        const auto played = now.note >= 0;
+        const auto isMute = played && now.articulation == guitar::Articulation::mute;
+        GuitarRack::Screen screen;
+        screen.caption = split ? "KEY MAP  SPLIT  (C-1 BY VELOCITY)" : "KEY MAP  FACTORY";
+        screen.articulation = juce::String (power ? "POWER " : "") + (isMute ? "PALM MUTE" : "SUSTAIN");
+        screen.key = notenames::name (latchedKey);
+        screen.line1 = played ? notenames::name (now.note) + "   VEL " + juce::String (now.inputVelocity) + "   TAKE "
+                                    + juce::String (now.roundRobin + 1) + "/" + juce::String (now.roundRobins)
+                              : juce::String ("PLAY A NOTE");
+        screen.line2 = played ? "STRING " + juce::String (guitar::playerNumber (now.string)) + "  FRET " + juce::String (now.fret)
+                                    + (isMute ? "  MUTE " : "  DYNAMIC ") + juce::String (now.layer + 1) + "/" + juce::String (now.layers)
+                              : juce::String ("NOTHING PLAYED YET");
+        rack.setScreen (screen);
+        rack.setOn (processor.getParameters().getRawParameterValue (ParamIDs::bypass)->load() < 0.5f);
+        const auto peakDb = juce::Decibels::gainToDecibels (processor.getOutputMeter().takePeak(), -100.0f);
+        meterDb = juce::jmax (peakDb, meterDb - 24.0f / 30.0f, -100.0f);
+        rack.setMeterDb (meterDb);
+    }
+
     performance.setSelectedId ((int) processor.currentPerformance() + 1, juce::dontSendNotification);
     const auto variationValue = processor.getParameters().getRawParameterValue (ParamIDs::variation)->load();
     variationOn.setToggleState (variationValue > 0.0f, juce::dontSendNotification);
@@ -474,10 +498,9 @@ void GuitarView::paint (juce::Graphics& g)
 
     // A soft dark backing under each floating control (PR7-A 0.1.0 / PR7-I 0.4.5): a body's neon edge running behind
     // a knob (PR7-A's long horn crosses the knob row) would otherwise cut through its label and value.
-    for (auto* c : std::initializer_list<juce::Component*> { &tone, &bite, &attack, &transpose, &velToVol, &release, &polyWindow,
-                                                             &variation, &variationOn, &pickMode, &fretMode, &performance,
+    for (auto* c : std::initializer_list<juce::Component*> { &pickMode, &fretMode, &performance,
                                                              &pickLabel, &fretLabel, &performanceLabel, &forceKnob, &forceLabel,
-                                                             &handKnob, &handLabel, &splitMap, &factoryMap })
+                                                             &handKnob, &handLabel })
     {
         const auto r = c->getBounds().toFloat();
         for (int ring = 3; ring >= 0; --ring)
@@ -500,34 +523,8 @@ void GuitarView::paint (juce::Graphics& g)
     Logo::drawMark (g, atF (60.0f, 134.0f, 270.0f, 54.0f), juce::Justification::centredLeft,
                     { ParagonColours::glow, ParagonColours::glow, {}, {}, 1.0f, true });
 
-    // The OUTPUT box (where the reference has its pickup box, mirrored).
-    const auto outBox = atF (1253.0f, 99.0f, 278.0f, 245.0f);
-    g.setColour (juce::Colour (0x8c080608));
-    g.fillRoundedRectangle (outBox, 6.0f);
-    g.setColour (juce::Colour (0xff4a3a40));
-    g.drawRoundedRectangle (outBox.reduced (0.5f), 6.0f, 1.0f);
-    text (g, "OUTPUT", atF (1270.0f, 110.0f, 120.0f, 22.0f), ParagonColours::text, 13.0f);
-
-    paintDoubleTracking (g);
     paintNeck (g);
     paintNowPlaying (g);
-}
-
-void GuitarView::paintDoubleTracking (juce::Graphics& g)
-{
-    // DOUBLE TRACKING: a later release (stage 3), shown where the reference has its multi-tracking guitars.
-    text (g, "DOUBLE TRACKING", atF (744.0f, 271.0f, 140.0f, 22.0f), ParagonColours::text.withAlpha (0.85f), 11.5f, true, juce::Justification::centred);
-    for (int i = 0; i < 4; ++i)
-    {
-        const auto r = atF (760.0f + (float) i * 36.0f, 305.0f, 26.0f, 56.0f);
-        g.setColour (i == 0 ? ParagonColours::accent.withAlpha (0.18f) : juce::Colour (0xcc140e10));
-        g.fillRoundedRectangle (r, 6.0f);
-        g.setColour (i == 0 ? ParagonColours::accent.withAlpha (0.8f) : juce::Colour (0xff3a3236));
-        g.drawRoundedRectangle (r, 6.0f, 1.0f);
-        text (g, juce::String (i + 1), r.translated (0.0f, 44.0f).withHeight (20.0f), i == 0 ? ParagonColours::accent : ParagonColours::textDim,
-              10.0f, true, juce::Justification::centred);
-    }
-    text (g, "(a later release)", atF (744.0f, 384.0f, 140.0f, 16.0f), ParagonColours::textDim, 10.0f, false, juce::Justification::centred);
 }
 
 void GuitarView::paintNeck (juce::Graphics& g)

@@ -38,9 +38,12 @@ public:
     void setLabelText (const juce::String& text) { label.setText (text, juce::dontSendNotification); }   // its name above
     // PR7-I 0.4.0: its name under the value instead (the GUITAR page's knobs, as the reference's are labelled).
     void setLabelBelow (bool);
+    // PR7-I 0.5.0: as on PR7-G's rack: the name stamped above, the rack's big knob, the value on a small orange screen.
+    void setRack (bool);
     const juce::String& getParameterId() const noexcept { return parameterId; }
 
     void resized() override;
+    void paint (juce::Graphics&) override;
     void paintOverChildren (juce::Graphics&) override;
     void mouseDown (const juce::MouseEvent&) override;
 
@@ -53,7 +56,8 @@ private:
 
     juce::AudioProcessorValueTreeState& state;
     juce::String parameterId;
-    bool compact = false, labelBelow = false;
+    bool compact = false, labelBelow = false, rack = false;
+    juce::Rectangle<float> valueScreen() const;
     juce::Label label;
     std::unique_ptr<juce::Slider> slider;
     std::unique_ptr<juce::ComboBox> box;

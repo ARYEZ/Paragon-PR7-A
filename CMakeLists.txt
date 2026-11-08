@@ -77,6 +77,9 @@ target_sources(ParagonX1
         source/ui/Fretboard.cpp
         source/ui/RendersPage.cpp
         source/ui/GuitarView.cpp
+        source/ui/GuitarRack.cpp
+        source/ui/PedalBody.cpp
+        source/ui/LedDisplay.cpp
         source/ui/MainView.cpp
         source/ui/ParagonLookAndFeel.cpp
         source/ui/Finish.cpp)

@@ -1,7 +1,11 @@
 #include "SynthControls.h"
 
 #include "ui/DockPanels.h"
+#include "ui/Finish.h"
+#include "ui/LedDisplay.h"
 #include "ui/ParagonLookAndFeel.h"
+
+namespace { constexpr int rackValueHeight = 18; }   // a rack knob's value screen
 
 ParamControl::ParamControl (juce::AudioProcessorValueTreeState& stateToUse, const juce::String& id, const juce::String& labelText,
                             const juce::String& tooltip)
@@ -50,8 +54,23 @@ ParamControl::ParamControl (juce::AudioProcessorValueTreeState& stateToUse, cons
 
 ParamControl::~ParamControl() = default;
 
+juce::Rectangle<float> ParamControl::valueScreen() const
+{
+    if (! rack || slider == nullptr)
+        return {};
+    return slider->getBounds().toFloat().removeFromBottom ((float) rackValueHeight).withSizeKeepingCentre (juce::jmin (82.0f, (float) getWidth() - 8.0f), (float) rackValueHeight + 4.0f);
+}
+
+void ParamControl::paint (juce::Graphics& g)
+{
+    if (const auto screen = valueScreen(); ! screen.isEmpty())
+        LedDisplay::paintScreen (g, screen, 0.45f);
+}
+
 void ParamControl::paintOverChildren (juce::Graphics& g)
 {
+    if (const auto screen = valueScreen(); ! screen.isEmpty())
+        LedDisplay::paintGlassOverlay (g, screen.reduced (3.0f), 0.45f);
     const auto* h = host();
     if (h == nullptr)
         return;
@@ -157,6 +176,23 @@ void ParamControl::setLabelBelow (bool below)
     label.setColour (juce::Label::textColourId, below ? ParagonColours::text.withAlpha (0.85f) : ParagonColours::textDim);
     label.setFont (juce::FontOptions (below ? 11.5f : 10.5f, juce::Font::bold));
     resized();
+}
+
+void ParamControl::setRack (bool inRack)
+{
+    rack = inRack;
+    labelBelow = false;
+    label.setFont (juce::FontOptions (rack ? 9.5f : 10.5f, juce::Font::bold));
+    label.setColour (juce::Label::textColourId, rack ? Finish::ink() : ParagonColours::textDim);
+    if (slider != nullptr)
+    {
+        slider->getProperties().set (ParagonLookAndFeel::pedalKnobProperty, rack);
+        slider->setTextBoxStyle (juce::Slider::TextBoxBelow, false, 78, rack ? rackValueHeight : 18);
+        slider->setColour (juce::Slider::textBoxTextColourId, rack ? LedDisplay::ledOrange : ParagonColours::accent);
+        slider->setColour (juce::Slider::textBoxBackgroundColourId, juce::Colours::transparentBlack);
+    }
+    resized();
+    repaint();
 }
 
 void ParamControl::resized()

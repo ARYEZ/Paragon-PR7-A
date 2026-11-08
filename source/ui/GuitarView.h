@@ -1,7 +1,7 @@
 #pragma once
 
 #include "PluginProcessor.h"
-#include "ui/LevelMeter.h"
+#include "ui/GuitarRack.h"
 #include "ui/SynthControls.h"
 
 // THE GUITAR page (PR7-I 0.4.0): the owner's approved mock-up. Our own 3D guitar (resources/guitar: a 7-string with a
@@ -51,7 +51,6 @@ private:
     void timerCallback() override { refresh(); }
     void paintNeck (juce::Graphics&);
     void paintNowPlaying (juce::Graphics&);
-    void paintDoubleTracking (juce::Graphics&);
     float stringY (int string, float x) const;
     float boardEdge (bool upper, float x) const;
     juce::Rectangle<int> neckArea() const;
@@ -59,7 +58,8 @@ private:
 
     ParagonX1AudioProcessor& processor;
     ParamControl tone, bite, attack, transpose, velToVol, release, polyWindow, variation, level, output, pickMode, fretMode;
-    juce::ToggleButton variationOn { "VARIATION" }, splitMap { "SPLIT KEY MAP (C-1 BY VELOCITY)" }, factoryMap { "FACTORY KEY MAP" };
+    GuitarRack rack;   // 0.5.0: the main controls on a rack unit, as PR7-G's
+    juce::TextButton variationOn, splitMap, factoryMap;   // the rack's small keys (their stripes lit while on)
     juce::ComboBox performance;
     juce::Label pickLabel, fretLabel, performanceLabel, forceLabel, handLabel;
     juce::Slider forceKnob { juce::Slider::RotaryHorizontalVerticalDrag, juce::Slider::NoTextBox },
@@ -67,7 +67,7 @@ private:
     juce::AudioProcessorValueTreeState::SliderAttachment forceAttachment, handAttachment;
     std::unique_ptr<juce::ParameterAttachment> keyMapAttachment;
     std::vector<std::unique_ptr<ValueBox>> boxes;
-    LevelMeter meter;
+    float meterDb = -100.0f;
 
     std::array<int, guitar::numStrings> frets {};
     std::array<float, guitar::numStrings> levels {};
