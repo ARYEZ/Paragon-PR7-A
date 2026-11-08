@@ -2,6 +2,13 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.4.5
+
+**The page's controls stay readable over the guitar.** Every floating control (the knobs, menus and boxes) now sits on a soft dark backing, so a glowing body edge behind one can't cut across its label. The guitar still shows through.
+
+- **Why now:** your second guitar instrument, PR7-A, has a long horn that runs right through the knob row. The backing fixes that there, and PR7-I gets it too so the two pages stay identical. Here it mostly shows behind TONE, where the RG's horn passes.
+- **For PR7-A:** the 3D guitar can now be headless, and the body tracer handles photos with a drop shadow. Neither changes PR7-I's guitar.
+
 ## 0.4.4
 
 **The GUITAR page is black again, not grey.** You were right that it looked greyer than PR7-D, so I measured both.

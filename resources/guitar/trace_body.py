@@ -10,6 +10,7 @@ import cv2, numpy as np, sys, json, os
 # Options (environment), for photos unlike the RG one (their defaults keep that trace exactly as it was):
 #   TRACE_SHADOWS=1      pale grey (bright, colourless) pixels count as background: a drop shadow isn't body
 #   TRACE_NECK_ROWS=n    measure the neck in the photo's top n rows only (above the horns, where only the neck is)
+#   TRACE_SMOOTH=n       smooth the outline over n pixels (a phone photo's edge is ragged with the wood's grain and JPEG)
 
 src, out = sys.argv[1], sys.argv[2]
 board_end = int(sys.argv[3]) if len(sys.argv) > 3 else None
@@ -58,6 +59,13 @@ for y in range(0, board_end):
 guitar = cv2.morphologyEx(guitar, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (23, 23)))
 contours, _ = cv2.findContours(guitar, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
 c = max(contours, key=cv2.contourArea)
+if int(os.environ.get("TRACE_SMOOTH", "0")) > 1:
+    n = int(os.environ["TRACE_SMOOTH"])
+    pts = c[:, 0, :].astype(float)
+    kernel = np.ones(n) / n
+    wrap = np.concatenate([pts[-n:], pts, pts[:n]])
+    c = np.stack([np.convolve(wrap[:, 0], kernel, "same"), np.convolve(wrap[:, 1], kernel, "same")], axis=1)[n:-n]
+    c = np.round(c).astype(np.int32).reshape(-1, 1, 2)
 neck_px = float(np.polyval(fr, board_end) - np.polyval(fl, board_end))
 centre = float(np.polyval(fl, board_end) + np.polyval(fr, board_end)) / 2
 k = neck_mm / neck_px
