@@ -258,8 +258,11 @@ with open(os.environ.get("GUITAR_OUTLINE", os.path.join(os.path.dirname(os.path.
 # 0.4.6: along the neck, the body follows OUR neck's edge (1.5 mm in, under the fretboard), not the photo's: a photo's
 # neck leans a little (and PR7-A's has fanned frets), so the traced edge ran at a slant beside our straight neck (the
 # owner: "not really parallel where the body meets the neck").
+# (GUITAR_NECK_SNAP_MM: how far out from the neck's edge a traced point is still moved onto it: PR7-I 6, PR7-A 10,
+# where the headless body's horn meets the neck at a shallower angle and its traced points sit further out.)
+NECK_SNAP = float(os.environ.get("GUITAR_NECK_SNAP_MM", "6")) / 1000.0
 for i, (x, y) in enumerate(outline):
-    if x >= BOARD_END - 0.001 and abs(y) <= neck_half(x) + 0.006:
+    if x >= BOARD_END - 0.001 and abs(y) <= neck_half(x) + NECK_SNAP:
         outline[i] = (x, math.copysign(neck_half(x) - 0.0015, y if y != 0 else 1.0))
 # the outline as a slab: one flat face on top and one below (n-gons, so the lacquer shades clean), the edge rounded
 # by a bevel

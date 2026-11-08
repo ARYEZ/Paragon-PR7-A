@@ -2,6 +2,13 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.4.6
+
+**A clean join where the body meets the neck.** You spotted that the body's glowing edge met the neck at a slant. That's fixed.
+
+- **Why it slanted:** the body is traced from your photo, and along the neck the trace followed the photo's neck. That neck leans very slightly, so beside our perfectly straight neck the body's edge ran at a shallow angle from the 24th fret up to the horn.
+- **Now** along the neck the body follows our own neck's edge, tucked just under the fretboard. The horn curves straight down onto the neck at the 19th fret, and the edge runs parallel to the fretboard. Nothing else in the picture changed.
+
 ## 0.4.5
 
 **The page's controls stay readable over the guitar.** Every floating control (the knobs, menus and boxes) now sits on a soft dark backing, so a glowing body edge behind one can't cut across its label. The guitar still shows through.
