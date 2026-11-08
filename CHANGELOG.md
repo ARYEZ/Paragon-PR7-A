@@ -2,6 +2,13 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.4.7
+
+**Smoother body edges.** The guitar body's outline flows as one smooth curve now, with no small corners, and the straight runs stay straight.
+
+- **Why it wasn't smooth:** the body's outline was traced from your photo and stored as about 100 short straight lines, so every curve was a chain of tiny corners. The trace also picked up a little raggedness from the photo's wood grain and compression.
+- **Now** the outline is resampled every millimetre and gently smoothed along its length when the guitar is built. The horn tips round off the way a real body's edges do. The neck join from 0.4.6 stays clean and parallel.
+
 ## 0.4.6
 
 **A clean join where the body meets the neck.** You spotted that the body's glowing edge met the neck at a slant. That's fixed.
