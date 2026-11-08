@@ -20,3 +20,13 @@ with a red grid. Built into the plugin as `guitar.jpg` (`process_guitar.py`: the
   the window at 1x; the plugin's picture is 3200 x 1800 (about 8 minutes at 64 samples on 4 cores). `geometry.json`
   says where each string meets the nut and the bridge, each fret and the board's edges land, in window pixels, for the
   code that lights the notes on top.
+
+## Another guitar (a sibling plugin, PR7-A: everything the same but the body's shape)
+
+1. `python3 trace_body.py <photo> <out.json>` (the photo: straight on, neck up, plain light background): it writes a
+   preview with the rows numbered; give the row where the fretboard ends: `python3 trace_body.py <photo> <out.json> <row>`.
+   Check `<out>.png` (the outline on the photo). It reproduces this guitar's `body-outline.json` exactly from the RG
+   photo with row 640.
+2. `GUITAR_OUTLINE=<out.json> blender -b -P guitar3d.py -- guitar.png 64 3200 1800` (~8 min), then
+   `python3 process_guitar.py guitar.png guitar.jpg`. The neck, strings and frets don't move, so
+   `guitar-geometry.json` stays the same.

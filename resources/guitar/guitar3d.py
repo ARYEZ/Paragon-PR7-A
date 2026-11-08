@@ -250,7 +250,8 @@ OUTLINE_PARTS = [
 # 0.4.0 mock-up 3: the outline traced off a photo of a 7-string superstrat at the owner's ask (body-outline.json, in mm
 # from the fretboard's end and the neck's centre line); OUTLINE_PARTS above is the drawn one it replaced
 BOARD_END = X_BRIDGE + L * 2 ** (-24 / 12) - 0.007
-with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "body-outline.json")) as f:
+# (GUITAR_OUTLINE: another body's outline, from trace_body.py; a sibling plugin's guitar differs only in this)
+with open(os.environ.get("GUITAR_OUTLINE", os.path.join(os.path.dirname(os.path.abspath(__file__)), "body-outline.json"))) as f:
     outline = [(BOARD_END + x / 1000.0, y / 1000.0) for x, y in json.load(f)["points"]]
 # the outline as a slab: one flat face on top and one below (n-gons, so the lacquer shades clean), the edge rounded
 # by a bevel
