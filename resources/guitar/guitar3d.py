@@ -255,6 +255,12 @@ BOARD_END = X_BRIDGE + L * 2 ** (-24 / 12) - 0.007
 # (GUITAR_OUTLINE: another body's outline, from trace_body.py; a sibling plugin's guitar differs only in this)
 with open(os.environ.get("GUITAR_OUTLINE", os.path.join(os.path.dirname(os.path.abspath(__file__)), "body-outline.json"))) as f:
     outline = [(BOARD_END + x / 1000.0, y / 1000.0) for x, y in json.load(f)["points"]]
+# 0.4.6: along the neck, the body follows OUR neck's edge (1.5 mm in, under the fretboard), not the photo's: a photo's
+# neck leans a little (and PR7-A's has fanned frets), so the traced edge ran at a slant beside our straight neck (the
+# owner: "not really parallel where the body meets the neck").
+for i, (x, y) in enumerate(outline):
+    if x >= BOARD_END - 0.001 and abs(y) <= neck_half(x) + 0.006:
+        outline[i] = (x, math.copysign(neck_half(x) - 0.0015, y if y != 0 else 1.0))
 # the outline as a slab: one flat face on top and one below (n-gons, so the lacquer shades clean), the edge rounded
 # by a bevel
 n_out = len(outline)
