@@ -6,7 +6,10 @@
 #   neck width mm: the neck's width there, which scales the photo (default 64, PR7-I's neck)
 # It also writes <out>.png, the outline drawn on the photo, to check by eye. Needs OpenCV (pip install opencv-python-headless).
 # The photo itself is never committed: only the outline is.
-import cv2, numpy as np, sys, json
+import cv2, numpy as np, sys, json, os
+# Options (environment), for photos unlike the RG one (their defaults keep that trace exactly as it was):
+#   TRACE_SHADOWS=1      pale grey (bright, colourless) pixels count as background: a drop shadow isn't body
+#   TRACE_NECK_ROWS=n    measure the neck in the photo's top n rows only (above the horns, where only the neck is)
 
 src, out = sys.argv[1], sys.argv[2]
 board_end = int(sys.argv[3]) if len(sys.argv) > 3 else None
@@ -16,17 +19,27 @@ g = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
 h, w = g.shape
 # the guitar: everything not joined to the background at the photo's corners
 fg = (g < 235).astype(np.uint8)
+plain = fg.copy()   # (the neck is measured on this: with TRACE_SHADOWS the pale fret wires would break it up)
+if os.environ.get("TRACE_SHADOWS") == "1":
+    spread = im.max(axis=2).astype(int) - im.min(axis=2).astype(int)
+    fg[(g > 150) & (spread < 14)] = 0   # light and neutral grey: a shadow (pale wood has a tint, so it stays)
 ff = (1 - fg).copy()
 mask = np.zeros((h + 2, w + 2), np.uint8)
 for corner in ((0, 0), (w - 1, h - 1)):   # (as PR7-I 0.4.0's trace: the outline must come out the same)
     if ff[corner[1], corner[0]]:
         cv2.floodFill(ff, mask, corner, 2)
 guitar = (ff != 2).astype(np.uint8)
+ffp = (1 - plain).copy()
+maskp = np.zeros((h + 2, w + 2), np.uint8)
+for corner in ((0, 0), (w - 1, h - 1)):
+    if ffp[corner[1], corner[0]]:
+        cv2.floodFill(ffp, maskp, corner, 2)
+plainGuitar = (ffp != 2).astype(np.uint8)
 # the neck: the run of pixels round the centre column in the top rows, its edges fitted as straight lines
-rows = range(20, 300, 10)   # (the photo's top rows: only the neck there)
+rows = range(20, int(os.environ.get("TRACE_NECK_ROWS", "300")), 10)   # (the photo's top rows: only the neck there)
 cx = None; L = []; R = []
 for y in rows:
-    xs = np.where(guitar[y])[0]
+    xs = np.where(plainGuitar[y])[0]
     runs = np.split(xs, np.where(np.diff(xs) > 1)[0] + 1)
     run = max(runs, key=len) if cx is None else min(runs, key=lambda r: abs((r[0] + r[-1]) / 2 - cx))
     cx = (run[0] + run[-1]) / 2; L.append(run[0]); R.append(run[-1])
