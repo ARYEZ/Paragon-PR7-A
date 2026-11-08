@@ -472,6 +472,27 @@ void GuitarView::paint (juce::Graphics& g)
     else
         g.fillAll (ParagonColours::background);
 
+    // A soft dark backing under each floating control (PR7-A 0.1.0 / PR7-I 0.4.5): a body's neon edge running behind
+    // a knob (PR7-A's long horn crosses the knob row) would otherwise cut through its label and value.
+    for (auto* c : std::initializer_list<juce::Component*> { &tone, &bite, &attack, &transpose, &velToVol, &release, &polyWindow,
+                                                             &variation, &variationOn, &pickMode, &fretMode, &performance,
+                                                             &pickLabel, &fretLabel, &performanceLabel, &forceKnob, &forceLabel,
+                                                             &handKnob, &handLabel, &splitMap, &factoryMap })
+    {
+        const auto r = c->getBounds().toFloat();
+        for (int ring = 3; ring >= 0; --ring)
+        {
+            g.setColour (juce::Colour (0xff050304).withAlpha (ring == 0 ? 0.62f : 0.16f));
+            g.fillRoundedRectangle (r.expanded (2.0f + 4.0f * (float) ring), 8.0f + 4.0f * (float) ring);
+        }
+    }
+    for (auto& b : boxes)
+        for (int ring = 3; ring >= 0; --ring)
+        {
+            g.setColour (juce::Colour (0xff050304).withAlpha (ring == 0 ? 0.62f : 0.16f));
+            g.fillRoundedRectangle (b->getBounds().toFloat().expanded (2.0f + 4.0f * (float) ring), 6.0f + 4.0f * (float) ring);
+        }
+
     // The wordmark over the body's top horn (where the reference has its logo, mirrored).
     text (g, "PARAGON", atF (66.0f, 100.0f, 220.0f, 24.0f), ParagonColours::text, 15.0f);
     g.setColour (ParagonColours::glow.withAlpha (0.6f));

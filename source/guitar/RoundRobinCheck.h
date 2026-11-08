@@ -26,7 +26,7 @@ namespace guitar::renders::rrcheck
     std::vector<ProbeTake> takes();
     double lengthSeconds();
     juce::MidiFile toMidi();
-    inline const juce::String fileName = "PR7-I Round-Robin Check";
+    inline const juce::String fileName = "PR7-A Round-Robin Check";
 
     // Which takes are the same recording: 0, 1, 2... by first appearance, one per take given.
     std::vector<int> sameAs (const std::vector<std::vector<float>>& takes, double sampleRate);

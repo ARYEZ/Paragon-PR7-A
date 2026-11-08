@@ -79,7 +79,7 @@ namespace guitar::renders
     juce::String fileName (Articulation a, int string)
     {
         const auto which = string == 0 ? juce::String ("low A") : string == numStrings - 1 ? juce::String ("high E") : stringName (string);
-        return "PR7-I " + articulationName (a) + " - String " + juce::String (playerNumber (string)) + " (" + which + ")";
+        return "PR7-A " + articulationName (a) + " - String " + juce::String (playerNumber (string)) + " (" + which + ")";
     }
 
     juce::String takeFileName (Articulation a, const Take& t)

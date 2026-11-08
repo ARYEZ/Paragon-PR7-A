@@ -8,8 +8,8 @@ namespace Logo
         // are 0.24 wide and bars 0.2 tall: chunky, for a bold silhouette.
         constexpr float slant = 0.3f;     // how far the top leans right, per unit of height
         constexpr float spacing = 0.1f;
-        constexpr float letterWidths[] = { 0.8f, 0.84f, 0.8f, 0.4f, 0.56f };   // P, R, 7, dash, I
-        constexpr float totalWidth = 0.8f + 0.84f + 0.8f + 0.4f + 0.56f + 4.0f * spacing + slant;
+        constexpr float letterWidths[] = { 0.8f, 0.84f, 0.8f, 0.4f, 0.8f };   // P, R, 7, dash, A (PR7-I's I was 0.56)
+        constexpr float totalWidth = 0.8f + 0.84f + 0.8f + 0.4f + 0.8f + 4.0f * spacing + slant;
 
         // The two speed cuts, as fractions of the height from the top.
         constexpr std::pair<float, float> cuts[] = { { 0.63f, 0.68f }, { 0.79f, 0.83f } };
@@ -37,15 +37,17 @@ namespace Logo
             addPolygon (path, { { 0.24f, 0.2f }, { 0.56f, 0.2f }, { 0.56f, 0.4f }, { 0.24f, 0.4f } }, x);
         }
 
-        // PR7-I 0.1.0: the I, from the P's parts: a 0.24 stem between 0.2 bars top and bottom (an I-beam, so it
-        // doesn't read as a 1 or an l beside the slanted 7, and carries the other letters' weight).
-        void addI (juce::Path& path, float x)
+        // PR7-A 0.1.0: the A, from the P's parts (as PR7-I's I was): the P's bowl, bevelled on both top corners, carried
+        // down into two 0.24 legs, a 0.2 crossbar and a counter like the P's; squared off, so it reads as an A in the
+        // same blocky lettering rather than a pointed one.
+        void addA (juce::Path& path, float x)
         {
-            addPolygon (path, { { 0.0f, 0.0f }, { 0.56f, 0.0f }, { 0.56f, 0.2f }, { 0.4f, 0.2f }, { 0.4f, 0.8f }, { 0.56f, 0.8f },
-                                { 0.56f, 1.0f }, { 0.0f, 1.0f }, { 0.0f, 0.8f }, { 0.16f, 0.8f }, { 0.16f, 0.2f }, { 0.0f, 0.2f } }, x);
+            addPolygon (path, { { 0.0f, 1.0f }, { 0.0f, 0.15f }, { 0.16f, 0.0f }, { 0.64f, 0.0f }, { 0.8f, 0.15f }, { 0.8f, 1.0f },
+                                { 0.56f, 1.0f }, { 0.56f, 0.62f }, { 0.24f, 0.62f }, { 0.24f, 1.0f } }, x);
+            addPolygon (path, { { 0.24f, 0.2f }, { 0.56f, 0.2f }, { 0.56f, 0.42f }, { 0.24f, 0.42f } }, x);
         }
 
-        // The letters, 1 unit tall, upright: [0] is P, R and "-I", [1] is the 7.
+        // The letters, 1 unit tall, upright: [0] is P, R and "-A", [1] is the 7.
         std::pair<juce::Path, juce::Path> letterPaths()
         {
             juce::Path pr, seven;
@@ -63,11 +65,11 @@ namespace Logo
                                  { 0.5f, 0.2f }, { 0.0f, 0.2f } }, x);
             x += letterWidths[2] + spacing;
 
-            // "-I" (the instrument: PR7-I, the guitar): a dash at mid height, clear of the speed cuts, and the I.
+            // "-A" (PR7-A, the family's second guitar): a dash at mid height, clear of the speed cuts, and the A.
             addPolygon (pr, { { 0.0f, 0.42f }, { 0.4f, 0.42f }, { 0.4f, 0.6f }, { 0.0f, 0.6f } }, x);
             x += letterWidths[3] + spacing;
 
-            addI (pr, x);
+            addA (pr, x);
 
             // Lean them forward: the top moves right, the baseline stays put.
             const auto lean = juce::AffineTransform (1.0f, -slant, slant, 0.0f, 1.0f, 0.0f);
@@ -138,14 +140,14 @@ namespace Logo
         const auto box = area.withSizeKeepingCentre (n, n);
         const auto lean = juce::AffineTransform (1.0f, -slant, slant, 0.0f, 1.0f, 0.0f);
 
-        // "7I": the 7 at 0, the I 0.9 letters on; 1.76 letter heights wide with the lean.
+        // "7A": the 7 at 0, the A 0.9 letters on; 2.0 letter heights wide with the lean (PR7-I's "7I" was 1.76).
         const auto h = 0.40f * n, top = box.getY() + 0.15f * n;
-        const auto left = box.getCentreX() - 1.76f * h * 0.5f;
+        const auto left = box.getCentreX() - 2.0f * h * 0.5f;
         juce::Path seven, d;
         d.setUsingNonZeroWinding (false);
         addPolygon (seven, { { 0.0f, 0.0f }, { 0.8f, 0.0f }, { 0.8f, 0.2f }, { 0.44f, 1.0f }, { 0.18f, 1.0f },
                              { 0.5f, 0.2f }, { 0.0f, 0.2f } }, 0.0f);
-        addI (d, 0.9f);
+        addA (d, 0.9f);
         const auto place = lean.scaled (h).translated (left, top);
         seven.applyTransform (place);
         d.applyTransform (place);

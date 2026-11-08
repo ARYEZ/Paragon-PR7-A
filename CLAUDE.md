@@ -1,4 +1,47 @@
-# Paragon PR7-I: notes for Claude
+# Paragon PR7-A: notes for Claude
+
+**Paragon PR7-A** is the owner's **second guitar instrument**: **exactly PR7-I** (repo `ARYEZ/Paragon-PR7-I`; same
+page, controls, engine, render lists, import, scale, look) **except the guitar's body shape**, so the two don't look
+like the same plugin (the owner, November 2026: "everything about it is exactly the same except the shape: same
+scale, same UI, same everything"). PR7-I is the equivalent of the reference's Jupiter; PR7-A of its **Rogue** (the
+owner renders that one's takes into PR7-A's own guitar folder). It started from PR7-I's full history at its 0.4.4
+plus the body tracer (commit `9c0dc39`), as PR7-I started from PR7-D.
+
+## What makes PR7-A its own (0.1.0)
+
+- **CMakeLists.txt:** `PRODUCT_NAME` "Paragon PR7-A", `BUNDLE_ID` `com.paragon.paragonpr7a`, **`PLUGIN_CODE` `Pr7a`**
+  (never a sibling's: `Pr7i` PR7-I, `Px1a` PR7-G, `Pr7b`, `Pr7v`, `Pr7c`, `Pr7e`, `Pr7k`, `Pr7d`, `Pr7m`), version
+  restarted at 0.1.0 (target name `ParagonX1` as across the family).
+- **Names in the code:** every string literal that said PR7-I says PR7-A (presets folder "Paragon PR7-A", settings
+  file, temp folder, thread names, render-list file names "PR7-A Sustain - String 7 (low A)", About). Comments that
+  tell PR7-I's history keep its name.
+- **Logo** (`source/ui/Logo.cpp`): "-A", from the P's parts as PR7-I's I was: the P's bowl bevelled on both top
+  corners, carried down into two 0.24 legs, a 0.2 crossbar and a counter (squared off, the family's blocky lettering);
+  the icon is "7A" (2.0 letter heights wide).
+- **The guitar picture** (`resources/guitar/`): the body traced off the owner's photo of a **headless 7-string** with
+  long swept horns (`trace_body.py` with `TRACE_SHADOWS=1 TRACE_NECK_ROWS=120 TRACE_SMOOTH=9`, the fretboard's end at
+  row 478 of the product photo cut out of the owner's phone screenshot; no maker's name or logo; the photo isn't
+  committed); `guitar3d.py`'s `GUITAR_HEADLESS` (default 1 here): no headstock, the neck runs on to a black-chrome
+  string clamp just past the nut, and the RG's knob and switch (off the window anyway) left out. Everything else in the
+  scene, the camera and so `guitar-geometry.json`, is PR7-I's exactly (checked: the 1x geometry is identical).
+- **Release workflow:** `Paragon PR7-A.vst3`, `ParagonPR7-A-${TAG}-...` zips, "Paragon PR7-A ${TAG}" (the seed commit
+  switched the release job off; 0.1.0 switched it back on).
+- **README, CHANGELOG** (from 0.1.0).
+
+## Keeping PR7-A the same as PR7-I
+
+Features land in PR7-I first. To bring them here: `git remote add pr7i https://github.com/ARYEZ/Paragon-PR7-I`,
+`git fetch pr7i <branch>`, merge, and keep PR7-A's side for its identity (the files above: CMakeLists' names and
+version, the string literals, `Logo.cpp`, `resources/guitar/body-outline.json`, `guitar.jpg`, the headless default,
+README, CHANGELOG, this section). If PR7-I re-renders its guitar (a look change), re-render PR7-A's the same way with
+its own outline and `GUITAR_HEADLESS=1`. Each PR7-A release gets its own version and CHANGELOG section saying which
+PR7-I version it matches.
+
+---
+
+The notes below are PR7-I's (the shared code's history and rules); read "PR7-I" there as the shared design.
+
+# Paragon PR7-I: notes for Claude (inherited)
 
 This repository starts as a copy of **Paragon PR7-D** (the drum instrument, repo `ARYEZ/Paragon-PR7-D`) at PR7-D **0.60.0** plus its CI fix for pluginval (branch `claude/new-session-yhgoe4`, commit `aab0ee8`), full history included, to become **Paragon PR7-I**, the **guitar instrument** of the PR7 family: a VST3 instrument played from MIDI, a spiritual cousin of Impact Soundworks' Shreddage 3 (it works the way that plugin works, but sounds and runs the way the owner wants; no Kontakt). The owner plays **djent and progressive metal**: weigh features by what helps tight, palm-muted rhythm parts. Siblings: **PR7-G** (the guitar amp-and-effects plugin, `ARYEZ/Paragon-PR7-G`), **PR7-D** (drums), **PR7-K** (synth), **PR7-B** (bass), **PR7-V** (vocal), **PR7-C**, **PR7-X** (utility; PR7-E until its 0.20.0), **PR7-M**, and **PR7-S** (the owner's DAW, based on Cubase 15).
 

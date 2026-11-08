@@ -70,7 +70,7 @@ namespace guitar::renders
     std::vector<Take> takes (Articulation, int string);
     double lengthSeconds (Articulation, int string);   // to the end of the last take's slot
     juce::MidiFile toMidi (Articulation, int string);
-    juce::String fileName (Articulation, int string);   // "PR7-I Sustain - String 7 (low A)" (no extension)
+    juce::String fileName (Articulation, int string);   // "PR7-A Sustain - String 7 (low A)" (no extension)
 
     // Where an imported take's file goes in a guitar's folder: "<Sustain>/s0_f05_l2_d_r1.wav", and back.
     juce::String takeFileName (Articulation, const Take&);

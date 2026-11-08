@@ -195,6 +195,8 @@ def tube(name, pts, r, mat, closed=False):
 # kit at about 5; the owner: "too bright, it looks more grey than black"). The neon is emission and stays as it was.
 LIGHT = float(os.environ.get("GUITAR_LIGHT", "0.2"))
 RIM = float(os.environ.get("GUITAR_RIM", "0.4"))
+# PR7-A: a headless guitar (no headstock past the nut: the neck runs on a little to a string clamp). PR7-I: 0.
+HEADLESS = os.environ.get("GUITAR_HEADLESS", "1") == "1"
 
 # ================================================================ dimensions (metres)
 PX_PER_M = 3000.0                # the plugin's 1x pixels per metre
@@ -300,7 +302,7 @@ def tapered(name, x0, x1, z0, z1, extra, mat, bevel=0.0015):
         bpy.ops.object.modifier_apply(modifier="bevel")
         smooth(o)
     return o
-tapered("neck", x_end - 0.03, X_NUT + 0.004, -0.004, neck_top, 0.0012, NECKWOOD, 0.003)
+tapered("neck", x_end - 0.03, X_NUT + (0.024 if HEADLESS else 0.004), -0.004, neck_top, 0.0012, NECKWOOD, 0.003)
 tapered("fretboard", x_end, X_NUT, neck_top - 0.001, fb_top, 0.0, EBONY, 0.0008)
 # a soft neon line along both edges of the fretboard
 for side in (1, -1):
@@ -319,16 +321,22 @@ for f in (3, 5, 7, 9, 12, 15, 17, 19, 21, 24):
     for y in ((0.0,) if f % 12 else (0.016, -0.016)):
         bpy.ops.mesh.primitive_torus_add(major_radius=0.0028, minor_radius=0.0005, location=(x, y, fb_top + 0.0001))
         assign(bpy.context.object, INLAY)
-# the headstock's start, past the nut (off the stage's right edge soon after)
-hv = [(X_NUT + 0.004, -nh - 0.001), (X_NUT + 0.004, nh + 0.001), (X_NUT + 0.03, nh + 0.009), (X_NUT + 0.12, nh + 0.013),
-      (X_NUT + 0.12, -nh + 0.004), (X_NUT + 0.03, -nh - 0.004)]
-cu = bpy.data.curves.new("headstock", "CURVE"); cu.dimensions = "2D"; cu.fill_mode = "BOTH"; cu.extrude = 0.004; cu.bevel_depth = 0.0015
-sp = cu.splines.new("POLY"); sp.points.add(len(hv) - 1)
-for i, p in enumerate(hv):
-    sp.points[i].co = (p[0], p[1], 0, 1)
-sp.use_cyclic_u = True
-hs = link(bpy.data.objects.new("headstock", cu)); hs.location.z = neck_top - 0.006; hs.data.materials.append(NECKWOOD)
-tube("headstock edge", [(p[0], p[1], neck_top - 0.002) for p in hv[1:] + hv[:1]], 0.0006, NEON_SOFT)
+if HEADLESS:
+    # a headless guitar's string clamp just past the nut: a black-chrome block across the neck, a soft neon line along it
+    nh2 = neck_half(X_NUT)
+    box("string clamp", (0.012, 2 * nh2 + 0.004, 0.009), (X_NUT + 0.014, 0, neck_top + 0.0045), CHROME, bevel=0.0015)
+    tube("clamp edge", [(X_NUT + 0.0075, -nh2 - 0.002, neck_top + 0.0085), (X_NUT + 0.0075, nh2 + 0.002, neck_top + 0.0085)], 0.0005, NEON_SOFT)
+else:
+    # the headstock's start, past the nut (off the stage's right edge soon after)
+    hv = [(X_NUT + 0.004, -nh - 0.001), (X_NUT + 0.004, nh + 0.001), (X_NUT + 0.03, nh + 0.009), (X_NUT + 0.12, nh + 0.013),
+          (X_NUT + 0.12, -nh + 0.004), (X_NUT + 0.03, -nh - 0.004)]
+    cu = bpy.data.curves.new("headstock", "CURVE"); cu.dimensions = "2D"; cu.fill_mode = "BOTH"; cu.extrude = 0.004; cu.bevel_depth = 0.0015
+    sp = cu.splines.new("POLY"); sp.points.add(len(hv) - 1)
+    for i, p in enumerate(hv):
+        sp.points[i].co = (p[0], p[1], 0, 1)
+    sp.use_cyclic_u = True
+    hs = link(bpy.data.objects.new("headstock", cu)); hs.location.z = neck_top - 0.006; hs.data.materials.append(NECKWOOD)
+    tube("headstock edge", [(p[0], p[1], neck_top - 0.002) for p in hv[1:] + hv[:1]], 0.0006, NEON_SOFT)
 
 # ================================================================ pickups, bridge, controls
 def humbucker(name, X):
@@ -355,13 +363,14 @@ for s in range(7):
     y = string_y(s, X_BRIDGE)
     box("saddle %d" % s, (0.014, 0.0085, 0.013), (X_BRIDGE - 0.004, y, TOP + 0.0075), CHROME, bevel=0.0012)
 # a volume knob and the pickup switch
-kx, ky = B(-62, -118)
-cylinder("knob", 0.010, 0.016, (kx, ky, TOP + 0.008), CHROME, verts=48)
-bpy.ops.mesh.primitive_torus_add(major_radius=0.0085, minor_radius=0.0006, location=(kx, ky, TOP + 0.0162))
-assign(bpy.context.object, NEON)
-sx, sy_ = B(14, -112)
-cylinder("switch base", 0.0045, 0.003, (sx, sy_, TOP + 0.0015), CHROME)
-cylinder("switch tip", 0.0022, 0.012, (sx + 0.003, sy_ - 0.003, TOP + 0.007), PEARL, rot=(0.5, 0.5, 0))
+if not HEADLESS:   # (the RG's knob and switch: off the window either way; a headless body is smaller there)
+    kx, ky = B(-62, -118)
+    cylinder("knob", 0.010, 0.016, (kx, ky, TOP + 0.008), CHROME, verts=48)
+    bpy.ops.mesh.primitive_torus_add(major_radius=0.0085, minor_radius=0.0006, location=(kx, ky, TOP + 0.0162))
+    assign(bpy.context.object, NEON)
+    sx, sy_ = B(14, -112)
+    cylinder("switch base", 0.0045, 0.003, (sx, sy_, TOP + 0.0015), CHROME)
+    cylinder("switch tip", 0.0022, 0.012, (sx + 0.003, sy_ - 0.003, TOP + 0.007), PEARL, rot=(0.5, 0.5, 0))
 
 # ================================================================ strings
 STRING_RGB = ["ff2d6e", None, None, "ff2a2e", None, None, "ff6a24"]
@@ -376,7 +385,7 @@ for s in range(7):
     m = material("string %d" % s, srgb("6a6266"), metallic=1.0, rough=0.25, emission=srgb(string_colour(s)), strength=3.0)
     r = 0.00034 - s * 0.00003
     a = Vector((X_BRIDGE - 0.004, string_y(s, X_BRIDGE), TOP + 0.0145))
-    b = Vector((X_NUT + 0.03, string_y(s, X_NUT) * 0.9, z_string))
+    b = Vector((X_NUT + 0.009, string_y(s, X_NUT), z_string)) if HEADLESS else Vector((X_NUT + 0.03, string_y(s, X_NUT) * 0.9, z_string))
     d = b - a
     cylinder("string %d" % s, r, d.length, (a + b) / 2, m, verts=10)
     o = bpy.context.object

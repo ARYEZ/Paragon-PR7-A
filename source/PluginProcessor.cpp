@@ -376,7 +376,7 @@ bool ParagonX1AudioProcessor::waitUntilIdle (int timeoutMs)
 
 juce::File ParagonX1AudioProcessor::renderListFile (guitar::Articulation a, int string) const
 {
-    const auto file = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("Paragon PR7-I")
+    const auto file = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("Paragon PR7-A")
                           .getChildFile ("Render Lists").getChildFile (guitar::renders::fileName (a, string) + ".mid");
     saveRenderList (a, string, file);
     return file;

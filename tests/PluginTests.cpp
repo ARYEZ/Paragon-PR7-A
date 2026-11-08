@@ -15,7 +15,7 @@ namespace
 {
     juce::File temp (const juce::String& name)
     {
-        auto f = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("PR7-I plugin tests").getChildFile (name);
+        auto f = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("PR7-A plugin tests").getChildFile (name);
         f.deleteRecursively();
         f.createDirectory();
         return f;
@@ -104,7 +104,7 @@ namespace
     }
 }
 
-TEST_CASE ("PR7-I is an instrument: no audio in, MIDI in, one output (mono or stereo)", "[plugin]")
+TEST_CASE ("PR7-A is an instrument: no audio in, MIDI in, one output (mono or stereo)", "[plugin]")
 {
     ParagonX1AudioProcessor p;
     CHECK (p.acceptsMidi());
@@ -119,7 +119,7 @@ TEST_CASE ("PR7-I is an instrument: no audio in, MIDI in, one output (mono or st
     CHECK (p.checkBusesLayoutSupported (stereo));
     CHECK (p.checkBusesLayoutSupported (mono));
     CHECK_FALSE (p.checkBusesLayoutSupported (withInput));
-    CHECK (juce::String (JucePlugin_Name) == "Paragon PR7-I");
+    CHECK (juce::String (JucePlugin_Name) == "Paragon PR7-A");
 }
 
 TEST_CASE ("THE PLUGIN: a render imported, the guitar folder loaded, notes played on their strings; OUTPUT, TONE, BYPASS", "[plugin]")
@@ -205,7 +205,7 @@ TEST_CASE ("THE PLUGIN: the project keeps the guitar's folder, settings, preset 
 TEST_CASE ("PRESETS: their own folder; ways of playing; saved, loaded, stepped; undo", "[plugin][rigs]")
 {
     Plugin t;
-    CHECK (RigLibrary().getFolder().getParentDirectory().getFileName() == "Paragon PR7-I");
+    CHECK (RigLibrary().getFolder().getParentDirectory().getFileName() == "Paragon PR7-A");
     auto& library = t.p.getRigLibrary();
     juce::StringArray names;
     for (const auto& e : library.getEntries())

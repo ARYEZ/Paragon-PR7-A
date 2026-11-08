@@ -11,7 +11,7 @@ namespace Finish
         juce::PropertiesFile::Options settingsOptions()
         {
             juce::PropertiesFile::Options options;
-            options.applicationName = "Paragon PR7-I";   // its own file, so PR7-I and its siblings each remember their own finish
+            options.applicationName = "Paragon PR7-A";   // its own file, so PR7-I and its siblings each remember their own finish
             options.folderName = "Paragon";
             options.filenameSuffix = "settings";
             options.osxLibrarySubFolder = "Application Support";

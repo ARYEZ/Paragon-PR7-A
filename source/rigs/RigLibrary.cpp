@@ -33,7 +33,7 @@ juce::File RigLibrary::defaultFolder()
            .getChildFile ("Application Support")
           #endif
            .getChildFile ("Paragon")
-           .getChildFile ("Paragon PR7-I")
+           .getChildFile ("Paragon PR7-A")
            .getChildFile ("Rigs");
 }
 

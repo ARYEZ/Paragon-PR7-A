@@ -199,7 +199,7 @@ private:
     std::atomic<bool> loadCancel { false }, importCancel { false };
     std::atomic<int> importingString { -1 }, importingArticulation { 0 };
     std::array<std::array<juce::String, guitar::numStrings>, guitar::numArticulations> importReports;
-    juce::ThreadPool jobs { juce::ThreadPoolOptions().withThreadName ("PR7-I guitar").withNumberOfThreads (1) };
+    juce::ThreadPool jobs { juce::ThreadPoolOptions().withThreadName ("PR7-A guitar").withNumberOfThreads (1) };
 
     // The audio thread's parameters.
     std::atomic<float>* toneValue = nullptr;

@@ -48,7 +48,7 @@ namespace
 
     juce::File tempGuitar (const juce::String& name)
     {
-        auto f = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("PR7-I tests").getChildFile (name);
+        auto f = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("PR7-A tests").getChildFile (name);
         f.deleteRecursively();
         f.createDirectory();
         return f;
@@ -185,8 +185,8 @@ TEST_CASE ("THE RENDER LIST: every fret, three dynamics, two round-robins of dow
     for (const auto& t : list)
         CHECK (t.velocity() <= 119);   // sustain's velocities (above: the reference's rake and pinch harmonic)
     CHECK_THAT (renders::lengthSeconds (Articulation::sustain, 0), WithinAbs (2.0 + 300 * 5.5, 1e-9));
-    CHECK (renders::fileName (Articulation::sustain, 0) == "PR7-I Sustain - String 7 (low A)");
-    CHECK (renders::fileName (Articulation::sustain, 3) == "PR7-I Sustain - String 4 (D)");
+    CHECK (renders::fileName (Articulation::sustain, 0) == "PR7-A Sustain - String 7 (low A)");
+    CHECK (renders::fileName (Articulation::sustain, 3) == "PR7-A Sustain - String 4 (D)");
 
     // The MIDI: the string forced (C-2 + string), legato off, then per take the articulation and stroke keys, the note.
     const auto midi = renders::toMidi (Articulation::sustain, 4);
@@ -695,7 +695,7 @@ TEST_CASE ("RENDER LISTS 0.3.0: sustain's exactly as the owner rendered them; pa
     CHECK (list[15].roundRobin == 7);
     CHECK (list[16].layer == 1);
     CHECK_THAT (list[1].noteSeconds - list[0].noteSeconds, WithinAbs (1.6, 1e-9));
-    CHECK (renders::fileName (Articulation::mute, 0) == "PR7-I Mute - String 7 (low A)");
+    CHECK (renders::fileName (Articulation::mute, 0) == "PR7-A Mute - String 7 (low A)");
     const auto name = renders::takeFileName (Articulation::mute, list[15]);
     CHECK (name == "Mute/s0_f00_l0_u_r7.wav");
     const auto id = renders::parseTakeFile (juce::File ("/x").getChildFile (name));

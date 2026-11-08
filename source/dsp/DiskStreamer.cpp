@@ -7,7 +7,7 @@ namespace streaming
     class Streamer::Thread final : public juce::Thread
     {
     public:
-        explicit Thread (Streamer& s) : juce::Thread ("PR7-I disk streaming"), owner (s) {}
+        explicit Thread (Streamer& s) : juce::Thread ("PR7-A disk streaming"), owner (s) {}
         void run() override
         {
             while (! threadShouldExit())
