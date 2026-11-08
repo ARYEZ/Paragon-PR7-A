@@ -84,7 +84,7 @@ def neon(name, strength):
 
 def grid_floor():
     # Gloss black with a faint red grid (one line every 24 mm: 48 px at the plugin's 2x), fading out from the guitar.
-    m = material("grid floor", srgb("070507"), rough=0.25, spec=0.5)
+    m = material("grid floor", srgb("030203"), rough=0.25, spec=0.5)
     nt = m.node_tree
     b = nt.nodes["Principled BSDF"]
     coords = nt.nodes.new("ShaderNodeTexCoord")
@@ -190,6 +190,11 @@ def tube(name, pts, r, mat, closed=False):
     o = link(bpy.data.objects.new(name, cu))
     o.data.materials.append(mat)
     return o
+
+# 0.4.4: how bright the lights are (0.4.0 had them 5x brighter: its floor and body came out dark grey, about 27 of 255 against PR7-D's
+# kit at about 5; the owner: "too bright, it looks more grey than black"). The neon is emission and stays as it was.
+LIGHT = float(os.environ.get("GUITAR_LIGHT", "0.2"))
+RIM = float(os.environ.get("GUITAR_RIM", "0.4"))
 
 # ================================================================ dimensions (metres)
 PX_PER_M = 3000.0                # the plugin's 1x pixels per metre
@@ -384,7 +389,7 @@ world = bpy.data.worlds.new("dark")
 scene.world = world
 world.use_nodes = True
 world.node_tree.nodes["Background"].inputs["Color"].default_value = srgb("060407")
-world.node_tree.nodes["Background"].inputs["Strength"].default_value = 0.02
+world.node_tree.nodes["Background"].inputs["Strength"].default_value = 0.02 * LIGHT
 
 def light(name, kind, loc, rot, energy, colour, size=1.0, size_y=None, spot=None):
     data = bpy.data.lights.new(name, kind)
@@ -404,10 +409,10 @@ def light(name, kind, loc, rot, energy, colour, size=1.0, size_y=None, spot=None
     return o
 
 # a long strip light above, at an angle across the body: the gloss streak along the lacquer
-light("sheen", "AREA", (0.10, 0.25, 1.1), (math.radians(-14), math.radians(-10), 0), 2.2, (1.0, 0.95, 0.96), size=0.35, size_y=0.9)
-light("key", "AREA", (-0.3, 0.6, 0.9), (math.radians(-35), math.radians(-25), 0), 1.2, (1.0, 0.96, 0.95), size=0.6)
-light("rim pink", "AREA", (0.29, 0.7, 0.18), (math.radians(-75), 0, 0), 9, srgb("ff3b6a"), size=1.4, size_y=0.12)
-light("rim orange", "AREA", (0.29, -0.7, 0.18), (math.radians(75), 0, 0), 9, srgb("ff5a2c"), size=1.4, size_y=0.12)
+light("sheen", "AREA", (0.10, 0.25, 1.1), (math.radians(-14), math.radians(-10), 0), 2.2 * LIGHT, (1.0, 0.95, 0.96), size=0.35, size_y=0.9)
+light("key", "AREA", (-0.3, 0.6, 0.9), (math.radians(-35), math.radians(-25), 0), 1.2 * LIGHT, (1.0, 0.96, 0.95), size=0.6)
+light("rim pink", "AREA", (0.29, 0.7, 0.18), (math.radians(-75), 0, 0), 9 * RIM, srgb("ff3b6a"), size=1.4, size_y=0.12)
+light("rim orange", "AREA", (0.29, -0.7, 0.18), (math.radians(75), 0, 0), 9 * RIM, srgb("ff5a2c"), size=1.4, size_y=0.12)
 
 for name in ("sheen", "key"):
     bpy.data.objects[name].visible_glossy = False
@@ -418,6 +423,14 @@ box_ = bpy.context.object
 box_.scale = (3.5, 2.6, 1)
 box_.visible_camera = False
 box_.visible_shadow = False
+box_.visible_diffuse = False   # 0.4.4: only seen in reflections (the gloss on the lacquer), never lighting the floor grey
+# ...and it lights the guitar only (Blender 4.0's light linking): the floor stays black, as under PR7-D's kit
+receivers = bpy.data.collections.new("sheen receivers")
+for name in ("body", "neck", "fretboard", "headstock"):
+    if name in bpy.data.objects:
+        receivers.objects.link(bpy.data.objects[name])
+if hasattr(box_, "light_linking"):
+    box_.light_linking.receiver_collection = receivers
 sm = bpy.data.materials.new("softbox"); sm.use_nodes = True
 nt = sm.node_tree; nt.nodes.clear()
 out = nt.nodes.new("ShaderNodeOutputMaterial"); em = nt.nodes.new("ShaderNodeEmission")
@@ -427,7 +440,7 @@ ramp = nt.nodes.new("ShaderNodeValToRGB"); el = ramp.color_ramp.elements
 el[0].position, el[0].color = 0.0, (0, 0, 0, 1); el[1].position, el[1].color = 0.9, (1.0, 0.93, 0.95, 1)
 nt.links.new(tc.outputs["Object"], mp.inputs["Vector"]); nt.links.new(mp.outputs["Vector"], grad.inputs["Vector"])
 nt.links.new(grad.outputs["Fac"], ramp.inputs["Fac"]); nt.links.new(ramp.outputs["Color"], em.inputs["Color"])
-em.inputs["Strength"].default_value = 0.6
+em.inputs["Strength"].default_value = float(os.environ.get("GUITAR_SHEEN", "0.15"))   # the gloss on the lacquer (the softbox lights only the guitar)
 nt.links.new(em.outputs["Emission"], out.inputs["Surface"])
 assign(box_, sm)
 
