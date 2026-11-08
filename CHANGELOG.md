@@ -2,6 +2,12 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.1.2
+
+**Smoother body edges** (as PR7-I 0.4.7). The headless body's outline is one smooth curve now: the long horn sweeps without little corners, the tips round off as a real body's do, and the straight runs are straight.
+
+- **Why it wasn't smooth:** the trace was about 100 short straight lines, with some raggedness from the photo. It's now resampled and gently smoothed when the guitar is built.
+
 ## 0.1.1
 
 **A clean join where the body meets the neck** (as PR7-I 0.4.6). The body's glowing edge met the neck at a slant; now the long horn curves straight down onto the neck at the 17th fret, and the edge runs parallel to the fretboard.
