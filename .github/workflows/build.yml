@@ -112,7 +112,7 @@ jobs:
   # above, zipped, with notes from CHANGELOG.md.
   release:
     name: Release
-    if: github.event_name == 'push'
+    if: false   # PR7-A: off until its own identity is done (as PR7-I did when it was copied from PR7-D)
     needs: build
     runs-on: ubuntu-24.04
     permissions:
