@@ -287,12 +287,15 @@ namespace guitar
             v.muted = articulation == Articulation::mute;
             v.take = found.take;
             v.step = found.take->sampleRate / rate * found.pitchRatio;
+            v.position = takeStartSeconds * found.take->sampleRate;
+            v.fadeIn = 0.0f;
+            v.fadeInStep = (float) (1.0 / juce::jmax (1.0, 0.001 * rate));
             const auto ratio = (double) velocity / (double) renders::spec (articulation).velocities[(size_t) layer];
             v.gain = (float) juce::jlimit (0.05, 2.0, std::pow (ratio, 1.5 * (double) s.velocityToVolume)) * borrowedGain;
             if (s.variation > 0.0f)
             {
                 // VARIATION: a little later into the take, a little louder or quieter, a little sharp or flat.
-                v.position = (double) s.variation * random.nextDouble() * 0.003 * found.take->sampleRate;
+                v.position += (double) s.variation * random.nextDouble() * 0.003 * found.take->sampleRate;
                 v.gain *= juce::Decibels::decibelsToGain (s.variation * (random.nextFloat() - 0.5f));
                 v.step *= std::pow (2.0, (double) s.variation * (random.nextDouble() * 6.0 - 3.0) / 1200.0);
             }
@@ -350,7 +353,8 @@ namespace guitar
             }
             const auto frac = (float) (v.position - (double) f);
             const auto a = frameAt (f), b = frameAt (f + 1);
-            const auto out = (a + (b - a) * frac) * v.gain * v.fade * (1.0f + v.attack);
+            const auto out = (a + (b - a) * frac) * v.gain * v.fade * v.fadeIn * (1.0f + v.attack);
+            v.fadeIn = juce::jmin (1.0f, v.fadeIn + v.fadeInStep);
             v.attack *= v.attackDecay;
             left[i] += out;
             right[i] += out;

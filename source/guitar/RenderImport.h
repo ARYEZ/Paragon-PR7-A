@@ -20,7 +20,7 @@
 //     guitar never takes a copy for variety; the report says how many different takes there were.
 namespace guitar::renders
 {
-    inline constexpr double prerollSeconds = 0.03;
+    inline constexpr double prerollSeconds = 0.03;   // (playback starts takeStartSeconds, 15 ms, in: Guitar.h)
     inline constexpr double tailSeconds = 0.08;     // kept after the note's end: the string being stopped
     inline constexpr double centsTolerance = 40.0;
 

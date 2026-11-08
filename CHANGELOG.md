@@ -2,6 +2,15 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.4.3
+
+**Notes land on time.** Your A/B render showed PR7-I's picks landing about 15 ms after your guitar instrument's. This fixes it.
+
+- **What your two renders showed:** I lined up the same chug riff from both plugins. The pitches, levels, decay and tone match closely, within about 1 dB in every frequency band. But PR7-I's picks came 15 ms later by one measure and 22 ms later by another.
+- **Why:** when PR7-I imports a take, it keeps 30 ms of sound from before the pick, and it used to play every take from the very start of that. So each pick landed 30 ms after its note-on, where your guitar instrument's land about 15 ms after.
+- **Now** each note starts 15 ms into that lead-in, with a 1 ms fade so there's no click, and the pick lands 15 ms after the note-on. On 16ths at 120 BPM, 15 ms is an eighth of the gap between notes, so tight riffs should sit noticeably closer to the drums.
+- **What can't be checked here:** whether it feels tighter to you. Tested to the sample with made-up takes.
+
 ## 0.4.2
 
 **Repeated palm mutes no longer machine-gun.** On a chug, the same palm-mute take kept coming back several times in a row. That was a bug, and this fixes it.

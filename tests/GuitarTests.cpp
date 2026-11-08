@@ -1198,3 +1198,45 @@ TEST_CASE ("Compare two renders of a riff", "[.][ab-compare]")
     std::cout << table << std::endl;
     SUCCEED();
 }
+
+TEST_CASE ("0.4.3: a note's pick lands 15 ms after its note-on (takes keep 30 ms before the pick; playback starts 15 ms in)", "[guitar][engine]")
+{
+    // A take as an import cuts it: quiet lead-in, the pick (a sharp step) exactly prerollSeconds in.
+    auto library = std::make_shared<Library>();
+    const auto rate = 48000.0;
+    for (int f = 0; f <= numFrets; ++f)
+        for (int l = 0; l < renders::spec (Articulation::sustain).layers; ++l)
+            for (const auto stroke : { Stroke::down, Stroke::up })
+                for (int rr = 0; rr < renders::spec (Articulation::sustain).roundRobins; ++rr)
+                {
+                    auto take = std::make_shared<Take>();
+                    take->sampleRate = rate;
+                    const auto pick = (int) (renders::prerollSeconds * rate);
+                    for (int i = 0; i < (int) (0.5 * rate); ++i)
+                        take->head.push_back (i < pick ? 0.001f * (float) std::sin (i * 0.3) : 0.5f * (float) std::sin (juce::MathConstants<double>::twoPi * 110.0 * (i - pick) / rate));
+                    take->frames = (juce::int64) take->head.size();
+                    take->loudness = 0.3f;
+                    library->add (Articulation::sustain, 2, f, l, stroke, rr, take);
+                }
+    Guitar g;
+    g.prepare (rate);
+    Settings s;
+    s.library = library.get();
+    s.keyMap = KeyMap::factory;
+    std::vector<float> l (4800, 0.0f), r (4800, 0.0f);
+    juce::MidiBuffer midi;
+    const auto noteAt = 1000;
+    midi.addEvent (juce::MidiMessage::noteOn (1, 45, (juce::uint8) 100), noteAt);
+    g.process (l.data(), r.data(), (int) l.size(), midi, 0, s);
+    auto pickAt = -1;
+    for (int i = 0; i < (int) l.size() && pickAt < 0; ++i)
+        if (std::abs (l[(size_t) i]) > 0.05f)
+            pickAt = i;
+    INFO ("the pick at " << pickAt << ", the note-on at " << noteAt);
+    // (the sine's first sample over 0.05 comes a few samples after the step)
+    CHECK (pickAt - noteAt >= (int) (takeStartSeconds * rate));
+    CHECK (pickAt - noteAt <= (int) (takeStartSeconds * rate) + 8);
+    // nothing loud before it: the lead-in faded in, no click
+    for (int i = noteAt; i < noteAt + (int) (takeStartSeconds * rate) - 2; ++i)
+        CHECK (std::abs (l[(size_t) i]) < 0.01f);
+}

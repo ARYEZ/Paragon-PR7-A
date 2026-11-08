@@ -83,6 +83,13 @@ namespace guitar
     Played playedFor (KeyMap, int key, int velocity) noexcept;
     bool isArticulationKey (KeyMap, int note) noexcept;
 
+    // 0.4.3: where in each take a note starts. Imports cut each take from 30 ms before its pick (RenderImport's
+    // prerollSeconds), and until 0.4.2 notes played from the very start, so every pick landed 30 ms after its note-on.
+    // The owner's A/B render of a chug riff measured their guitar instrument's picks 15-22 ms earlier than PR7-I's, so
+    // notes now start 15 ms in (15 ms of the pick's lead-in kept, a 1 ms fade into it): the pick lands 15 ms after the
+    // note-on, as theirs do.
+    inline constexpr double takeStartSeconds = 0.015;
+
     class Guitar
     {
     public:
@@ -130,6 +137,7 @@ namespace guitar
             double position = 0.0, step = 1.0;
             float gain = 1.0f, fade = 1.0f, fadeStep = 0.0f;
             float attack = 0.0f, attackDecay = 1.0f;   // ATTACK: an extra gain at the start, decaying
+            float fadeIn = 1.0f, fadeInStep = 0.0f;    // 0.4.3: a 1 ms fade in (the take starts inside its lead-in)
             int stream = -1;
             juce::uint32 age = 0;
         };
