@@ -7,6 +7,7 @@
 #include "guitar/PolyWindow.h"
 #include "guitar/RenderImport.h"
 #include "guitar/RoundRobinCheck.h"
+#include "guitar/NoiseLists.h"
 
 #include <juce_audio_formats/juce_audio_formats.h>
 
@@ -490,6 +491,90 @@ TEST_CASE ("Write the render lists", "[.][render-lists]")
             REQUIRE (out.openedOk());
             REQUIRE (renders::toMidi (a, s).writeTo (out));
         }
+}
+
+TEST_CASE ("THE NOISE LISTS 0.6.0: their layouts (fixed once sent), notes, keyswitches and times", "[guitar][noises]")
+{
+    using namespace noises;
+    // How many hits each list has, and how long it is: the layouts sent to the owner (November 2026).
+    CHECK (hits (List::pitchedRelease, 0).size() == 25 * 4);
+    CHECK (hits (List::powerChordRelease).size() == 3 * 16 * 3);
+    CHECK (hits (List::unpitched).size() == 7 * 4 * 12);
+    CHECK (hits (List::fretNoise).size() == 32);
+    CHECK_THAT (lengthSeconds (List::pitchedRelease, 0), Catch::Matchers::WithinAbs (2.0 + 100 * 1.25 + 1.0, 1e-9));
+    CHECK_THAT (lengthSeconds (List::unpitched), Catch::Matchers::WithinAbs (2.0 + 336 * 1.25 + 1.0, 1e-9));
+
+    // Each hit: its slot, the note held 0.5 s, and its release (or fret noise) clear of the next hit's keyswitches.
+    for (const auto list : { List::pitchedRelease, List::powerChordRelease, List::unpitched, List::fretNoise })
+    {
+        const auto all = hits (list, 3);
+        for (size_t i = 0; i < all.size(); ++i)
+        {
+            INFO ((int) list << " " << i);
+            CHECK_THAT (all[i].noteSeconds, Catch::Matchers::WithinAbs (2.0 + (double) i * layout (list).slotSeconds + 0.25, 1e-9));
+            if (i + 1 < all.size())
+                CHECK (all[i + 1].noteSeconds - 0.25 - all[i].offSeconds >= 0.45);   // the ~0.3 s noise has room
+        }
+    }
+    const auto pitched = hits (List::pitchedRelease, 3);
+    CHECK (pitched.front().note == noteOf (3, 0));
+    CHECK (pitched.back().note == noteOf (3, numFrets));
+    CHECK (pitched[4].fret == 1);
+    CHECK (hits (List::powerChordRelease).back().string == 2);
+    CHECK (hits (List::powerChordRelease).back().fret == 15);
+    CHECK (hits (List::fretNoise).front().note == 30);
+
+    // The MIDI: every hit's note at its time and velocity; before it its force-string, articulation and down-stroke
+    // keys (not for fret noise); legato off at the start.
+    for (const auto list : { List::pitchedRelease, List::powerChordRelease, List::unpitched, List::fretNoise })
+    {
+        auto file = toMidi (list, 5);
+        file.convertTimestampTicksToSeconds();
+        const auto& track = *file.getTrack (0);
+        std::vector<std::pair<double, int>> ons;
+        for (int i = 0; i < track.getNumEvents(); ++i)
+            if (const auto& m = track.getEventPointer (i)->message; m.isNoteOn())
+                ons.push_back ({ m.getTimeStamp(), m.getNoteNumber() * 1000 + m.getVelocity() });
+        const auto expect = hits (list, 5);
+        auto found = 0;
+        for (const auto& h : expect)
+        {
+            const auto v = list == List::fretNoise ? 127 : 85;
+            for (const auto& [t, nv] : ons)
+                if (std::abs (t - h.noteSeconds) < 1e-6 && nv == h.note * 1000 + v)
+                    ++found;
+            if (list != List::fretNoise)
+            {
+                const auto articulation = list == List::powerChordRelease ? 15 : 12;
+                for (const auto k : { renders::keys::forceStringLowA + h.string, articulation })
+                    CHECK (std::count_if (ons.begin(), ons.end(), [&] (const auto& e) { return std::abs (e.first - (h.noteSeconds - 0.25)) < 1e-6 && e.second / 1000 == k; }) == 1);
+            }
+        }
+        CHECK (found == (int) expect.size());
+        CHECK (std::count_if (ons.begin(), ons.end(), [] (const auto& e) { return e.second / 1000 == renders::keys::legatoOff; }) == 1);
+    }
+    CHECK (fileName (List::pitchedRelease, 0) == "PR7-I Release - String 7 (low A)");
+    CHECK (fileName (List::fretNoise) == "PR7-I Fret Noise");
+}
+
+// PARAGON_NOISE_LISTS=<folder> ./GuitarCoreTests "[noise-lists]": the noise lists written as MIDI files.
+TEST_CASE ("Write the noise lists", "[.][noise-lists]")
+{
+    using namespace noises;
+    const auto folder = juce::File (juce::SystemStats::getEnvironmentVariable ("PARAGON_NOISE_LISTS", "noise-lists"));
+    folder.createDirectory();
+    const auto write = [&] (List list, int string)
+    {
+        const auto file = folder.getChildFile (fileName (list, string) + ".mid");
+        file.deleteFile();
+        juce::FileOutputStream out (file);
+        REQUIRE (out.openedOk());
+        REQUIRE (toMidi (list, string).writeTo (out));
+    };
+    for (int s = 0; s < numStrings; ++s)
+        write (List::pitchedRelease, s);
+    for (const auto list : { List::powerChordRelease, List::unpitched, List::fretNoise })
+        write (list, 0);
 }
 
 TEST_CASE ("THE ENGINE: streaming live (not waiting for the disk), the note whole and clean", "[guitar][engine]")

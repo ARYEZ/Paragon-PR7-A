@@ -59,6 +59,7 @@ target_sources(ParagonX1
         # THE GUITAR (0.2.0): fretting, the render list and its import, the takes, the playing engine.
         source/guitar/Fretting.cpp
         source/guitar/RenderList.cpp
+        source/guitar/NoiseLists.cpp
         source/guitar/RenderImport.cpp
         source/guitar/RoundRobinCheck.cpp
         source/guitar/GuitarLibrary.cpp
