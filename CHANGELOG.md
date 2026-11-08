@@ -2,6 +2,18 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.3.0
+
+**The noises, as PR7-I 0.6.0: release noises, scrapes and fret noise, from your guitar instrument.** Everything works exactly as in PR7-I's new version, with PR7-A's own list names.
+
+- **Releases:** on every note-off of a sustained note, the finger leaving the string at that note's pitch. A touch louder for harder notes; full for notes held up to a second, fading after, gone at 2 seconds; none for palm mutes.
+- **Power chords** get their own release, one per chord (each string's own if those aren't imported yet).
+- **Scrapes:** now and then an unpitched scrape is mixed in, about 1 release in 8, never twice in a row.
+- **Fret noise on F#0**, its recordings in turn, velocity setting how loud.
+- **The rack's new NOISES page:** RELEASE NOISE, SCRAPES and FRET NOISE, and a screen of what's imported. They're on by default at their rendered level.
+- **RENDERS has a NOISES tab** with a row per noise list (PR7-A's own: "PR7-A Release - String 7 (low A)" and so on). Render them through Rogue the way PR7-I's go through Jupiter, then import each into PR7-A's guitar folder. The importer refuses renders made the wrong way, or dropped on the wrong string's row.
+- **What's a guess:** where between 1 and 2 seconds of holding the releases stop. How it sounds next to the original is for your ears.
+
 ## 0.2.0
 
 **The GUITAR page rebuilt, as PR7-I 0.5.0: a family rack unit across the top, a smaller guitar.** Everything is the same as PR7-I's new page except the guitar's shape.

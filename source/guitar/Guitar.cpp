@@ -45,6 +45,8 @@ namespace guitar
     {
         for (auto& v : voices)
             v = {};
+        for (auto& n : noiseVoices)
+            n = {};
         onString.fill (-1);
         for (int s = 0; s < numStrings; ++s)
         {
@@ -119,6 +121,17 @@ namespace guitar
             const auto velocity = (int) m.getVelocity();
             if (n < lowestNote || n == keyswitch::pickUp || n == keyswitch::pickDown || n == keyswitch::pickAlternate)
             {
+                if (n == keyswitch::fretNoise)
+                {
+                    // FRET NOISE: the next recording in turn, by velocity.
+                    if (library != nullptr && s.fretNoise > 0.0f)
+                        if (const auto* take = library->fretNoise (fretTurn))
+                        {
+                            ++fretTurn;
+                            playNoise (take, s.fretNoise * (float) std::pow (velocity / 127.0, 0.85), 1.0);
+                        }
+                    return;
+                }
                 if (n >= keyswitch::forceLowA && n < keyswitch::forceLowA + numStrings) ksForce = n - keyswitch::forceLowA;
                 else if (n == keyswitch::forceOff) ksForce = -1;
                 else if (n == keyswitch::setHand) ksHand = juce::jlimit (1, numFrets - 3, velocity);
@@ -151,6 +164,7 @@ namespace guitar
         else if (m.isNoteOff())
         {
             const auto note = m.getNoteNumber() + s.transpose;
+            releaseNoises (note, s);
             for (auto& v : voices)
                 if (v.active && v.held && v.sourceNote == note)
                     stopVoice (v, s.releaseSeconds);
@@ -285,6 +299,10 @@ namespace guitar
             v.note = chord.notes[i];
             v.sourceNote = chord.sources[i];
             v.muted = articulation == Articulation::mute;
+            v.palmMuted = chord.articulations[i] == Articulation::mute;   // (asked for: a sustain standing in still has no release)
+            v.power = chord.power[i];
+            v.inputVelocity = chord.inputVelocities[i];
+            v.started = eventTime;
             v.take = found.take;
             v.step = found.take->sampleRate / rate * found.pitchRatio;
             v.position = takeStartSeconds * found.take->sampleRate;
@@ -398,6 +416,27 @@ namespace guitar
             for (auto& v : voices)
                 if (v.active)
                     render (v, left + done, right + done, to - done, s);
+            for (auto& n : noiseVoices)
+                if (n.take != nullptr)
+                {
+                    // A noise: whole in memory, played once.
+                    const auto& head = n.take->head;
+                    const auto frames = (juce::int64) head.size();
+                    for (int i = done; i < to; ++i)
+                    {
+                        const auto f = (juce::int64) n.position;
+                        if (f + 1 >= frames)
+                        {
+                            n.take = nullptr;
+                            break;
+                        }
+                        const auto frac = (float) (n.position - (double) f);
+                        const auto out = (head[(size_t) f] + (head[(size_t) f + 1] - head[(size_t) f]) * frac) * n.gain;
+                        left[i] += out;
+                        right[i] += out;
+                        n.position += n.step;
+                    }
+                }
             done = to;
         };
         auto chordAt = -1;
@@ -413,10 +452,16 @@ namespace guitar
             }
             renderTo (pos);
             chordAt = pos;
+            eventTime = blockStart + pos;
             handle (metadata.getMessage(), s, chord);
         }
         strike (chord, s);
         renderTo (numSamples);
+        blockStart += numSamples;
+        auto noisesSounding = 0;
+        for (const auto& n : noiseVoices)
+            noisesSounding += n.take != nullptr ? 1 : 0;
+        activeNoises = noisesSounding;
 
         // The hand goes home after a second with nothing held; the page's view of it all.
         auto held = false;
@@ -445,5 +490,79 @@ namespace guitar
         }
         shownHand = handNow (s);
         activeVoices = any;
+    }
+
+    void Guitar::playNoise (const Take* take, float gain, double pitchRatio) noexcept
+    {
+        if (take == nullptr || take->head.size() < 2 || gain <= 0.0f)
+            return;
+        // A free noise voice, else the one furthest through its noise.
+        NoiseVoice* chosen = nullptr;
+        for (auto& n : noiseVoices)
+            if (n.take == nullptr)
+            {
+                chosen = &n;
+                break;
+            }
+        if (chosen == nullptr)
+            for (auto& n : noiseVoices)
+                if (chosen == nullptr || n.position / (double) n.take->head.size() > chosen->position / (double) chosen->take->head.size())
+                    chosen = &n;
+        chosen->take = take;
+        chosen->position = 0.0;
+        chosen->step = take->sampleRate / rate * pitchRatio;
+        chosen->gain = gain;
+        lastNoisePlayed = { take, gain, pitchRatio, lastNoisePlayed.count + 1 };
+    }
+
+    void Guitar::releaseNoises (int note, const Settings& s) noexcept
+    {
+        if (library == nullptr || s.releaseNoise <= 0.0f)
+            return;
+        // The held voices this note-off lets go of (a power chord: its three).
+        const auto lettingGo = [&] (const Voice& v) { return v.active && v.held && v.sourceNote == note && ! v.palmMuted && v.string >= 0; };
+        const auto gainFor = [&] (const Voice& v)
+        {
+            const auto held = (double) (eventTime - v.started) / rate;
+            const auto byLength = (float) juce::jlimit (0.0, 1.0, 2.0 - held);   // full to 1 s, none from 2 s
+            return s.releaseNoise * byLength * (float) std::pow (juce::jmax (1, v.inputVelocity) / 85.0, 0.36);
+        };
+        auto played = false, powerDone = false;
+        // A power chord: its own release once, by its root (looked for first, whatever order the voices are in).
+        for (const auto& v : voices)
+            if (lettingGo (v) && v.power && v.note == v.sourceNote)
+                if (const auto gain = gainFor (v); gain > 0.0f)
+                    if (const auto found = library->release (true, v.string, v.note - openNotes[(size_t) v.string], releaseTurn); found.take != nullptr)
+                    {
+                        playNoise (found.take, gain, found.pitchRatio);
+                        powerDone = played = true;
+                    }
+        // Every other note (and a power chord's strings when it has no release of its own): its pitched release.
+        for (const auto& v : voices)
+        {
+            if (! lettingGo (v) || (v.power && powerDone))
+                continue;
+            const auto gain = gainFor (v);
+            if (gain <= 0.0f)
+                continue;
+            if (const auto found = library->release (false, v.string, v.note - openNotes[(size_t) v.string], releaseTurn); found.take != nullptr)
+            {
+                playNoise (found.take, gain, found.pitchRatio);
+                played = true;
+            }
+        }
+        if (! played)
+            return;
+        ++releaseTurn;
+        // Now and then an unpitched noise with it (never two releases running).
+        const auto scrape = ! lastHadScrape && s.scrapes > 0.0f && noiseRandom.nextFloat() < s.scrapes;
+        lastHadScrape = false;
+        if (scrape)
+            if (const auto* take = library->unpitched (unpitchedTurn))
+            {
+                ++unpitchedTurn;
+                playNoise (take, s.releaseNoise, 1.0);
+                lastHadScrape = true;
+            }
     }
 }

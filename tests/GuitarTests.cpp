@@ -7,6 +7,8 @@
 #include "guitar/PolyWindow.h"
 #include "guitar/RenderImport.h"
 #include "guitar/RoundRobinCheck.h"
+#include "guitar/NoiseLists.h"
+#include "guitar/NoiseImport.h"
 
 #include <juce_audio_formats/juce_audio_formats.h>
 
@@ -52,6 +54,41 @@ namespace
         f.deleteRecursively();
         f.createDirectory();
         return f;
+    }
+
+    // 0.6.0: a made-up render of a noise list, as the owner's will be (the notes' Volume down: only noises), `late`
+    // seconds late. Releases: a decaying tone at the note's pitch from each note-off, `recordings` different ones in
+    // turn (the rest copies); `everyNth`: only every nth hit has a noise (the unpitched list's now and then), each a
+    // different burst of noise, `recordings` of them in turn; `notesHeard`: the notes too (a render made the wrong way).
+    std::vector<float> fakeNoiseRender (noises::List list, int string, double rate, double late, int recordings, int everyNth = 1,
+                                        bool notesHeard = false)
+    {
+        using namespace noises;
+        std::vector<float> audio ((size_t) (lengthSeconds (list, string) * rate), 0.0f);
+        auto n = 0;
+        for (const auto& h : hits (list, string))
+        {
+            const auto which = (n / everyNth) % recordings;
+            const auto heard = n % everyNth == 0;
+            ++n;
+            if (notesHeard)
+                for (int i = 0; i < (int) (holdSeconds * rate); ++i)
+                    if (const auto at = (size_t) ((h.noteSeconds + late) * rate) + (size_t) i; at < audio.size())
+                        audio[at] += 0.2f * (float) std::sin (juce::MathConstants<double>::twoPi * guitar::frequencyOf (h.note) * i / rate);
+            if (! heard)
+                continue;
+            const auto start = (list == List::fretNoise ? h.noteSeconds : h.offSeconds) + late;
+            juce::Random random (100 + which);
+            const auto hz = list == List::fretNoise || list == List::unpitched ? 0.0 : guitar::frequencyOf (h.note) * (1.0 + 0.002 * which);
+            for (int i = 0; i < (int) (0.3 * rate); ++i)
+            {
+                const auto envelope = std::exp (-(double) i / (0.05 * rate));
+                const auto tone = hz > 0.0 ? std::sin (juce::MathConstants<double>::twoPi * hz * i / rate + which) : random.nextDouble() * 2.0 - 1.0;
+                if (const auto at = (size_t) (start * rate) + (size_t) i; at < audio.size())
+                    audio[at] += (float) (0.03 * envelope * tone);
+            }
+        }
+        return audio;
     }
 
     // A guitar of tones in memory: every string and fret, every dynamic and stroke, each take a tone at its pitch, its
@@ -490,6 +527,340 @@ TEST_CASE ("Write the render lists", "[.][render-lists]")
             REQUIRE (out.openedOk());
             REQUIRE (renders::toMidi (a, s).writeTo (out));
         }
+}
+
+TEST_CASE ("THE NOISE LISTS 0.6.0: their layouts (fixed once sent), notes, keyswitches and times", "[guitar][noises]")
+{
+    using namespace noises;
+    // How many hits each list has, and how long it is: the layouts sent to the owner (November 2026).
+    CHECK (hits (List::pitchedRelease, 0).size() == 25 * 4);
+    CHECK (hits (List::powerChordRelease).size() == 3 * 16 * 3);
+    CHECK (hits (List::unpitched).size() == 7 * 4 * 12);
+    CHECK (hits (List::fretNoise).size() == 32);
+    CHECK_THAT (lengthSeconds (List::pitchedRelease, 0), Catch::Matchers::WithinAbs (2.0 + 100 * 1.25 + 1.0, 1e-9));
+    CHECK_THAT (lengthSeconds (List::unpitched), Catch::Matchers::WithinAbs (2.0 + 336 * 1.25 + 1.0, 1e-9));
+
+    // Each hit: its slot, the note held 0.5 s, and its release (or fret noise) clear of the next hit's keyswitches.
+    for (const auto list : { List::pitchedRelease, List::powerChordRelease, List::unpitched, List::fretNoise })
+    {
+        const auto all = hits (list, 3);
+        for (size_t i = 0; i < all.size(); ++i)
+        {
+            INFO ((int) list << " " << i);
+            CHECK_THAT (all[i].noteSeconds, Catch::Matchers::WithinAbs (2.0 + (double) i * layout (list).slotSeconds + 0.25, 1e-9));
+            if (i + 1 < all.size())
+                CHECK (all[i + 1].noteSeconds - 0.25 - all[i].offSeconds >= 0.45);   // the ~0.3 s noise has room
+        }
+    }
+    const auto pitched = hits (List::pitchedRelease, 3);
+    CHECK (pitched.front().note == noteOf (3, 0));
+    CHECK (pitched.back().note == noteOf (3, numFrets));
+    CHECK (pitched[4].fret == 1);
+    CHECK (hits (List::powerChordRelease).back().string == 2);
+    CHECK (hits (List::powerChordRelease).back().fret == 15);
+    CHECK (hits (List::fretNoise).front().note == 30);
+
+    // The MIDI: every hit's note at its time and velocity; before it its force-string, articulation and down-stroke
+    // keys (not for fret noise); legato off at the start.
+    for (const auto list : { List::pitchedRelease, List::powerChordRelease, List::unpitched, List::fretNoise })
+    {
+        auto file = toMidi (list, 5);
+        file.convertTimestampTicksToSeconds();
+        const auto& track = *file.getTrack (0);
+        std::vector<std::pair<double, int>> ons;
+        for (int i = 0; i < track.getNumEvents(); ++i)
+            if (const auto& m = track.getEventPointer (i)->message; m.isNoteOn())
+                ons.push_back ({ m.getTimeStamp(), m.getNoteNumber() * 1000 + m.getVelocity() });
+        const auto expect = hits (list, 5);
+        auto found = 0;
+        for (const auto& h : expect)
+        {
+            const auto v = list == List::fretNoise ? 127 : 85;
+            for (const auto& [t, nv] : ons)
+                if (std::abs (t - h.noteSeconds) < 1e-6 && nv == h.note * 1000 + v)
+                    ++found;
+            if (list != List::fretNoise)
+            {
+                const auto articulation = list == List::powerChordRelease ? 15 : 12;
+                for (const auto k : { renders::keys::forceStringLowA + h.string, articulation })
+                    CHECK (std::count_if (ons.begin(), ons.end(), [&] (const auto& e) { return std::abs (e.first - (h.noteSeconds - 0.25)) < 1e-6 && e.second / 1000 == k; }) == 1);
+            }
+        }
+        CHECK (found == (int) expect.size());
+        CHECK (std::count_if (ons.begin(), ons.end(), [] (const auto& e) { return e.second / 1000 == renders::keys::legatoOff; }) == 1);
+    }
+    CHECK (fileName (List::pitchedRelease, 0) == "PR7-A Release - String 7 (low A)");
+    CHECK (fileName (List::fretNoise) == "PR7-A Fret Noise");
+}
+
+TEST_CASE ("THE NOISE IMPORT 0.6.0: releases cut at their note-offs, copies left out, renders made the wrong way refused", "[guitar][noises]")
+{
+    using namespace noises;
+    constexpr double rate = 16000.0;
+
+    // A string's releases, 12 ms late, two recordings taking turns: each fret's two kept, its two copies left out.
+    {
+        const auto folder = tempGuitar ("NoiseRelease");
+        const auto audio = fakeNoiseRender (List::pitchedRelease, 3, rate, 0.012, 2);
+        const auto report = importAudio (audio.data(), (int) audio.size(), rate, List::pitchedRelease, 3, folder);
+        INFO (report.error);
+        REQUIRE (report.ok());
+        CHECK_THAT (report.offsetSeconds, Catch::Matchers::WithinAbs (0.012, 0.001));
+        CHECK (report.written == 25 * 2);
+        CHECK (report.copies == 25 * 2);
+        CHECK (report.silent == 0);
+        CHECK (folder.getChildFile ("Release/s3_f00_r0.wav").existsAsFile());
+        CHECK (folder.getChildFile ("Release/s3_f24_r1.wav").existsAsFile());
+        CHECK_FALSE (folder.getChildFile ("Release/s3_f00_r2.wav").existsAsFile());
+        const auto library = Library::load (folder);
+        CHECK (library->noiseCount (List::pitchedRelease, 3) == 50);
+        CHECK (library->noiseCount (List::pitchedRelease, 2) == 0);
+        CHECK (library->isEmpty());   // (no notes: the noises don't count as the guitar's takes)
+        // Each saved release starts 5 ms before its noise, at the note's pitch.
+        const auto found = library->release (false, 3, 7, 0);
+        REQUIRE (found.take != nullptr);
+        CHECK (found.pitchRatio == 1.0);
+        const auto& head = found.take->head;
+        CHECK (std::abs (head[(size_t) (0.003 * rate)]) < 1.0e-4f);
+        CHECK (rms (head, (size_t) (0.006 * rate), (size_t) (0.05 * rate)) > 0.005);
+        CHECK_THAT (frequencyOf (head, (size_t) (0.006 * rate), (size_t) (0.1 * rate)) * rate / sampleRate, Catch::Matchers::WithinRel (guitar::frequencyOf (noteOf (3, 7)), 0.03));   // (frequencyOf counts at 48 kHz)
+        CHECK (library->release (false, 3, 7, 1).take != found.take);
+        CHECK (library->release (false, 3, 7, 2).take == found.take);   // the two in turn
+        CHECK (library->release (false, 2, 7, 0).take == nullptr);
+        CHECK (library->release (true, 3, 7, 0).take == nullptr);
+
+        // Imported again: the string's old releases replaced, not added to.
+        REQUIRE (importAudio (audio.data(), (int) audio.size(), rate, List::pitchedRelease, 3, folder).ok());
+        CHECK (Library::load (folder)->noiseCount (List::pitchedRelease, 3) == 50);
+    }
+
+    // The notes heard (the notes' Volume wasn't down): refused, nothing saved.
+    {
+        const auto folder = tempGuitar ("NoiseNotesHeard");
+        const auto audio = fakeNoiseRender (List::pitchedRelease, 0, rate, 0.0, 2, 1, true);
+        const auto report = importAudio (audio.data(), (int) audio.size(), rate, List::pitchedRelease, 0, folder);
+        CHECK_FALSE (report.ok());
+        CHECK (report.error.contains ("notes can be heard"));
+        CHECK (Library::load (folder)->noiseTotal() == 0);
+    }
+    // No releases at all: refused.
+    {
+        const auto folder = tempGuitar ("NoiseSilent");
+        std::vector<float> audio ((size_t) (lengthSeconds (List::pitchedRelease, 0) * rate), 0.0f);
+        CHECK_FALSE (importAudio (audio.data(), (int) audio.size(), rate, List::pitchedRelease, 0, folder).ok());
+    }
+
+    // Unpitched: a noise on every 8th hit, 6 different ones in turn: the 6 kept, in the order they came.
+    {
+        const auto folder = tempGuitar ("NoiseUnpitched");
+        const auto audio = fakeNoiseRender (List::unpitched, 0, rate, 0.0, 6, 8);
+        const auto report = importAudio (audio.data(), (int) audio.size(), rate, List::unpitched, 0, folder);
+        INFO (report.error);
+        REQUIRE (report.ok());
+        CHECK (report.written == 6);
+        CHECK (report.silent == 336 - 42);
+        CHECK (Library::load (folder)->noiseCount (List::unpitched) == 6);
+        // ...but a noise on every hit means the pitched releases weren't turned down: refused.
+        const auto wrong = fakeNoiseRender (List::unpitched, 0, rate, 0.0, 6, 1);
+        CHECK (importAudio (wrong.data(), (int) wrong.size(), rate, List::unpitched, 0, tempGuitar ("NoiseUnpitchedWrong")).error.contains ("Pitched Release"));
+    }
+
+    // Fret noise: 13 recordings in turn over 32 hits: the 13 kept, numbered in turn (the first one played first).
+    {
+        const auto folder = tempGuitar ("NoiseFret");
+        const auto audio = fakeNoiseRender (List::fretNoise, 0, rate, 0.004, 13);
+        const auto report = importAudio (audio.data(), (int) audio.size(), rate, List::fretNoise, 0, folder);
+        INFO (report.error);
+        REQUIRE (report.ok());
+        CHECK (report.written == 13);
+        CHECK (report.copies == 19);
+        const auto library = Library::load (folder);
+        CHECK (library->noiseCount (List::fretNoise) == 13);
+        CHECK (library->fretNoise (0) != library->fretNoise (1));
+        CHECK (library->fretNoise (0) == library->fretNoise (13));
+    }
+
+    // Power-chord releases: by the root's string and fret.
+    {
+        const auto folder = tempGuitar ("NoisePower");
+        const auto audio = fakeNoiseRender (List::powerChordRelease, 0, rate, 0.0, 1);
+        const auto report = importAudio (audio.data(), (int) audio.size(), rate, List::powerChordRelease, 0, folder);
+        INFO (report.error);
+        REQUIRE (report.ok());
+        CHECK (report.written == 48);
+        const auto library = Library::load (folder);
+        CHECK (library->release (true, 1, 5, 0).take != nullptr);
+        CHECK (library->release (true, 1, 20, 0).pitchRatio > 1.0);   // past fret 15: the 15th's, played higher
+        CHECK (library->release (true, 4, 5, 0).take == nullptr);     // roots on strings 7-5 only
+    }
+}
+
+namespace
+{
+    // A noise in memory: a `hz` tone of `level`, `seconds` long, at 48 kHz.
+    std::shared_ptr<Take> noiseTake (double hz, float level = 0.1f, double seconds = 0.1)
+    {
+        auto t = std::make_shared<Take>();
+        t->sampleRate = sampleRate;
+        for (int i = 0; i < (int) (seconds * sampleRate); ++i)
+            t->head.push_back (level * (float) std::sin (juce::MathConstants<double>::twoPi * hz * i / sampleRate));
+        t->frames = (juce::int64) t->head.size();
+        return t;
+    }
+}
+
+TEST_CASE ("THE NOISES 0.6.0: a release at each note-off, by how long the note was held; power chords; fret noise; scrapes", "[guitar][engine][noises]")
+{
+    using noises::List;
+    const auto release = noiseTake (3000.0);
+
+    SECTION ("A note-off plays the note's release, from that very sample, at its level")
+    {
+        Player with, without;
+        for (auto* p : { &with, &without })
+        {
+            p->library->addNoise (List::pitchedRelease, 0, 0, release);
+            p->settings.releaseNoise = p == &with ? 1.0f : 0.0f;
+            p->play (1.0, { { Player::on (33, 90), 0 }, { Player::off (33), (int) (0.5 * sampleRate) } });
+        }
+        std::vector<float> noise (with.left.size());
+        for (size_t i = 0; i < noise.size(); ++i)
+            noise[i] = with.left[i] - without.left[i];
+        const auto off = (size_t) (0.5 * sampleRate);
+        CHECK (rms (noise, 0, off) < 1.0e-6);                                   // nothing before the note-off
+        const auto expected = 0.1 * std::pow (90.0 / 85.0, 0.36);               // a touch louder: velocity 90
+        CHECK_THAT (levelAt (noise, 3000.0, off, 2400), Catch::Matchers::WithinRel (expected, 0.03));
+        CHECK (std::abs (noise[off]) < 1.0e-6);
+        CHECK (std::abs (noise[off + 3]) > 1.0e-3);                             // its first samples right there
+        CHECK (rms (noise, off + (size_t) (0.11 * sampleRate), noise.size()) < 1.0e-6);   // played once (0.1 s)
+        CHECK (with.guitar.lastNoise().take == release.get());
+        CHECK (without.guitar.lastNoise().count == 0);
+        // A fret with no release of its own borrows the string's nearest, at the note's pitch.
+        Player b;
+        b.library->addNoise (List::pitchedRelease, 0, 0, release);
+        b.play (0.3, { { Player::on (38), 0 }, { Player::off (38), (int) (0.2 * sampleRate) } });   // low A, 5th fret
+        CHECK_THAT (b.guitar.lastNoise().pitchRatio, Catch::Matchers::WithinRel (std::pow (2.0, 5.0 / 12.0), 1e-9));
+        // No release on that string: none.
+        Player n;
+        n.library->addNoise (List::pitchedRelease, 3, 0, release);
+        n.play (0.3, { { Player::on (33), 0 }, { Player::off (33), (int) (0.2 * sampleRate) } });
+        CHECK (n.guitar.lastNoise().count == 0);
+    }
+
+    SECTION ("Held a second: full; 1.5 s: half; 2 s or more: none (the reference played none after 2 s)")
+    {
+        const auto gainAfter = [&] (double held)
+        {
+            Player p;
+            p.library->addNoise (List::pitchedRelease, 0, 0, release);
+            p.play (held + 0.2, { { Player::on (33, 85), 0 }, { Player::off (33), (int) (held * sampleRate) } });
+            return p.guitar.lastNoise().count == 0 ? 0.0f : p.guitar.lastNoise().gain;
+        };
+        CHECK_THAT (gainAfter (0.1), Catch::Matchers::WithinAbs (1.0, 1e-3));
+        CHECK_THAT (gainAfter (1.0), Catch::Matchers::WithinAbs (1.0, 1e-3));
+        CHECK_THAT (gainAfter (1.5), Catch::Matchers::WithinAbs (0.5, 0.01));
+        CHECK (gainAfter (2.5) == 0.0f);
+    }
+
+    SECTION ("No release for a palm mute, a note stopped by MONO, or with RELEASE NOISE at 0")
+    {
+        Player m;
+        m.library->addNoise (List::pitchedRelease, 0, 0, release);
+        m.play (0.4, { { Player::on (13), 0 }, { Player::on (33), 10 }, { Player::off (33), (int) (0.2 * sampleRate) } });   // C#-1: palm mute
+        CHECK (m.guitar.lastNoise().count == 0);
+        Player o;
+        o.library->addNoise (List::pitchedRelease, 0, 0, release);
+        o.settings.mono = true;
+        o.play (0.4, { { Player::on (33), 0 }, { Player::on (45), (int) (0.1 * sampleRate) }, { Player::off (33), (int) (0.2 * sampleRate) } });
+        CHECK (o.guitar.lastNoise().count == 0);   // (the low A was already stopped by the A string's note)
+    }
+
+    SECTION ("A power chord: one release of its own (by the root), else each string's")
+    {
+        const auto power = noiseTake (2000.0);
+        Player p;
+        p.library->addNoise (List::powerChordRelease, 0, 0, power);
+        for (int s = 0; s < 3; ++s)
+            p.library->addNoise (List::pitchedRelease, s, 0, release);
+        p.play (0.4, { { Player::on (15), 0 }, { Player::on (33), 10 }, { Player::off (33), (int) (0.2 * sampleRate) } });   // D#-1: power chords
+        CHECK (p.guitar.lastNoise().count == 1);
+        CHECK (p.guitar.lastNoise().take == power.get());
+        Player q;
+        for (int s = 0; s < 3; ++s)
+            q.library->addNoise (List::pitchedRelease, s, 0, release);
+        q.play (0.4, { { Player::on (15), 0 }, { Player::on (33), 10 }, { Player::off (33), (int) (0.2 * sampleRate) } });
+        CHECK (q.guitar.lastNoise().count == 3);   // the root, the fifth and the octave: each string's own
+    }
+
+    SECTION ("F#0: fret noise, its recordings in turn, by velocity; none at 0")
+    {
+        const auto a = noiseTake (1000.0), b = noiseTake (1500.0), c = noiseTake (2500.0);
+        Player p;
+        for (const auto& t : { a, b, c })
+            p.library->addNoise (List::fretNoise, 0, 0, t);
+        std::vector<const Take*> order;
+        std::vector<float> gains;
+        for (const auto velocity : { 127, 127, 127, 40 })
+        {
+            p.play (0.2, { { Player::on (30, velocity), 0 } });
+            order.push_back (p.guitar.lastNoise().take);
+            gains.push_back (p.guitar.lastNoise().gain);
+        }
+        CHECK (order == std::vector<const Take*> { a.get(), b.get(), c.get(), a.get() });
+        CHECK_THAT (gains[0], Catch::Matchers::WithinAbs (1.0, 1e-6));
+        CHECK_THAT (db (gains[3]), Catch::Matchers::WithinAbs (db (std::pow (40.0 / 127.0, 0.85)), 0.01));   // ~ -8.5 dB
+        CHECK (p.guitar.getActiveVoices() == 0);   // (no note played)
+        Player z;
+        z.library->addNoise (List::fretNoise, 0, 0, a);
+        z.settings.fretNoise = 0.0f;
+        z.play (0.2, { { Player::on (30, 127), 0 } });
+        CHECK (z.guitar.lastNoise().count == 0);
+    }
+
+    SECTION ("SCRAPES: an unpitched noise with a release now and then, the next in turn, never two releases running")
+    {
+        const auto u1 = noiseTake (700.0), u2 = noiseTake (900.0);
+        Player p;
+        p.library->addNoise (List::pitchedRelease, 0, 0, release);
+        p.library->addNoise (List::unpitched, 0, 0, u1);
+        p.library->addNoise (List::unpitched, 0, 0, u2);
+        p.settings.scrapes = 1.0f;   // every time it may
+        std::vector<const Take*> last;
+        for (int i = 0; i < 4; ++i)
+        {
+            p.play (0.3, { { Player::on (33), 0 }, { Player::off (33), (int) (0.2 * sampleRate) } });
+            last.push_back (p.guitar.lastNoise().take);
+        }
+        CHECK (last == std::vector<const Take*> { u1.get(), release.get(), u2.get(), release.get() });
+        Player none;
+        none.library->addNoise (List::pitchedRelease, 0, 0, release);
+        none.library->addNoise (List::unpitched, 0, 0, u1);
+        none.settings.scrapes = 0.0f;
+        for (int i = 0; i < 6; ++i)
+            none.play (0.3, { { Player::on (33), 0 }, { Player::off (33), (int) (0.2 * sampleRate) } });
+        CHECK (none.guitar.lastNoise().take == release.get());
+        CHECK (none.guitar.lastNoise().count == 6);
+    }
+}
+
+// PARAGON_NOISE_LISTS=<folder> ./GuitarCoreTests "[noise-lists]": the noise lists written as MIDI files.
+TEST_CASE ("Write the noise lists", "[.][noise-lists]")
+{
+    using namespace noises;
+    const auto folder = juce::File (juce::SystemStats::getEnvironmentVariable ("PARAGON_NOISE_LISTS", "noise-lists"));
+    folder.createDirectory();
+    const auto write = [&] (List list, int string)
+    {
+        const auto file = folder.getChildFile (fileName (list, string) + ".mid");
+        file.deleteFile();
+        juce::FileOutputStream out (file);
+        REQUIRE (out.openedOk());
+        REQUIRE (toMidi (list, string).writeTo (out));
+    };
+    for (int s = 0; s < numStrings; ++s)
+        write (List::pitchedRelease, s);
+    for (const auto list : { List::powerChordRelease, List::unpitched, List::fretNoise })
+        write (list, 0);
 }
 
 TEST_CASE ("THE ENGINE: streaming live (not waiting for the disk), the note whole and clean", "[guitar][engine]")

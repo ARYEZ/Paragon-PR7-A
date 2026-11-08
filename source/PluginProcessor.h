@@ -8,6 +8,7 @@
 #include "guitar/Guitar.h"
 #include "guitar/PolyWindow.h"
 #include "guitar/RenderImport.h"
+#include "guitar/NoiseImport.h"
 #include "rigs/MidiLinks.h"
 #include "rigs/RigLibrary.h"
 #include "rigs/UndoHistory.h"
@@ -141,6 +142,15 @@ public:
     int getImportingString() const noexcept { return importingString.load(); }   // -1: none
     guitar::Articulation getImportingArticulation() const noexcept { return (guitar::Articulation) importingArticulation.load(); }
     juce::String getImportReport (guitar::Articulation, int string) const;   // the last import's for that list (this session)
+    // 0.6.0: THE NOISE LISTS, by the RENDERS page's NOISES row (noises::rowList: 0-6 a string's releases, 7 power chords,
+    // 8 unpitched, 9 fret noise). An import runs as the note imports do (one at a time: getImportingString() is
+    // noiseImport while it does).
+    static constexpr int noiseImport = 99;
+    juce::File noiseListFile (int row) const;
+    bool saveNoiseList (int row, const juce::File&) const;
+    void startNoiseImport (const juce::File& render, int row);
+    int getImportingNoise() const noexcept { return importingNoise.load(); }   // -1: none
+    juce::String getNoiseReport (int row) const;
 
     juce::AudioProcessorValueTreeState& getParameters() noexcept { return parameters; }
     LevelMeterSource& getOutputMeter() noexcept { return outputMeter; }
@@ -199,6 +209,8 @@ private:
     std::atomic<bool> loadCancel { false }, importCancel { false };
     std::atomic<int> importingString { -1 }, importingArticulation { 0 };
     std::array<std::array<juce::String, guitar::numStrings>, guitar::numArticulations> importReports;
+    std::atomic<int> importingNoise { -1 };
+    std::array<juce::String, guitar::noises::numRows> noiseReports;
     juce::ThreadPool jobs { juce::ThreadPoolOptions().withThreadName ("PR7-A guitar").withNumberOfThreads (1) };
 
     // The audio thread's parameters.
@@ -222,6 +234,7 @@ private:
     std::atomic<float>* polyWindowValue = nullptr;
     std::atomic<float>* biteValue = nullptr;
     std::atomic<float>* attackValue = nullptr;
+    std::atomic<float>* releaseNoiseValue = nullptr, * scrapesValue = nullptr, * fretNoiseValue = nullptr;   // 0.6.0
     guitar::PolyWindow polyWindow;
     juce::MidiBuffer windowedMidi;
     std::atomic<int> windowSamples { 0 };

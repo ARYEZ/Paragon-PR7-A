@@ -219,12 +219,19 @@ GuitarView::GuitarView (ParagonX1AudioProcessor& p)
       forceString (p.getParameters(), ParamIDs::forceString, "FORCE STRING",
                    "Every note on that string where it can be (7: the low A ... 1: the high E). Off: the hand chooses", true),
       handPosition (p.getParameters(), ParamIDs::handPosition, "HAND POSITION",
-                    "Where the hand sits on the neck. Auto: it follows the notes")
+                    "Where the hand sits on the neck. Auto: it follows the notes"),
+      releaseNoise (p.getParameters(), ParamIDs::releaseNoise, "RELEASE NOISE",
+                    "The finger leaving the string at each note-off (imported from the noise lists): its level. Fuller on notes held "
+                    "up to a second, none after two; palm mutes have none. Off at the bottom"),
+      scrapes (p.getParameters(), ParamIDs::scrapes, "SCRAPES",
+               "How often a release has an unpitched scrape mixed in (your guitar instrument: about 1 in 8)"),
+      fretNoise (p.getParameters(), ParamIDs::fretNoise, "FRET NOISE",
+                 "The level of the fret noise F#0 plays (its velocity sets how loud too). Off at the bottom")
 {
     addAndMakeVisible (rack);
     Finish::paintAs (Finish::Type::pearlBlack);   // (the rack is always pearl black: its lettering's ink)
     for (auto* c : { &tone, &bite, &attack, &transpose, &velToVol, &release, &polyWindow, &variation, &level, &output,
-                     &forceString, &handPosition })
+                     &forceString, &handPosition, &releaseNoise, &scrapes, &fretNoise })
     {
         c->setRack (true);
         rack.addAndMakeVisible (*c);
@@ -321,17 +328,24 @@ void GuitarView::resized()
     handPosition.setBounds (rack.frettingKnobCell (1));
     for (size_t i = 0; i < boxes.size(); ++i)
         boxes[i]->setBounds (rack.boxCell ((int) i));
+    // NOISES.
+    releaseNoise.setBounds (rack.noiseKnobCell (0));
+    scrapes.setBounds (rack.noiseKnobCell (1));
+    fretNoise.setBounds (rack.noiseKnobCell (2));
 }
 
 void GuitarView::showRackPage()
 {
-    const auto playing = rack.getPage() == GuitarRack::Page::playing;
+    const auto page = rack.getPage();
+    const auto playing = page == GuitarRack::Page::playing, fretting = page == GuitarRack::Page::fretting;
     for (auto* c : std::initializer_list<juce::Component*> { &tone, &bite, &attack, &transpose, &velToVol, &release, &polyWindow, &variation })
         c->setVisible (playing);
     for (auto* c : std::initializer_list<juce::Component*> { &pickMode, &fretMode, &performance, &forceString, &handPosition })
-        c->setVisible (! playing);
+        c->setVisible (fretting);
     for (auto& b : boxes)
-        b->setVisible (! playing);
+        b->setVisible (fretting);
+    for (auto* c : std::initializer_list<juce::Component*> { &releaseNoise, &scrapes, &fretNoise })
+        c->setVisible (page == GuitarRack::Page::noises);
 }
 
 //==============================================================================
@@ -432,6 +446,24 @@ void GuitarView::refresh()
                                     + (isMute ? "  MUTE " : "  DYNAMIC ") + juce::String (now.layer + 1) + "/" + juce::String (now.layers)
                               : juce::String ("NOTHING PLAYED YET");
         rack.setScreen (screen);
+        // The NOISES page's screen: what's imported (0.6.0).
+        if (const auto library = processor.getLibrary(); library != nullptr)
+        {
+            using guitar::noises::List;
+            auto releases = 0, strings = 0;
+            for (int st = 0; st < guitar::numStrings; ++st)
+            {
+                const auto n = library->noiseCount (List::pitchedRelease, st);
+                releases += n;
+                strings += n > 0 ? 1 : 0;
+            }
+            juce::StringArray lines;
+            lines.add ("RELEASES  " + juce::String (releases) + "  (" + juce::String (strings) + " OF 7 STRINGS)");
+            lines.add ("POWER CHORDS  " + juce::String (library->noiseCount (List::powerChordRelease)));
+            lines.add ("SCRAPES  " + juce::String (library->noiseCount (List::unpitched)) + "    FRET NOISE  " + juce::String (library->noiseCount (List::fretNoise)));
+            lines.add (library->noiseTotal() == 0 ? "NONE YET: IMPORT THEM ON THE RENDERS PAGE (NOISES)" : "MORE ON THE RENDERS PAGE (NOISES)");
+            rack.setNoiseInfo (lines);
+        }
         rack.setOn (processor.getParameters().getRawParameterValue (ParamIDs::bypass)->load() < 0.5f);
         const auto peakDb = juce::Decibels::gainToDecibels (processor.getOutputMeter().takePeak(), -100.0f);
         meterDb = juce::jmax (peakDb, meterDb - 24.0f / 30.0f, -100.0f);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "guitar/RenderList.h"
+#include "guitar/NoiseLists.h"
 #include "dsp/DiskStreamer.h"
 
 #include <array>
@@ -58,7 +59,20 @@ namespace guitar
         {
             return (numFrets + 1) * renders::spec (a).layers * 2 * renders::spec (a).roundRobins;
         }
-        int total() const noexcept;
+        int total() const noexcept;   // the notes' takes (not the noises)
+
+        // 0.6.0, THE NOISES (noises::noiseFileName), each whole in memory (they're short): a pitched release per string
+        // and fret (each fret's different recordings), the power chords' by their root, the unpitched noises and fret
+        // noises in the order they came. On the audio thread, nothing allocated:
+        struct NoiseFound { const Take* take = nullptr; double pitchRatio = 1.0; };
+        // The release for a note (a power chord's: by its root), the `turn`th of that fret's recordings; a fret with none
+        // borrows the nearest fret on the same string, played at the note's pitch. Null: none on that string.
+        NoiseFound release (bool powerChord, int string, int fret, int turn) const noexcept;
+        const Take* unpitched (int turn) const noexcept;    // null: none
+        const Take* fretNoise (int turn) const noexcept;
+        int noiseCount (noises::List, int string = 0) const noexcept;   // (the pitched releases': one string's)
+        int noiseTotal() const noexcept;
+        void addNoise (noises::List, int string, int fret, std::shared_ptr<const Take>);   // tests (and load)
         bool isEmpty() const noexcept { return total() == 0; }
         const juce::File& getFolder() const noexcept { return folder; }
 
@@ -69,6 +83,9 @@ namespace guitar
         using Layers = std::array<Strokes, renders::maxLayers>;
         using Frets = std::array<Layers, numFrets + 1>;
         std::array<std::array<Frets, numStrings>, numArticulations> takes;
+        using NoiseTakes = std::vector<std::shared_ptr<const Take>>;
+        std::array<std::array<NoiseTakes, numFrets + 1>, numStrings> releases, powerReleases;
+        NoiseTakes unpitchedNoises, fretNoises;
         const Take* at (int a, int s, int f, int l, int k, int rr) const noexcept;
         const Take* anyLayer (int a, int s, int f, int layer, int stroke, int rr) const noexcept;
     };

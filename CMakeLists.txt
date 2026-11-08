@@ -5,7 +5,7 @@ cmake_minimum_required(VERSION 3.24)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS version")
 set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "macOS architectures")
 
-project(ParagonX1 VERSION 0.2.0 LANGUAGES C CXX)
+project(ParagonX1 VERSION 0.3.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -59,6 +59,8 @@ target_sources(ParagonX1
         # THE GUITAR (0.2.0): fretting, the render list and its import, the takes, the playing engine.
         source/guitar/Fretting.cpp
         source/guitar/RenderList.cpp
+        source/guitar/NoiseLists.cpp
+        source/guitar/NoiseImport.cpp
         source/guitar/RenderImport.cpp
         source/guitar/RoundRobinCheck.cpp
         source/guitar/GuitarLibrary.cpp

@@ -39,6 +39,11 @@ namespace ParamIDs
     inline constexpr auto polyWindow     = "polyWindow";      // ms: notes this close together make a chord (and the latency)
     inline constexpr auto bite           = "bite";            // 0..1: an EQ, brighter with less low-mid
     inline constexpr auto attack         = "attack";          // 0..1: each note's first milliseconds louder
+    // 0.6.0 (hint 5), THE NOISES (imported from the noise lists): their levels, dB (the bottom: off), and how often a
+    // release has an unpitched scrape mixed in (guitar::Settings).
+    inline constexpr auto releaseNoise   = "releaseNoise";    // dB: the releases at note-offs
+    inline constexpr auto scrapes        = "scrapes";         // 0..1: the chance a release has a scrape
+    inline constexpr auto fretNoise      = "fretNoise";       // dB: fret noise on F#0
 
     inline const juce::StringArray fretModeNames { "Natural", "Polyphonic" };
     inline const juce::StringArray pickModeNames { "Alternate", "Down", "Up", "Economy" };
@@ -59,6 +64,7 @@ namespace ParamRanges
     inline constexpr int maxHand = 21;                 // the hand's fret (its span then reaches the 24th)
     inline constexpr int maxCapo = 12;
     inline constexpr float maxPolyWindowMs = 100.0f;
+    inline constexpr float noiseMinDb = -30.0f, noiseMaxDb = 12.0f;   // 0.6.0: the noises' levels (the bottom: off)
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();

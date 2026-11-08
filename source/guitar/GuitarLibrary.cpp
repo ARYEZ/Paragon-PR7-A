@@ -52,6 +52,35 @@ namespace guitar
             take->loudness = Take::loudnessOf (take->head, take->sampleRate);
             library->add (id->articulation, id->string, id->fret, id->layer, id->stroke, id->roundRobin, take);
         }
+        // 0.6.0: the noises, whole in memory (unpitched and fret noises in the order they're numbered: played in turn).
+        juce::Array<juce::File> noiseFiles;
+        for (const auto list : { noises::List::pitchedRelease, noises::List::powerChordRelease, noises::List::unpitched, noises::List::fretNoise })
+            noiseFiles.addArray (folder.getChildFile (noises::folderName (list)).findChildFiles (juce::File::findFiles, false, "*.wav"));
+        struct Loaded { noises::NoiseId id; std::shared_ptr<const Take> take; };
+        std::vector<Loaded> loaded;
+        for (const auto& file : noiseFiles)
+        {
+            if (cancel != nullptr && cancel->load())
+                break;
+            const auto id = noises::parseNoiseFile (file);
+            if (! id)
+                continue;
+            std::unique_ptr<juce::AudioFormatReader> reader (formats.createReaderFor (file));
+            if (reader == nullptr || reader->lengthInSamples <= 0 || reader->lengthInSamples > (juce::int64) (10.0 * reader->sampleRate))
+                continue;
+            auto take = std::make_shared<Take>();
+            take->file = file;
+            take->sampleRate = reader->sampleRate;
+            take->frames = reader->lengthInSamples;
+            juce::AudioBuffer<float> all ((int) juce::jmax (1u, reader->numChannels), (int) take->frames);
+            reader->read (&all, 0, (int) take->frames, 0, true, true);
+            take->head.assign (all.getReadPointer (0), all.getReadPointer (0) + take->frames);
+            take->loudness = Take::loudnessOf (take->head, take->sampleRate);
+            loaded.push_back ({ *id, take });
+        }
+        std::sort (loaded.begin(), loaded.end(), [] (const Loaded& a, const Loaded& b) { return a.id.index < b.id.index; });
+        for (auto& l : loaded)
+            library->addNoise (l.id.list, l.id.string, l.id.fret, l.take);
         if (progress != nullptr)
             *progress = 1.0f;
         return library;
@@ -166,6 +195,79 @@ namespace guitar
         for (int a = 0; a < numArticulations; ++a)
             for (int s = 0; s < numStrings; ++s)
                 n += count ((Articulation) a, s);
+        return n;
+    }
+
+    void Library::addNoise (noises::List list, int string, int fret, std::shared_ptr<const Take> take)
+    {
+        if (take == nullptr)
+            return;
+        string = juce::jlimit (0, numStrings - 1, string);
+        fret = juce::jlimit (0, numFrets, fret);
+        switch (list)
+        {
+            case noises::List::pitchedRelease:    releases[(size_t) string][(size_t) fret].push_back (std::move (take)); break;
+            case noises::List::powerChordRelease: powerReleases[(size_t) string][(size_t) fret].push_back (std::move (take)); break;
+            case noises::List::unpitched:         unpitchedNoises.push_back (std::move (take)); break;
+            case noises::List::fretNoise:         fretNoises.push_back (std::move (take)); break;
+        }
+    }
+
+    Library::NoiseFound Library::release (bool powerChord, int string, int fret, int turn) const noexcept
+    {
+        if (string < 0 || string >= numStrings || fret < 0 || fret > numFrets)
+            return {};
+        const auto& set = powerChord ? powerReleases[(size_t) string] : releases[(size_t) string];
+        for (int d = 0; d <= numFrets; ++d)
+            for (const auto f : { fret - d, fret + d })
+                if (f >= 0 && f <= numFrets && ! set[(size_t) f].empty())
+                {
+                    const auto& takesThere = set[(size_t) f];
+                    return { takesThere[(size_t) (juce::jmax (0, turn) % (int) takesThere.size())].get(), std::pow (2.0, (fret - f) / 12.0) };
+                }
+        return {};
+    }
+
+    const Take* Library::unpitched (int turn) const noexcept
+    {
+        return unpitchedNoises.empty() ? nullptr : unpitchedNoises[(size_t) (juce::jmax (0, turn) % (int) unpitchedNoises.size())].get();
+    }
+
+    const Take* Library::fretNoise (int turn) const noexcept
+    {
+        return fretNoises.empty() ? nullptr : fretNoises[(size_t) (juce::jmax (0, turn) % (int) fretNoises.size())].get();
+    }
+
+    int Library::noiseCount (noises::List list, int string) const noexcept
+    {
+        const auto countIn = [] (const std::array<NoiseTakes, numFrets + 1>& frets)
+        {
+            auto n = 0;
+            for (const auto& f : frets)
+                n += (int) f.size();
+            return n;
+        };
+        switch (list)
+        {
+            case noises::List::pitchedRelease:    return countIn (releases[(size_t) juce::jlimit (0, numStrings - 1, string)]);
+            case noises::List::powerChordRelease:
+            {
+                auto n = 0;
+                for (const auto& s : powerReleases)
+                    n += countIn (s);
+                return n;
+            }
+            case noises::List::unpitched:         return (int) unpitchedNoises.size();
+            case noises::List::fretNoise:         return (int) fretNoises.size();
+        }
+        return 0;
+    }
+
+    int Library::noiseTotal() const noexcept
+    {
+        auto n = noiseCount (noises::List::powerChordRelease) + noiseCount (noises::List::unpitched) + noiseCount (noises::List::fretNoise);
+        for (int s = 0; s < numStrings; ++s)
+            n += noiseCount (noises::List::pitchedRelease, s);
         return n;
     }
 }

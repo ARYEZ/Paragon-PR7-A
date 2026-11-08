@@ -10,6 +10,7 @@ namespace
     constexpr int v030 = 2;           // PR7-I 0.2.1: VARIATION
     constexpr int v030b = 3;          // PR7-I 0.3.0: KEY MAP
     constexpr int v040 = 4;           // PR7-I 0.4.0: the new GUITAR page's controls
+    constexpr int v060 = 5;           // PR7-I 0.6.0: the noises
 
     const ToText asDb = [] (float value, int) { return juce::String (value, 1) + " dB"; };
     const ToText asPercent = [] (float value, int) { return juce::String (juce::roundToInt (value * 100.0f)) + "%"; };
@@ -82,5 +83,13 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
          [] (float ms, int) { return juce::String (ms, ms < 10.0f ? 1 : 0) + " ms"; }, v040);
     add (layout, bite, "Bite", { 0.0f, 1.0f, 0.01f }, 0.0f, asPercent, v040);
     add (layout, attack, "Attack", { 0.0f, 1.0f, 0.01f }, 0.0f, asPercent, v040);
+    // THE NOISES (0.6.0): on at their rendered level, as the owner compares against the reference with its noises on.
+    const auto noiseLevel = [] (float db, int)
+    {
+        return db <= ParamRanges::noiseMinDb + 0.05f ? juce::String ("Off") : (db > 0.05f ? "+" : "") + juce::String (db, 1) + " dB";
+    };
+    add (layout, releaseNoise, "Release Noise", { ParamRanges::noiseMinDb, ParamRanges::noiseMaxDb, 0.1f }, 0.0f, noiseLevel, v060);
+    add (layout, scrapes, "Scrapes", { 0.0f, 1.0f, 0.01f }, 0.12f, asPercent, v060);
+    add (layout, fretNoise, "Fret Noise", { ParamRanges::noiseMinDb, ParamRanges::noiseMaxDb, 0.1f }, 0.0f, noiseLevel, v060);
     return layout;
 }

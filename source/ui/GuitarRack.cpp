@@ -45,13 +45,16 @@ namespace
 GuitarRack::GuitarRack()
 {
     setOpaque (false);
-    for (auto* key : { &playingKey, &frettingKey })
+    for (auto* key : { &playingKey, &frettingKey, &noisesKey })
     {
         key->getProperties().set (ParagonLookAndFeel::pedalButtonProperty, true);   // a small key, its stripe lit on its page
         addAndMakeVisible (*key);
     }
     playingKey.setComponentID ("rackPlaying");
     frettingKey.setComponentID ("rackFretting");
+    noisesKey.setComponentID ("rackNoises");
+    noisesKey.setTooltip ("NOISES: the releases at note-offs, the scrapes with them, fret noise (F#0)");
+    noisesKey.onClick = [this] { setPage (Page::noises); };
     playingKey.setTooltip ("PLAYING: the tone and how notes play (TONE ... VARIATION)");
     frettingKey.setTooltip ("FRETTING: picking, fretting, performance, force string, hand, capo, mono");
     playingKey.onClick = [this] { setPage (Page::playing); };
@@ -64,6 +67,7 @@ void GuitarRack::resized()
     satin = Finish::makeSatinGrain (juce::jmax (1, getWidth() * 2), juce::jmax (1, getHeight() * 2), 1234);
     playingKey.setBounds (pageKeyCell (0));
     frettingKey.setBounds (pageKeyCell (1));
+    noisesKey.setBounds (pageKeyCell (2));
 }
 
 void GuitarRack::setScreen (const Screen& s)
@@ -94,6 +98,7 @@ void GuitarRack::setPage (Page newPage)
 {
     playingKey.setToggleState (newPage == Page::playing, juce::dontSendNotification);
     frettingKey.setToggleState (newPage == Page::fretting, juce::dontSendNotification);
+    noisesKey.setToggleState (newPage == Page::noises, juce::dontSendNotification);
     if (newPage == page)
         return;
     page = newPage;
@@ -126,8 +131,8 @@ juce::Rectangle<int> GuitarRack::pageKeyCell (int index) const
 {
     auto area = badgeColumn();
     area = area.removeFromBottom (60.0f).withTrimmedBottom (14.0f);   // names stamped under them
-    const auto width = area.getWidth() / 2.0f;
-    return area.withX (area.getX() + width * (float) index).withWidth (width).withSizeKeepingCentre (54.0f, 28.0f).toNearestInt();
+    const auto width = area.getWidth() / 3.0f;
+    return area.withX (area.getX() + width * (float) index).withWidth (width).withSizeKeepingCentre (50.0f, 28.0f).toNearestInt();
 }
 
 juce::Rectangle<int> GuitarRack::screenArea() const { return displayColumn().withHeight (screenHeight).toNearestInt(); }
@@ -173,6 +178,28 @@ juce::Rectangle<int> GuitarRack::boxCell (int index) const
         .reduced (8.0f, 0.0f).toNearestInt();
 }
 
+juce::Rectangle<int> GuitarRack::noiseKnobCell (int index) const
+{
+    const auto area = pageArea();
+    const auto height = juce::jmin (area.getHeight(), 136.0f);
+    return juce::Rectangle<float> (area.getX() + 120.0f * (float) index, area.getCentreY() - height * 0.5f, 120.0f, height).reduced (6.0f, 0.0f).toNearestInt();
+}
+
+juce::Rectangle<int> GuitarRack::noiseScreenArea() const
+{
+    auto area = pageArea().withTrimmedLeft (3.0f * 120.0f + 36.0f);
+    return area.withSizeKeepingCentre (area.getWidth(), juce::jmin (area.getHeight(), 150.0f)).toNearestInt();
+}
+
+void GuitarRack::setNoiseInfo (const juce::StringArray& lines)
+{
+    if (lines == noiseInfo)
+        return;
+    noiseInfo = lines;
+    if (page == Page::noises)
+        repaint (noiseScreenArea());
+}
+
 juce::Rectangle<int> GuitarRack::meterArea() const
 {
     return sideColumn().withTrimmedTop (titleHeight + 6.0f).withWidth (58.0f).toNearestInt();
@@ -198,9 +225,11 @@ void GuitarRack::paint (juce::Graphics& g)
     PedalBody::paintBadge (g, badgeColumn().withHeight (88.0f).translated (2.0f, 2.0f), "GUITAR INSTRUMENT");
     {
         const auto a = pageKeyCell (0).toFloat(), b = pageKeyCell (1).toFloat();
-        bracket (g, a, b, "PAGE");
-        stamped (g, "PLAYING", a.translated (0.0f, a.getHeight() + 2.0f).withHeight (12.0f).expanded (24.0f, 0.0f), 8.0f);
-        stamped (g, "FRETTING", b.translated (0.0f, b.getHeight() + 2.0f).withHeight (12.0f).expanded (24.0f, 0.0f), 8.0f);
+        const auto c = pageKeyCell (2).toFloat();
+        bracket (g, a, c, "PAGE");
+        stamped (g, "PLAYING", a.translated (0.0f, a.getHeight() + 2.0f).withHeight (12.0f).expanded (10.0f, 0.0f), 7.5f);
+        stamped (g, "FRETTING", b.translated (0.0f, b.getHeight() + 2.0f).withHeight (12.0f).expanded (10.0f, 0.0f), 7.5f);
+        stamped (g, "NOISES", c.translated (0.0f, c.getHeight() + 2.0f).withHeight (12.0f).expanded (10.0f, 0.0f), 7.5f);
     }
 
     // The printed lines between the sections.
@@ -226,11 +255,31 @@ void GuitarRack::paint (juce::Graphics& g)
     // The page's name, over it.
     auto title = pageArea().withY (content().getY()).withHeight (titleHeight);
     g.setFont (font (15.0f, juce::Font::bold | juce::Font::italic));
-    ParagonLookAndFeel::drawStampedText (g, page == Page::playing ? "PLAYING" : "FRETTING", title.removeFromLeft (120.0f),
-                                         juce::Justification::centredLeft, Finish::ink());
+    ParagonLookAndFeel::drawStampedText (g, page == Page::playing ? "PLAYING" : page == Page::fretting ? "FRETTING" : "NOISES",
+                                         title.removeFromLeft (120.0f), juce::Justification::centredLeft, Finish::ink());
     g.setColour (Finish::printedRed());
     g.setFont (font (8.0f));
-    g.drawText (page == Page::playing ? "TONE AND HOW EACH NOTE PLAYS" : "PICKING, FRETTING AND THE HAND", title, juce::Justification::centredLeft, false);
+    g.drawText (page == Page::playing ? "TONE AND HOW EACH NOTE PLAYS" : page == Page::fretting ? "PICKING, FRETTING AND THE HAND"
+                                                                                              : "RELEASES, SCRAPES AND FRET NOISE (F#0)",
+                title, juce::Justification::centredLeft, false);
+
+    // NOISES: a screen of what's imported.
+    if (page == Page::noises)
+    {
+        const auto glass = LedDisplay::paintScreen (g, noiseScreenArea().toFloat(), screenSize);
+        auto text = glass.reduced (12.0f, 9.0f);
+        g.setColour (orange.withAlpha (0.6f));
+        g.setFont (font (8.5f));
+        g.drawText ("IMPORTED", text.removeFromTop (11.0f), juce::Justification::centredLeft, false);
+        text.removeFromTop (6.0f);
+        for (int i = 0; i < noiseInfo.size(); ++i)
+        {
+            g.setColour (i == noiseInfo.size() - 1 ? orange.withAlpha (0.65f) : orange);
+            g.setFont (font (i == noiseInfo.size() - 1 ? 9.5f : 12.0f));
+            g.drawFittedText (noiseInfo[i], text.removeFromTop (i == noiseInfo.size() - 1 ? 16.0f : 19.0f).toNearestInt(), juce::Justification::centredLeft, 1, 0.75f);
+        }
+        LedDisplay::paintGlassOverlay (g, glass, screenSize);
+    }
 
     // FRETTING: the menus' and value boxes' names and screens (the menus and boxes themselves sit on them).
     if (page == Page::fretting)

@@ -42,6 +42,17 @@
 //     an up stroke going on to a lower one stays up); MONO (one note at a time: a new one stops the others); ATTACK (each
 //     note's first milliseconds louder, by velocity: our stand-in for the reference's pick noise, which isn't rendered).
 //     The page's NOW PLAYING reads what the last note did (getNowPlaying).
+//   - 0.6.0, THE NOISES (imported from the noise lists, NoiseLists.h), as the owner's noise check measured the reference:
+//       a NOTE-OFF of a sustained note plays its PITCHED RELEASE (the note's string and fret; a fret not imported borrows
+//       the nearest on the string, at the note's pitch), at RELEASE NOISE's level, a touch louder the harder the note
+//       was played ((velocity / 85)^0.36: ~3 dB from 45 to 118, as measured), full for a note held up to a second, then
+//       less, none once held 2 s (the reference played none after 2 s: where between 1 and 2 s it stops is our guess);
+//       palm mutes none; a POWER CHORD one release for the chord, its own (by the root), else each string's own; a note
+//       stopped by the next on its string (picked again), by MONO or by all-notes-off none (no finger left the string).
+//       Now and then (SCRAPES: the chance per release, 12% as the 2 in 16 measured; never two in a row) an UNPITCHED
+//       noise is mixed in, the next of them in turn. F#0 (30) plays FRET NOISE, the next of its recordings in turn
+//       (the reference's 13 come in a fixed order), at FRET NOISE's level times (velocity / 127)^0.85 (~8 dB from 127
+//       down to 40, as measured). Each a one-shot of its own (noise voices), whole in memory.
 namespace guitar
 {
     enum class PickMode { alternate, down, up, economy };   // append only
@@ -63,6 +74,9 @@ namespace guitar
         float handResetSeconds = 1.0f; // 0.4.0: an AUTO hand goes home after this long with nothing held
         bool mono = false;             // 0.4.0: one note at a time
         float attack = 0.0f;           // 0.4.0: 0 to 1, each note's first milliseconds louder
+        float releaseNoise = 1.0f;     // 0.6.0: the releases' gain (0: none)
+        float scrapes = 0.12f;         // 0.6.0: the chance a release has an unpitched noise mixed in
+        float fretNoise = 1.0f;        // 0.6.0: fret noise's gain (0: none)
         const Library* library = nullptr;
         Streamer* streamer = nullptr;
         bool waitForDisk = false;      // bouncing: wait for the disk rather than play silence
@@ -73,6 +87,7 @@ namespace guitar
         inline constexpr int forceLowA = 0, forceOff = 7, setHand = 10, handAuto = 11;
         inline constexpr int c1 = 12, cSharp1 = 13, dSharp1 = 15, e1 = 16;   // the articulation keys
         inline constexpr int pickUp = 108, pickDown = 109, pickAlternate = 110;
+        inline constexpr int fretNoise = 30;   // 0.6.0: F#0
     }
 
     int layerFor (int velocity) noexcept;
@@ -93,7 +108,7 @@ namespace guitar
     class Guitar
     {
     public:
-        static constexpr int maxVoices = 32;
+        static constexpr int maxVoices = 32, maxNoiseVoices = 16;
         static constexpr double stopSeconds = 0.005;
 
         void prepare (double sampleRate);
@@ -111,6 +126,10 @@ namespace guitar
         int getArticulationKey() const noexcept { return articulationKey; }
         int getHand() const noexcept { return shownHand.load(); }
         int getActiveVoices() const noexcept { return activeVoices.load(); }
+        int getActiveNoises() const noexcept { return activeNoises.load(); }   // 0.6.0: noise voices sounding
+        // 0.6.0, tests: the last noise started (its take, gain and pitch ratio).
+        struct NoisePlayed { const Take* take = nullptr; float gain = 0.0f; double pitchRatio = 1.0; int count = 0; };
+        NoisePlayed lastNoise() const noexcept { return lastNoisePlayed; }
         int getForcedString (const Settings&) const noexcept;   // as a keyswitch or the setting leaves it
 
         // What the last note (or chord) played, for the page's NOW PLAYING (any thread; -1 fields: nothing yet).
@@ -140,8 +159,25 @@ namespace guitar
             float fadeIn = 1.0f, fadeInStep = 0.0f;    // 0.4.3: a 1 ms fade in (the take starts inside its lead-in)
             int stream = -1;
             juce::uint32 age = 0;
+            bool power = false;                        // 0.6.0: part of a power chord
+            bool palmMuted = false;                    // 0.6.0: played as a palm mute (no release)
+            int inputVelocity = 100;                   // 0.6.0: as played (the release's level)
+            juce::int64 started = 0;                   // 0.6.0: when (the engine's sample count: how long it was held)
         };
         std::array<Voice, maxVoices> voices {};
+        struct NoiseVoice
+        {
+            const Take* take = nullptr;
+            double position = 0.0, step = 1.0;
+            float gain = 1.0f;
+        };
+        std::array<NoiseVoice, maxNoiseVoices> noiseVoices {};
+        juce::int64 blockStart = 0, eventTime = 0;     // 0.6.0: samples since prepare (the block's start, the event's)
+        int releaseTurn = 0, unpitchedTurn = 0, fretTurn = 0;
+        bool lastHadScrape = false;
+        juce::Random noiseRandom { 0x6e6f };
+        NoisePlayed lastNoisePlayed;
+        std::atomic<int> activeNoises { 0 };
         std::array<int, numStrings> onString {};   // the held voice on each string (-1: none)
         double rate = 48000.0;
         juce::uint32 clock = 0;
@@ -180,6 +216,8 @@ namespace guitar
         void stopVoice (Voice&, double seconds) noexcept;
         Voice& freeVoice() noexcept;
         void render (Voice&, float* left, float* right, int numSamples, const Settings&) noexcept;
+        void playNoise (const Take*, float gain, double pitchRatio) noexcept;
+        void releaseNoises (int note, const Settings&) noexcept;   // a note-off's releases (before its voices stop)
         int handNow (const Settings&) const noexcept;
     };
 }
