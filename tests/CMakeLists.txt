@@ -30,6 +30,7 @@ add_executable(GuitarCoreTests
     ../source/guitar/Fretting.cpp
     ../source/guitar/RenderList.cpp
     ../source/guitar/NoiseLists.cpp
+    ../source/guitar/NoiseImport.cpp
     ../source/guitar/RenderImport.cpp
     ../source/guitar/RoundRobinCheck.cpp
     ../source/guitar/GuitarLibrary.cpp

@@ -127,4 +127,67 @@ namespace guitar::noises
         }
         return {};
     }
+
+    RowList rowList (int row) noexcept
+    {
+        if (row < numStrings)
+            return { List::pitchedRelease, juce::jmax (0, row) };
+        return { row == numStrings ? List::powerChordRelease : row == numStrings + 1 ? List::unpitched : List::fretNoise, 0 };
+    }
+
+    juce::String rowName (int row)
+    {
+        if (row < numStrings)
+            return stringLabel (row);
+        return row == numStrings ? "Power chords" : row == numStrings + 1 ? "Unpitched" : "Fret noise";
+    }
+
+    juce::String folderName (List list)
+    {
+        switch (list)
+        {
+            case List::pitchedRelease:    return "Release";
+            case List::powerChordRelease: return "PowerRelease";
+            case List::unpitched:         return "Unpitched";
+            case List::fretNoise:         return "FretNoise";
+        }
+        return {};
+    }
+
+    juce::String noiseFileName (List list, int string, int fret, int index)
+    {
+        if (list == List::unpitched || list == List::fretNoise)
+            return folderName (list) + "/n" + juce::String (index).paddedLeft ('0', 3) + ".wav";
+        return folderName (list) + "/s" + juce::String (string) + "_f" + juce::String (fret).paddedLeft ('0', 2) + "_r" + juce::String (index) + ".wav";
+    }
+
+    std::optional<NoiseId> parseNoiseFile (const juce::File& file)
+    {
+        const auto folder = file.getParentDirectory().getFileName();
+        const auto name = file.getFileNameWithoutExtension();
+        for (const auto list : { List::pitchedRelease, List::powerChordRelease, List::unpitched, List::fretNoise })
+        {
+            if (! folder.equalsIgnoreCase (folderName (list)))
+                continue;
+            NoiseId id;
+            id.list = list;
+            if (list == List::unpitched || list == List::fretNoise)
+            {
+                if (! name.startsWith ("n") || ! name.substring (1).containsOnly ("0123456789") || name.length() < 2)
+                    return std::nullopt;
+                id.index = name.substring (1).getIntValue();
+                return id;
+            }
+            const auto parts = juce::StringArray::fromTokens (name, "_", {});
+            if (parts.size() != 3 || ! parts[0].startsWith ("s") || ! parts[1].startsWith ("f") || ! parts[2].startsWith ("r"))
+                return std::nullopt;
+            id.string = parts[0].substring (1).getIntValue();
+            id.fret = parts[1].substring (1).getIntValue();
+            id.index = parts[2].substring (1).getIntValue();
+            if (id.string < 0 || id.string >= numStrings || id.fret < 0 || id.fret > numFrets || id.index < 0)
+                return std::nullopt;
+            return id;
+        }
+        return std::nullopt;
+    }
 }

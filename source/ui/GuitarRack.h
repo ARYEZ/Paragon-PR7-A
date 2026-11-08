@@ -35,17 +35,20 @@ public:
     void setOn (bool);
     void setMeterDb (float);   // the output's level, for the meter screen (dB)
 
-    enum class Page { playing, fretting };
+    enum class Page { playing, fretting, noises };   // (0.6.0: NOISES)
     void setPage (Page);
     Page getPage() const noexcept { return page; }
     std::function<void()> onPageChanged;
-    juce::TextButton& getPageKey (Page p) noexcept { return p == Page::playing ? playingKey : frettingKey; }
+    juce::TextButton& getPageKey (Page p) noexcept { return p == Page::playing ? playingKey : p == Page::fretting ? frettingKey : noisesKey; }
 
     // Where the controls go, in the unit's pixels.
     juce::Rectangle<int> knobCell (int index) const;            // PLAYING: the 8 knobs in a row
     juce::Rectangle<int> menuCell (int index) const;            // FRETTING: the 3 menus (their screens)
     juce::Rectangle<int> frettingKnobCell (int index) const;    // FRETTING: FORCE STRING, HAND POSITION
     juce::Rectangle<int> boxCell (int index) const;             // FRETTING: CAPO, HAND SPAN, HAND RESET, MONO (their screens)
+    juce::Rectangle<int> noiseKnobCell (int index) const;       // NOISES: RELEASE NOISE, SCRAPES, FRET NOISE
+    juce::Rectangle<int> noiseScreenArea() const;               // NOISES: what's imported
+    void setNoiseInfo (const juce::StringArray& lines);         // the noise screen's lines
     juce::Rectangle<int> keyCell (int index) const;             // 0 SPLIT, 1 FACTORY, 2 VARIATION
     juce::Rectangle<int> sideKnobCell (int index) const;        // 0 LEVEL, 1 OUTPUT
     juce::Rectangle<int> screenArea() const;
@@ -71,5 +74,6 @@ private:
     bool on = true;
     float meterDb = -100.0f;
     Page page = Page::playing;
-    juce::TextButton playingKey, frettingKey;
+    juce::TextButton playingKey, frettingKey, noisesKey;
+    juce::StringArray noiseInfo;
 };

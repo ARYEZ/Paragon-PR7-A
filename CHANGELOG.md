@@ -2,6 +2,34 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.6.0
+
+**The noises: release noises, scrapes and fret noise, from your guitar instrument.** This is the biggest thing your renders were missing next to the original: the small sounds a real guitar makes between notes.
+
+- **Releases.** Every time you let go of a sustained note, PR7-I plays the sound of the finger leaving the string, at that note's pitch. It works the way your noise check measured the original:
+  - it starts the instant the key is let go;
+  - it's a touch louder for harder notes;
+  - it's full for notes held up to a second, fades for longer ones, and is gone for notes held 2 seconds or more;
+  - palm mutes don't get one;
+  - a note cut short by the next note on its string, or by MONO, doesn't get one either.
+- **Power chords** get their own release, one per chord, from their own renders. If those aren't imported yet, each string plays its own.
+- **Scrapes.** Now and then (about 1 release in 8, like the original) an unpitched scrape is mixed in, the next one in turn, and never on two releases in a row.
+- **Fret noise on F#0**, the same key as your guitar instrument, so your MIDI parts work unchanged. Its recordings play in turn, as the original's 13 do, and velocity sets how loud.
+- **A third page on the rack, NOISES:**
+  - **RELEASE NOISE** and **FRET NOISE** levels (all the way down is off);
+  - **SCRAPES**, how often a release gets one;
+  - a screen showing what's been imported.
+
+  The noises are on by default at the level they were rendered, the way you compare against the original.
+- **Importing them.** The RENDERS page has a new **NOISES** tab with a row per noise list (each string's releases, power chords, unpitched, fret noise). Click MIDI to save a list or drag it into your DAW; IMPORT... the render or drop it on the row. SAVE ALL LISTS now saves the noise lists too.
+- **The importer checks each render** so a wrong one can't fill your guitar with the wrong sounds:
+  - it lines the render up with the list by itself;
+  - it leaves out silent hits and exact copies;
+  - it refuses a render where the notes can still be heard (the notes' Volume wasn't turned down);
+  - it refuses one with no releases, or with a "scrape" on almost every note (Pitched Release wasn't turned down);
+  - it refuses a string's releases dropped on another string's row (their pitches are wrong).
+- **What's a guess:** where between 1 and 2 seconds of holding the releases stop. The original gave a release at 1 second and none at 2; PR7-I fades between the two. How it all sounds next to the original is for your ears.
+
 ## 0.5.0
 
 **The GUITAR page rebuilt: a family rack unit across the top, a smaller guitar with its whole headstock.** This is the mock-up you approved, now working.

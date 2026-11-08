@@ -39,6 +39,9 @@ ParagonX1AudioProcessor::ParagonX1AudioProcessor()
     polyWindowValue = find (ParamIDs::polyWindow);
     biteValue = find (ParamIDs::bite);
     attackValue = find (ParamIDs::attack);
+    releaseNoiseValue = find (ParamIDs::releaseNoise);
+    scrapesValue = find (ParamIDs::scrapes);
+    fretNoiseValue = find (ParamIDs::fretNoise);
 
     rigLibrary = std::make_unique<RigLibrary>();
     if (midiLinksDefaultFile().existsAsFile())
@@ -186,6 +189,10 @@ guitar::Settings ParagonX1AudioProcessor::getGuitarSettings() const noexcept
     s.handResetSeconds = handResetValue->load();
     s.mono = monoValue->load() > 0.5f;
     s.attack = attackValue->load();
+    const auto noiseGain = [] (float db) { return db <= ParamRanges::noiseMinDb + 0.05f ? 0.0f : juce::Decibels::decibelsToGain (db); };
+    s.releaseNoise = noiseGain (releaseNoiseValue->load());
+    s.scrapes = scrapesValue->load();
+    s.fretNoise = noiseGain (fretNoiseValue->load());
     return s;
 }
 
@@ -396,7 +403,63 @@ bool ParagonX1AudioProcessor::saveAllRenderLists (const juce::File& folder) cons
     for (const auto a : { guitar::Articulation::sustain, guitar::Articulation::mute })
         for (int s = 0; s < guitar::numStrings; ++s)
             ok = saveRenderList (a, s, folder.getChildFile (guitar::renders::fileName (a, s) + ".mid")) && ok;
+    for (int row = 0; row < guitar::noises::numRows; ++row)   // 0.6.0: the noise lists too
+    {
+        const auto which = guitar::noises::rowList (row);
+        ok = saveNoiseList (row, folder.getChildFile (guitar::noises::fileName (which.list, which.string) + ".mid")) && ok;
+    }
     return ok;
+}
+
+juce::File ParagonX1AudioProcessor::noiseListFile (int row) const
+{
+    const auto which = guitar::noises::rowList (row);
+    const auto file = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("Paragon PR7-I")
+                          .getChildFile ("Render Lists").getChildFile (guitar::noises::fileName (which.list, which.string) + ".mid");
+    saveNoiseList (row, file);
+    return file;
+}
+
+bool ParagonX1AudioProcessor::saveNoiseList (int row, const juce::File& file) const
+{
+    const auto which = guitar::noises::rowList (row);
+    file.getParentDirectory().createDirectory();
+    file.deleteFile();
+    juce::FileOutputStream out (file);
+    return out.openedOk() && guitar::noises::toMidi (which.list, which.string).writeTo (out);
+}
+
+void ParagonX1AudioProcessor::startNoiseImport (const juce::File& render, int row)
+{
+    if (importingString.load() >= 0 || row < 0 || row >= guitar::noises::numRows)
+        return;   // one at a time
+    importingString = noiseImport;
+    importingNoise = row;
+    importProgress = 0.0f;
+    importCancel = false;
+    const auto folder = getGuitarFolder();
+    jobs.addJob ([this, render, row, folder]
+    {
+        const auto which = guitar::noises::rowList (row);
+        const auto report = guitar::noises::importFile (render, which.list, which.string, folder, &importProgress, &importCancel);
+        {
+            const std::lock_guard<std::mutex> lock (libraryLock);
+            noiseReports[(size_t) row] = report.summary (which.list);
+        }
+        importProgress = -1.0f;
+        importingNoise = -1;
+        importingString = -1;
+        if (report.ok())
+            reloadGuitar();   // (queued after this job)
+        else
+            guitarBroadcaster.sendChangeMessage();
+    });
+}
+
+juce::String ParagonX1AudioProcessor::getNoiseReport (int row) const
+{
+    const std::lock_guard<std::mutex> lock (libraryLock);
+    return row >= 0 && row < guitar::noises::numRows ? noiseReports[(size_t) row] : juce::String();
 }
 
 void ParagonX1AudioProcessor::startImport (const juce::File& render, guitar::Articulation a, int string)

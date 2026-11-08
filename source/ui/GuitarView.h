@@ -61,6 +61,7 @@ private:
     GuitarRack rack;   // 0.5.0: the main controls on a rack unit, as PR7-G's
     juce::TextButton variationOn, splitMap, factoryMap;   // the rack's small keys (their stripes lit while on)
     ParamControl forceString, handPosition;   // the rack's FRETTING page
+    ParamControl releaseNoise, scrapes, fretNoise;   // 0.6.0: the rack's NOISES page
     juce::ComboBox performance;
     std::unique_ptr<juce::ParameterAttachment> keyMapAttachment;
     std::vector<std::unique_ptr<ValueBox>> boxes;

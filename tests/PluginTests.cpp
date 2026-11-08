@@ -434,6 +434,95 @@ TEST_CASE ("PALM MUTE 0.3.0: a palm-mute render imported into Mute; played palm-
     CHECK (page.getRow (0).getStatus() == "Not imported");
 }
 
+TEST_CASE ("THE NOISES 0.6.0: a release render imported from its NOISES row, played at note-offs; RELEASE NOISE; the rack's NOISES page", "[plugin]")
+{
+    Plugin t;
+    const auto guitarFolder = t.folder.getChildFile ("Noises");
+    t.p.setGuitarFolder (guitarFolder);
+    REQUIRE (t.p.waitUntilIdle (10000));
+    t.p.startImport (fakeRenderFile (0, t.folder.getChildFile ("Low A.wav")), Articulation::sustain, 0);
+    REQUIRE (t.p.waitUntilIdle (120000));
+
+    // The low A's release list rendered (the notes' Volume down): from each note-off a short decaying tone at the
+    // note's pitch (as the owner's noise check measured them), 8 kHz.
+    const auto writeRender = [&t] (int string, const juce::String& name)
+    {
+        constexpr double rate = 8000.0;
+        using namespace guitar::noises;
+        std::vector<float> audio ((size_t) (lengthSeconds (List::pitchedRelease, string) * rate), 0.0f);
+        for (const auto& h : hits (List::pitchedRelease, string))
+            for (int i = 0; i < (int) (0.3 * rate); ++i)
+                audio[(size_t) (h.offSeconds * rate) + (size_t) i] += 0.05f * std::exp (-(float) i / (float) (0.08 * rate))
+                                                                      * (float) std::sin (juce::MathConstants<double>::twoPi * guitar::frequencyOf (h.note) * i / rate);
+        const auto file = t.folder.getChildFile (name);
+        juce::WavAudioFormat wav;
+        file.deleteFile();
+        std::unique_ptr<juce::OutputStream> stream (file.createOutputStream().release());
+        auto writer = wav.createWriterFor (stream, juce::AudioFormatWriterOptions().withSampleRate (rate).withNumChannels (1).withBitsPerSample (24));
+        const float* channels[] { audio.data() };
+        writer->writeFromFloatArrays (channels, 1, (int) audio.size());
+        return file;
+    };
+    const auto renderFile = writeRender (0, "Low A releases.wav");
+    // Dropped on the D string's row: its times line up (every string's list has the same), its pitches don't: refused.
+    t.p.startNoiseImport (renderFile, 3);
+    REQUIRE (t.p.waitUntilIdle (60000));
+    CHECK (t.p.getNoiseReport (3).contains ("aren't at the pitches"));
+    CHECK (t.p.getLibrary()->noiseCount (guitar::noises::List::pitchedRelease, 3) == 0);
+    t.p.startNoiseImport (renderFile, 0);
+    REQUIRE (t.p.waitUntilIdle (60000));
+    INFO (t.p.getNoiseReport (0));
+    CHECK (t.p.getNoiseReport (0).startsWith ("25 releases imported, 75 copies left out"));
+    CHECK (t.p.getLibrary()->noiseCount (guitar::noises::List::pitchedRelease, 0) == 25);
+    CHECK (guitarFolder.getChildFile ("Release/s0_f12_r0.wav").existsAsFile());
+
+    // Played: the low A held, then let go: its release at the note-off; none with RELEASE NOISE off. (Measured 50-200 ms
+    // after the note-off at the low A's pitch, with RELEASE at 10 ms: the note itself gone by then, its release not.)
+    t.p.setParameterNow (ParamIDs::release, 0.01f);
+    const auto releaseLevel = [&t]
+    {
+        t.play (1, { { 33, 100 } });
+        t.play (20);
+        const auto out = t.play (40, { { 33, 0 } });
+        t.play (60);
+        return levelAt (out, 55.0, (size_t) (0.05 * sampleRate), (size_t) (0.15 * sampleRate));
+    };
+    CHECK (releaseLevel() > 0.004);   // (~0.012 rendered, through OUTPUT's -6 dB default)
+    t.p.setParameterNow (ParamIDs::releaseNoise, ParamRanges::noiseMinDb);
+    CHECK (t.p.getGuitarSettings().releaseNoise == 0.0f);
+    CHECK (releaseLevel() < 0.001);
+
+    // The pages: RENDERS' NOISES row says what came in; the rack's NOISES page shows its three knobs and what's imported.
+    std::unique_ptr<juce::AudioProcessorEditor> editor (t.p.createEditor());
+    editor->setSize (1600, 900);
+    auto* view = dynamic_cast<MainView*> (editor->getChildComponent (0));
+    REQUIRE (view != nullptr);
+    auto& renders = view->getRendersPage();
+    renders.showNoises();
+    renders.refresh();
+    CHECK (renders.getNoiseRow (0).getStatus().startsWith ("25 releases imported"));
+    CHECK (renders.getNoiseRow (9).getStatus() == "Not imported");
+    checkLayout (renders, "renders (noises)");
+    auto& page = view->getGuitarView();
+    std::vector<ParamControl*> controls;
+    findAll (page, controls);
+    const auto control = [&controls] (const char* id) -> juce::Component*
+    {
+        for (auto* c : controls)
+            if (c->getParameterId() == id)
+                return c;
+        return nullptr;
+    };
+    REQUIRE (control (ParamIDs::releaseNoise) != nullptr);
+    CHECK_FALSE (control (ParamIDs::releaseNoise)->isVisible());
+    page.getRack().getPageKey (GuitarRack::Page::noises).onClick();
+    CHECK (control (ParamIDs::releaseNoise)->isVisible());
+    CHECK (control (ParamIDs::scrapes)->isVisible());
+    CHECK (control (ParamIDs::fretNoise)->isVisible());
+    CHECK_FALSE (control (ParamIDs::tone)->isVisible());
+    checkLayout (page, "guitar view (noises)");
+}
+
 TEST_CASE ("THE GUITAR PAGE 0.4.0: its controls; the capo dragged on the neck; PERFORMANCE; the family's colours only", "[ui]")
 {
     Plugin t;

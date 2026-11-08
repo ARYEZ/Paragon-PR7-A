@@ -58,4 +58,19 @@ namespace guitar::noises
     double lengthSeconds (List, int string = 0);
     juce::MidiFile toMidi (List, int string = 0);
     juce::String fileName (List, int string = 0);    // "PR7-I Release - String 7 (low A)", "PR7-I Fret Noise"...
+
+    // The RENDERS page's NOISES rows: 0-6 each string's pitched releases (the low A first), 7 power-chord releases,
+    // 8 unpitched noises, 9 fret noise.
+    inline constexpr int numRows = numStrings + 3;
+    struct RowList { List list = List::pitchedRelease; int string = 0; };
+    RowList rowList (int row) noexcept;
+    juce::String rowName (int row);                  // "String 7 (low A)", "Power chords", "Unpitched", "Fret noise"
+
+    // Where an imported noise goes in a guitar's folder (0.6.0): "Release/s0_f05_r0.wav" (pitched release: string,
+    // fret, which of its different recordings), "PowerRelease/s1_f03_r0.wav" (the root's string and fret),
+    // "Unpitched/n007.wav", "FretNoise/n04.wav" (numbered in the order they came: the reference plays them in turn).
+    juce::String folderName (List);
+    juce::String noiseFileName (List, int string, int fret, int index);
+    struct NoiseId { List list = List::pitchedRelease; int string = 0, fret = 0, index = 0; };
+    std::optional<NoiseId> parseNoiseFile (const juce::File&);
 }
