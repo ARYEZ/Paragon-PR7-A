@@ -492,11 +492,18 @@ assign(box_, sm)
 cam_data = bpy.data.cameras.new("camera")
 cam_data.type = "ORTHO"
 cam_data.ortho_scale = WIDTH / 2000.0 * (1576 / WIDTH) if WIDTH else 0.788    # 2000 px a metre at the plugin's 1x
-cam_data.ortho_scale = WIDTH_1X / PX_PER_M
+# 0.5.0 (the rack across the top): the camera pulled back (GUITAR_ZOOM: 1 the guitar at 3000 px a metre, 0.67 a third
+# smaller), the nut at GUITAR_NUT_X px and the neck's centre line at GUITAR_NECK_Y px in the window. The defaults are
+# 0.4.x's picture exactly.
+ZOOM = float(os.environ.get("GUITAR_ZOOM", "1"))
+VIEW_NUT_X = float(os.environ.get("GUITAR_NUT_X", "1560"))
+VIEW_NECK_Y = float(os.environ.get("GUITAR_NECK_Y", str(NECK_Y_1X)))
+VIEW_PX_PER_M = PX_PER_M * ZOOM
+cam_data.ortho_scale = WIDTH_1X / VIEW_PX_PER_M
 cam = link(bpy.data.objects.new("camera", cam_data))
 # straight down over the stage's centre, tilted a few degrees toward the player so the sides show
 TILT = math.radians(float(os.environ.get("GUITAR_TILT", "5")))
-centre = Vector((0.5 * WIDTH_1X / PX_PER_M, (NECK_Y_1X - 0.5 * HEIGHT_1X) / PX_PER_M / math.cos(TILT), 0.0))
+centre = Vector((X_NUT - (VIEW_NUT_X - 0.5 * WIDTH_1X) / VIEW_PX_PER_M, (VIEW_NECK_Y - 0.5 * HEIGHT_1X) / VIEW_PX_PER_M / math.cos(TILT), 0.0))
 cam.location = centre + Vector((0, -math.sin(TILT), math.cos(TILT))) * 1.5
 cam.rotation_euler = (TILT, 0, 0)
 cam_data.clip_end = 10

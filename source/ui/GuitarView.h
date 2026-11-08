@@ -40,7 +40,8 @@ public:
     int fretAt (float x) const;                   // the fret space under x (0: between the 1st fret and the nut)
     int shownFret (int string) const noexcept { return frets[(size_t) string]; }
     bool shownMuted (int string) const noexcept { return muted[(size_t) string]; }
-    juce::String getNowPlayingText() const { return nowLine1 + "\n" + nowLine2; }
+    juce::String getNowPlayingText() const { return rack.getScreen().line1 + "\n" + rack.getScreen().line2; }   // the rack's screen
+    GuitarRack& getRack() noexcept { return rack; }
     static juce::Image picture();                  // the guitar, its colours kept in the family's range
 
     // A small box showing a parameter's value (CAPO, HAND SPAN...): drag up or down to change it, click an on/off
@@ -50,7 +51,7 @@ public:
 private:
     void timerCallback() override { refresh(); }
     void paintNeck (juce::Graphics&);
-    void paintNowPlaying (juce::Graphics&);
+    void showRackPage();   // the rack's page's controls shown, the other's hidden
     float stringY (int string, float x) const;
     float boardEdge (bool upper, float x) const;
     juce::Rectangle<int> neckArea() const;
@@ -60,11 +61,8 @@ private:
     ParamControl tone, bite, attack, transpose, velToVol, release, polyWindow, variation, level, output, pickMode, fretMode;
     GuitarRack rack;   // 0.5.0: the main controls on a rack unit, as PR7-G's
     juce::TextButton variationOn, splitMap, factoryMap;   // the rack's small keys (their stripes lit while on)
+    ParamControl forceString, handPosition;   // the rack's FRETTING page
     juce::ComboBox performance;
-    juce::Label pickLabel, fretLabel, performanceLabel, forceLabel, handLabel;
-    juce::Slider forceKnob { juce::Slider::RotaryHorizontalVerticalDrag, juce::Slider::NoTextBox },
-                 handKnob { juce::Slider::RotaryHorizontalVerticalDrag, juce::Slider::NoTextBox };
-    juce::AudioProcessorValueTreeState::SliderAttachment forceAttachment, handAttachment;
     std::unique_ptr<juce::ParameterAttachment> keyMapAttachment;
     std::vector<std::unique_ptr<ValueBox>> boxes;
     float meterDb = -100.0f;
@@ -74,7 +72,6 @@ private:
     std::array<bool, guitar::numStrings> muted {};
     int hand = 1, span = 4, forced = -1, capo = 0;
     juce::uint32 nowCount = 0;
-    juce::String nowLine1, nowLine2;
     guitar::Guitar::NowPlaying now;
     int latchedKey = guitar::keyswitch::c1;
     bool draggingCapo = false;

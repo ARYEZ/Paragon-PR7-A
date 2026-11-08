@@ -27,7 +27,7 @@ class ParamControl final : public juce::Component
 {
 public:
     ParamControl (juce::AudioProcessorValueTreeState&, const juce::String& parameterId, const juce::String& label,
-                  const juce::String& tooltip = {});
+                  const juce::String& tooltip = {}, bool knobForChoices = false);   // (a menu's parameter as a knob: PR7-I 0.5.0's rack)
     ~ParamControl() override;
 
     void attach (const juce::String& parameterId);

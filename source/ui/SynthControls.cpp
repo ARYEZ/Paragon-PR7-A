@@ -8,7 +8,7 @@
 namespace { constexpr int rackValueHeight = 18; }   // a rack knob's value screen
 
 ParamControl::ParamControl (juce::AudioProcessorValueTreeState& stateToUse, const juce::String& id, const juce::String& labelText,
-                            const juce::String& tooltip)
+                            const juce::String& tooltip, bool knobForChoices)
     : state (stateToUse)
 {
     label.setText (labelText, juce::dontSendNotification);
@@ -22,7 +22,7 @@ ParamControl::ParamControl (juce::AudioProcessorValueTreeState& stateToUse, cons
 
     auto* parameter = state.getParameter (id);
     jassert (parameter != nullptr);   // a typo in a panel's parameter list
-    if (auto* choice = dynamic_cast<juce::AudioParameterChoice*> (parameter))
+    if (auto* choice = knobForChoices ? nullptr : dynamic_cast<juce::AudioParameterChoice*> (parameter))
     {
         box = std::make_unique<juce::ComboBox>();
         box->addItemList (choice->choices, 1);
@@ -190,6 +190,14 @@ void ParamControl::setRack (bool inRack)
         slider->setTextBoxStyle (juce::Slider::TextBoxBelow, false, 78, rack ? rackValueHeight : 18);
         slider->setColour (juce::Slider::textBoxTextColourId, rack ? LedDisplay::ledOrange : ParagonColours::accent);
         slider->setColour (juce::Slider::textBoxBackgroundColourId, juce::Colours::transparentBlack);
+    }
+    if (box != nullptr)
+    {
+        // On a screen the rack draws: the choice in orange, no box of its own.
+        box->setColour (juce::ComboBox::backgroundColourId, rack ? juce::Colours::transparentBlack : juce::Colour (0xff151217));
+        box->setColour (juce::ComboBox::outlineColourId, rack ? juce::Colours::transparentBlack : ParagonColours::panelEdge);
+        box->setColour (juce::ComboBox::textColourId, rack ? LedDisplay::ledOrange : ParagonColours::accent);
+        box->setColour (juce::ComboBox::arrowColourId, rack ? LedDisplay::ledOrange.withAlpha (0.6f) : ParagonColours::textDim);
     }
     resized();
     repaint();

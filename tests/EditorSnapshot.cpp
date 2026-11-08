@@ -3,6 +3,7 @@
 // Options (environment variables):
 //   PARAGON_SNAPSHOT_WIDTH=n         the window's width (default 1600; 3200 for a sharp 2x look)
 //   PARAGON_SNAPSHOT_PAGE=guitar|renders|presets|settings   (guitar, the default)
+//   PARAGON_SNAPSHOT_RACK=fretting                         (the GUITAR page's rack on its FRETTING page)
 //   PARAGON_SNAPSHOT_PRESET=name     that factory preset loaded
 //   PARAGON_SNAPSHOT_PARAMS=id=value,...   parameters set (real units)
 //   PARAGON_SNAPSHOT_NOTES=1         a guitar of made-up takes (every string, frets 0-24; the low A, E and B strings
@@ -123,6 +124,8 @@ TEST_CASE ("Render the editor to a PNG", "[.][snapshot]")
     else if (page == "renders")
         view->showPage (MainView::Page::renders);
     view->getRendersPage().refresh();
+    if (env ("PARAGON_SNAPSHOT_RACK") == "fretting")
+        view->getGuitarView().getRack().setPage (GuitarRack::Page::fretting);
     view->getGuitarView().refresh();
     view->getFretboard().refresh();
     if (env ("PARAGON_SNAPSHOT_PROGRESS") == "1")
