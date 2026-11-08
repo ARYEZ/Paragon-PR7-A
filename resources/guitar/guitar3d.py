@@ -368,7 +368,10 @@ else:
     with open(os.environ.get("GUITAR_HEADSTOCK", os.path.join(os.path.dirname(os.path.abspath(__file__)), "headstock-outline.json"))) as f:
         head = json.load(f)
     H0 = X_NUT + 0.005   # where the headstock leaves the nut
-    hv = [(H0 + x / 1000.0, y / 1000.0) for x, y in head["outline"]]
+    # smoothed along its length as the body is (GUITAR_SMOOTH_MM, 3 mm), its straight sides first carried 5 mm on under
+    # the nut, so the smoothing rounds those corners where the nut hides them
+    hv = smoothed([(H0 + (x if x > 0.5 else -5.0) / 1000.0, y / 1000.0) for x, y in head["outline"]],
+                  float(os.environ.get("GUITAR_SMOOTH_MM", "3")))
     head_z = neck_top - 0.006
     cu = bpy.data.curves.new("headstock", "CURVE"); cu.dimensions = "2D"; cu.fill_mode = "BOTH"; cu.extrude = 0.004; cu.bevel_depth = 0.0015
     sp = cu.splines.new("POLY"); sp.points.add(len(hv) - 1)
@@ -405,19 +408,19 @@ else:
         bpy.ops.mesh.primitive_torus_add(major_radius=0.0044, minor_radius=0.00045, location=(px_, py_, face_z + 0.0021))
         assign(bpy.context.object, NEON_SOFT)
         cylinder("post cap %d" % k, 0.0024, 0.001, (px_, py_, face_z + 0.0102), POLE, verts=20)
-    # PARAGON where the maker's name was: across the face, slanted along the treble edge, in pearl
-    font_path = "/usr/share/fonts/opentype/inter/Inter-BoldItalic.otf"
+    # PARAGON where the maker's name was, glowing, in the rack's PARAGON lettering (InterDisplay Black Italic, the
+    # plugin's own font): along the headstock between the tuner posts and the treble edge, the strings over it
+    font_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fonts", "InterDisplay-BlackItalic.ttf")
     tc = bpy.data.curves.new("headstock name", "FONT")
     tc.body = "PARAGON"
-    if os.path.exists(font_path):
-        tc.font = bpy.data.fonts.load(font_path)
+    tc.font = bpy.data.fonts.load(font_path)
     tc.align_x = "CENTER"; tc.align_y = "CENTER"
-    tc.size = 0.0135
+    tc.size = float(os.environ.get("GUITAR_HEAD_NAME_SIZE", "0.027"))
     tc.extrude = 0.0002
     name = link(bpy.data.objects.new("headstock name", tc))
-    name.location = (H0 + 0.110, -0.018, face_z + 0.0004)
-    name.rotation_euler = (0, 0, math.radians(-29.5 + 90 - 90))
-    name.data.materials.append(PEARL)
+    name.location = (H0 + 0.121, -0.0255, face_z + 0.0004)
+    name.rotation_euler = (0, 0, math.radians(-9.0))
+    name.data.materials.append(NEON_SOFT)
 
 # ================================================================ pickups, bridge, controls
 def humbucker(name, X):
