@@ -2,6 +2,24 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.5.0
+
+**The GUITAR page rebuilt: a family rack unit across the top, a smaller guitar with its whole headstock.** This is the mock-up you approved, now working.
+
+- **The rack.** All of the page's controls now sit on one rack unit across the top of the window, built from the same parts as PR7-G's units: the black pearl chassis with the red glow, the PARAGON PR7-I badge, stamped lettering, orange LED screens, big knobs with their values on small screens, and small keys with neon stripes. It's always the black finish, whatever finish you've chosen elsewhere, because it sits on the dark guitar page.
+- **Two pages**, switched by the PAGE keys under the badge (the lit stripe shows which page is open):
+  - **PLAYING:** TONE, BITE, ATTACK, TRANSPOSE, VEL > VOL, RELEASE, POLY WINDOW and VARIATION.
+  - **FRETTING:** PICKING MODE, FRETTING MODE and PERFORMANCE on screens; FORCE STRING and HAND POSITION as knobs; CAPO, HAND SPAN, HAND RESET and MONO as small screens (drag up or down to change one, click MONO, double-click for the default).
+- **On both pages:**
+  - the screen, showing the key map, what's latched (SUSTAIN or PALM MUTE, POWER for power chords) with its keyswitch, and the last note: its note, velocity, take, string, fret and dynamic;
+  - the KEY MAP keys (SPLIT, FACTORY) and the VARIATION on/off key;
+  - OUTPUT: an LED meter, LEVEL and OUTPUT. The status light top right goes out while the plugin is bypassed.
+- **NOW PLAYING is gone.** The rack's screen shows the same things. Nothing sits under the neck any more.
+- **The guitar is a third smaller and lower**, re-rendered with the camera pulled back so the red grid floor still fills the window. Frets 0 to 24 now span about 920 pixels, and both pickups and both horns show. The note dots on the neck are sized to fit the closer strings.
+- **The headstock.** The whole headstock is now in the picture, traced from your photo of the 7-string's headstock: smoothed like the body, with a neon edge and seven tuners. Each tuner has a post with a glowing ring on the face and a button outlined in neon along the top edge. The strings run over the nut to their own posts: the low A to the post nearest the nut, the high E to the one at the tip.
+- **PARAGON on the headstock**, where the maker's name sits. It glows in the soft neon of the guitar's edges and is written in the rack badge's own lettering (InterDisplay Black Italic).
+- **Nothing about the sound changed.** Your presets, projects and imported renders work as before.
+
 ## 0.4.7
 
 **Smoother body edges.** The guitar body's outline flows as one smooth curve now, with no small corners, and the straight runs stay straight.

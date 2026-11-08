@@ -24,6 +24,7 @@ PR7-I is built in stages, each one released:
 | **1a** | The playing engine with sustain: strings and frets as a player chooses, one note per string, alternate picking with round-robins, velocity layers; render lists and importing renders; the drums and effects removed | **Done (0.2.0)** |
 | **1b** | Palm mute (by velocity, as the reference does), your own key map (C-1 palm mute / sustain by velocity), power chords | **Done (0.3.0)** |
 | **1c** | The GUITAR page in PR7-D's Tron look (our own 3D guitar), laid out like the reference's main page; capo, hand span and reset, mono, economy picking, poly window, bite, attack | **Done (0.4.0)** |
+| **1d** | The page's controls on a PR7 rack unit across the top (two pages: PLAYING, FRETTING), the guitar a third smaller with its whole headstock | **Done (0.5.0)** |
 | **2** | The other articulations: staccato and chugs, pinch and natural harmonics, slides, legato, tremolo picking, fret and pick noises | Planned |
 | **3** | Realism: automatic double-tracking, a little timing and tuning variation | Planned |
 | **4** | The editor and tools: strumming and chords, keyswitch maps | Planned |

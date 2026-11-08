@@ -4,7 +4,6 @@
 #include "ui/Finish.h"
 #include "ui/Fretboard.h"
 #include "ui/LedDisplay.h"
-#include "ui/Logo.h"
 #include "ui/ParagonLookAndFeel.h"
 
 #include <GuitarPicture.h>
@@ -13,7 +12,6 @@ namespace
 {
     // In the 1600 x 900 canvas's pixels (the mock-up's); the view starts at row GuitarView::top.
     juce::Rectangle<int> at (int x, int y, int w, int h) { return { x, y - GuitarView::top, w, h }; }
-    juce::Rectangle<float> atF (float x, float y, float w, float h) { return { x, y - (float) GuitarView::top, w, h }; }
 
     // Where the render's strings, frets and board edges land (guitar3d.py writes it beside the picture), in canvas pixels.
     struct Geometry

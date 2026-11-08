@@ -506,6 +506,84 @@ TEST_CASE ("THE GUITAR PAGE 0.4.0: its controls; the capo dragged on the neck; P
     CHECK (outside * 2000 <= coloured);
 }
 
+TEST_CASE ("THE RACK 0.5.0: the GUITAR page's controls on a rack unit with two pages; its screen; the family's colours", "[ui]")
+{
+    Plugin t;
+    std::unique_ptr<juce::AudioProcessorEditor> editor (t.p.createEditor());
+    editor->setSize (1600, 900);
+    auto* view = dynamic_cast<MainView*> (editor->getChildComponent (0));
+    REQUIRE (view != nullptr);
+    auto& page = view->getGuitarView();
+    auto& rack = page.getRack();
+
+    std::vector<ParamControl*> controls;
+    findAll (rack, controls);
+    const auto control = [&controls] (const char* id) -> juce::Component*
+    {
+        for (auto* c : controls)
+            if (c->getParameterId() == id)
+                return c;
+        return nullptr;
+    };
+    // Every control on the rack (none left floating on the page), the rack across the top above the neck.
+    for (const auto* id : { ParamIDs::tone, ParamIDs::bite, ParamIDs::attack, ParamIDs::transpose, ParamIDs::velocityToVolume,
+                            ParamIDs::release, ParamIDs::polyWindow, ParamIDs::variation, ParamIDs::patchLevel, ParamIDs::outputGain,
+                            ParamIDs::pickMode, ParamIDs::fretMode, ParamIDs::forceString, ParamIDs::handPosition })
+    {
+        INFO (id);
+        REQUIRE (control (id) != nullptr);
+    }
+    CHECK (rack.getWidth() > 1500);
+    CHECK (rack.getBottom() < page.noteCentre (0, 12).y - 60.0f);
+    std::vector<GuitarView::ValueBox*> boxes;
+    findAll (rack, boxes);
+    CHECK (boxes.size() == 4);
+
+    // PLAYING first: its knobs shown, FRETTING's hidden; OUTPUT on both pages.
+    CHECK (rack.getPage() == GuitarRack::Page::playing);
+    CHECK (control (ParamIDs::tone)->isVisible());
+    CHECK_FALSE (control (ParamIDs::pickMode)->isVisible());
+    CHECK_FALSE (boxes[0]->isVisible());
+    CHECK (control (ParamIDs::outputGain)->isVisible());
+    CHECK (rack.getPageKey (GuitarRack::Page::playing).getToggleState());
+    checkLayout (page, "guitar view (playing)");
+
+    // The FRETTING key: the other page.
+    rack.getPageKey (GuitarRack::Page::fretting).onClick();   // (as clicked: triggerClick would wait for the message loop)
+    CHECK (rack.getPage() == GuitarRack::Page::fretting);
+    CHECK_FALSE (control (ParamIDs::tone)->isVisible());
+    CHECK (control (ParamIDs::pickMode)->isVisible());
+    CHECK (control (ParamIDs::forceString)->isVisible());
+    CHECK (boxes[0]->isVisible());
+    CHECK (control (ParamIDs::outputGain)->isVisible());
+    CHECK (rack.getPageKey (GuitarRack::Page::fretting).getToggleState());
+    CHECK_FALSE (rack.getPageKey (GuitarRack::Page::playing).getToggleState());
+    checkLayout (page, "guitar view (fretting)");
+
+    // The screen: what's latched before anything is played.
+    page.refresh();
+    CHECK (rack.getScreen().articulation == "SUSTAIN");
+    CHECK (rack.getScreen().line1 == "PLAY A NOTE");
+
+    // The FRETTING page drawn in the family's colours too (the PLAYING page is checked by the 0.4.0 test).
+    const auto image = page.createComponentSnapshot (page.getLocalBounds(), true, 1.0f);
+    auto coloured = 0, outside = 0;
+    for (int y = 0; y < image.getHeight(); y += 3)
+        for (int x = 0; x < image.getWidth(); x += 3)
+        {
+            const auto c = image.getPixelAt (x, y);
+            if (c.getSaturation() < 0.25f || c.getBrightness() < 0.15f)
+                continue;
+            ++coloured;
+            const auto hue = c.getHue() * 360.0f;
+            if (hue > 44.0f && hue < 316.0f)
+                ++outside;
+        }
+    INFO (outside << " of " << coloured);
+    CHECK (coloured > 1000);
+    CHECK (outside * 2000 <= coloured);
+}
+
 TEST_CASE ("0.4.0: BITE (less low-mid, more top); POLY WINDOW reported as latency; old presets get the new controls' defaults", "[plugin]")
 {
     Plugin t;

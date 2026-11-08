@@ -546,12 +546,13 @@ assign(box_, sm)
 cam_data = bpy.data.cameras.new("camera")
 cam_data.type = "ORTHO"
 cam_data.ortho_scale = WIDTH / 2000.0 * (1576 / WIDTH) if WIDTH else 0.788    # 2000 px a metre at the plugin's 1x
-# 0.5.0 (the rack across the top): the camera pulled back (GUITAR_ZOOM: 1 the guitar at 3000 px a metre, 0.67 a third
-# smaller), the nut at GUITAR_NUT_X px and the neck's centre line at GUITAR_NECK_Y px in the window. The defaults are
-# 0.4.x's picture exactly.
-ZOOM = float(os.environ.get("GUITAR_ZOOM", "1"))
-VIEW_NUT_X = float(os.environ.get("GUITAR_NUT_X", "1560"))
-VIEW_NECK_Y = float(os.environ.get("GUITAR_NECK_Y", str(NECK_Y_1X)))
+# 0.5.0 (the rack across the top, the owner: "the guitar 33% smaller, moved down"): the camera pulled back (GUITAR_ZOOM:
+# 0.67, 2000 px a metre; 1 was 0.4's 3000), the nut at GUITAR_NUT_X px (1090: the whole headstock in the window) and
+# the neck's centre line at GUITAR_NECK_Y px (670) in the window. 0.4.x's picture: GUITAR_ZOOM=1 GUITAR_NUT_X=1560
+# GUITAR_NECK_Y=550.
+ZOOM = float(os.environ.get("GUITAR_ZOOM", "0.67"))
+VIEW_NUT_X = float(os.environ.get("GUITAR_NUT_X", "1090"))
+VIEW_NECK_Y = float(os.environ.get("GUITAR_NECK_Y", "670"))
 VIEW_PX_PER_M = PX_PER_M * ZOOM
 cam_data.ortho_scale = WIDTH_1X / VIEW_PX_PER_M
 cam = link(bpy.data.objects.new("camera", cam_data))

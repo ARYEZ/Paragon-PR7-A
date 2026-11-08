@@ -4,17 +4,16 @@
 #include "ui/GuitarRack.h"
 #include "ui/SynthControls.h"
 
-// THE GUITAR page (PR7-I 0.4.0): the owner's approved mock-up. Our own 3D guitar (resources/guitar: a 7-string with a
-// superstrat body traced off the owner's photo, in PR7-D's "Tron" look) fills the window under the header, laid out as
-// the owner's reference guitar instrument's Main tab, mirrored as the owner asked (the headstock right, the low A on
-// top): frets 0 to 24 across the window, the body's horns at the left. On it, live:
+// THE GUITAR page (PR7-I 0.4.0; 0.5.0 its layout): our own 3D guitar (resources/guitar: a 7-string with a body and
+// headstock traced off the owner's photos, PARAGON on the headstock, in PR7-D's "Tron" look) under the header, the low A
+// on top and the headstock right, a third smaller since 0.5.0 so it all shows; across the top, the controls on one of the
+// family's rack units (GuitarRack, as PR7-G's), with two pages: PLAYING (TONE BITE ATTACK TRANSPOSE VEL > VOL RELEASE
+// POLY WINDOW VARIATION) and FRETTING (PICKING / FRETTING / PERFORMANCE, FORCE STRING, HAND POSITION, CAPO, HAND SPAN,
+// HAND RESET, MONO); the screen (what's latched, the last note), the KEY MAP and VARIATION keys and OUTPUT on both.
+// On the neck, live:
 //   - each note on its string and fret: a solid dot sustained, a ring palm-muted, the string lit from it to the bridge;
 //   - the hand's reach (a lit window and a bracket: HAND 1-4 AUTO), the capo (drag it from the nut along the neck;
-//     double-click it off), a forced string;
-// and the controls floating round it where the reference has its own (mirrored): TONE BITE ATTACK TRANSPOSE VEL > VOL
-// RELEASE; POLY WINDOW, DOUBLE TRACKING (a later release), VARIATION; OUTPUT (LEVEL, OUTPUT, the meter) and the KEY
-// MAP; the PICKING / FRETTING / PERFORMANCE menus, FORCE STRING and HAND POSITION, CAPO HAND SPAN HAND RESET MONO; and
-// NOW PLAYING (what the last note did: our addition, where the reference has a picture of picks).
+//     double-click it off), a forced string.
 class GuitarView final : public juce::Component,
                          private juce::Timer
 {
