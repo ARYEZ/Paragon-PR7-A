@@ -362,16 +362,65 @@ if HEADLESS:
     box("string clamp", (0.012, 2 * nh2 + 0.004, 0.009), (X_NUT + 0.014, 0, neck_top + 0.0045), CHROME, bevel=0.0015)
     tube("clamp edge", [(X_NUT + 0.0075, -nh2 - 0.002, neck_top + 0.0085), (X_NUT + 0.0075, nh2 + 0.002, neck_top + 0.0085)], 0.0005, NEON_SOFT)
 else:
-    # the headstock's start, past the nut (off the stage's right edge soon after)
-    hv = [(X_NUT + 0.004, -nh - 0.001), (X_NUT + 0.004, nh + 0.001), (X_NUT + 0.03, nh + 0.009), (X_NUT + 0.12, nh + 0.013),
-          (X_NUT + 0.12, -nh + 0.004), (X_NUT + 0.03, -nh - 0.004)]
+    # 0.5.0: the whole headstock (the guitar a third smaller shows it all), traced off the owner's photo of a 7-string's
+    # headstock (headstock-outline.json: mm along the neck from the nut, + toward the low strings; no maker's name or
+    # logo): the long pointed shape with its seven tuners in a row along the low strings' edge, PARAGON across it.
+    with open(os.environ.get("GUITAR_HEADSTOCK", os.path.join(os.path.dirname(os.path.abspath(__file__)), "headstock-outline.json"))) as f:
+        head = json.load(f)
+    H0 = X_NUT + 0.005   # where the headstock leaves the nut
+    # smoothed along its length as the body is (GUITAR_SMOOTH_MM, 3 mm), its straight sides first carried 5 mm on under
+    # the nut, so the smoothing rounds those corners where the nut hides them
+    hv = smoothed([(H0 + (x if x > 0.5 else -5.0) / 1000.0, y / 1000.0) for x, y in head["outline"]],
+                  float(os.environ.get("GUITAR_SMOOTH_MM", "3")))
+    head_z = neck_top - 0.006
     cu = bpy.data.curves.new("headstock", "CURVE"); cu.dimensions = "2D"; cu.fill_mode = "BOTH"; cu.extrude = 0.004; cu.bevel_depth = 0.0015
     sp = cu.splines.new("POLY"); sp.points.add(len(hv) - 1)
     for i, p in enumerate(hv):
         sp.points[i].co = (p[0], p[1], 0, 1)
     sp.use_cyclic_u = True
-    hs = link(bpy.data.objects.new("headstock", cu)); hs.location.z = neck_top - 0.006; hs.data.materials.append(NECKWOOD)
-    tube("headstock edge", [(p[0], p[1], neck_top - 0.002) for p in hv[1:] + hv[:1]], 0.0006, NEON_SOFT)
+    hs = link(bpy.data.objects.new("headstock", cu)); hs.location.z = head_z; hs.data.materials.append(NECKWOOD)
+    face_z = head_z + 0.004 + 0.0015
+    # the neon edge all round but where it joins the neck at the nut
+    start = min(range(len(hv)), key=lambda k: (hv[k][0] > H0 + 0.001, -abs(hv[k][1])))
+    ring = hv[start:] + hv[:start]
+    edge = [p for p in ring if p[0] > H0 + 0.0015]
+    tube("headstock edge", [(p[0], p[1], face_z - 0.0005) for p in edge], 0.0006, NEON_SOFT)
+    # the tuners: a black-chrome post and bushing on the face, the gear and button off the low strings' edge
+    POSTS = [(H0 + x / 1000.0, y / 1000.0) for x, y in head["posts"]]
+    def edge_y(x):   # the low strings' edge at x (the outline's largest y there)
+        near = [p for p in hv if abs(p[0] - x) < 0.004]
+        return max(p[1] for p in near) if near else 0.03
+    for k, (px_, py_) in enumerate(POSTS):
+        cylinder("bushing %d" % k, 0.0042, 0.002, (px_, py_, face_z + 0.001), CHROME, verts=24)
+        cylinder("post %d" % k, 0.0028, 0.010, (px_, py_, face_z + 0.005), CHROME, verts=20)
+        ey = edge_y(px_)
+        cylinder("shaft %d" % k, 0.0016, 0.012, (px_, ey + 0.005, head_z + 0.002), CHROME, rot=(math.pi / 2, 0, 0), verts=12)
+        bx, by, bz = px_, ey + 0.0125, head_z + 0.002
+        box("button %d" % k, (0.0135, 0.0105, 0.007), (bx, by, bz), CHROME, bevel=0.0025, segs=4)
+        # a soft neon line round each button's top and round each post (black chrome alone vanishes in the dark scene)
+        hw, hh, r = 0.0055, 0.0040, 0.0012
+        loop = []
+        for q in range(48):
+            a = 2 * math.pi * q / 48
+            sx_, sy_ = (1 if math.cos(a) >= 0 else -1), (1 if math.sin(a) >= 0 else -1)
+            loop.append((bx + sx_ * (hw - r) + r * math.cos(a), by + sy_ * (hh - r) + r * math.sin(a), bz + 0.0036))
+        tube("button edge %d" % k, loop, 0.0004, NEON_SOFT, closed=True)
+        bpy.ops.mesh.primitive_torus_add(major_radius=0.0044, minor_radius=0.00045, location=(px_, py_, face_z + 0.0021))
+        assign(bpy.context.object, NEON_SOFT)
+        cylinder("post cap %d" % k, 0.0024, 0.001, (px_, py_, face_z + 0.0102), POLE, verts=20)
+    # PARAGON where the maker's name was, glowing, in the rack's PARAGON lettering (InterDisplay Black Italic, the
+    # plugin's own font): along the headstock between the tuner posts and the treble edge, the strings over it
+    font_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fonts", "InterDisplay-BlackItalic.ttf")
+    tc = bpy.data.curves.new("headstock name", "FONT")
+    tc.body = "PARAGON"
+    tc.font = bpy.data.fonts.load(font_path)
+    tc.align_x = "CENTER"; tc.align_y = "CENTER"
+    tc.size = float(os.environ.get("GUITAR_HEAD_NAME_SIZE", "0.027"))
+    tc.extrude = 0.0002
+    name = link(bpy.data.objects.new("headstock name", tc))
+    name.location = (H0 + 0.121, -0.0255, face_z + 0.0004)
+    name.rotation_euler = (0, 0, math.radians(-9.0))
+    name.data.materials.append(NEON_SOFT)
 
 # ================================================================ pickups, bridge, controls
 def humbucker(name, X):
@@ -420,11 +469,16 @@ for s in range(7):
     m = material("string %d" % s, srgb("6a6266"), metallic=1.0, rough=0.25, emission=srgb(string_colour(s)), strength=3.0)
     r = 0.00034 - s * 0.00003
     a = Vector((X_BRIDGE - 0.004, string_y(s, X_BRIDGE), TOP + 0.0145))
-    b = Vector((X_NUT + 0.009, string_y(s, X_NUT), z_string)) if HEADLESS else Vector((X_NUT + 0.03, string_y(s, X_NUT) * 0.9, z_string))
-    d = b - a
-    cylinder("string %d" % s, r, d.length, (a + b) / 2, m, verts=10)
-    o = bpy.context.object
-    o.rotation_euler = d.to_track_quat("Z", "Y").to_euler()
+    b = Vector((X_NUT + 0.009, string_y(s, X_NUT), z_string)) if HEADLESS else Vector((X_NUT + 0.0025, string_y(s, X_NUT), z_string))
+    segments = [(a, b)]
+    if not HEADLESS:   # over the nut and on to its tuner's post
+        px_, py_ = POSTS[s]
+        segments.append((b, Vector((px_, py_, face_z + 0.007))))
+    for a_, b_ in segments:
+        d = b_ - a_
+        cylinder("string %d" % s, r, d.length, (a_ + b_) / 2, m, verts=10)
+        o = bpy.context.object
+        o.rotation_euler = d.to_track_quat("Z", "Y").to_euler()
 
 # ================================================================ floor, light, camera
 bpy.ops.mesh.primitive_plane_add(size=3.0, location=(0.29, 0, -TOP - 0.001))
@@ -492,11 +546,19 @@ assign(box_, sm)
 cam_data = bpy.data.cameras.new("camera")
 cam_data.type = "ORTHO"
 cam_data.ortho_scale = WIDTH / 2000.0 * (1576 / WIDTH) if WIDTH else 0.788    # 2000 px a metre at the plugin's 1x
-cam_data.ortho_scale = WIDTH_1X / PX_PER_M
+# 0.5.0 (the rack across the top, the owner: "the guitar 33% smaller, moved down"): the camera pulled back (GUITAR_ZOOM:
+# 0.67, 2000 px a metre; 1 was 0.4's 3000), the nut at GUITAR_NUT_X px (1090: the whole headstock in the window) and
+# the neck's centre line at GUITAR_NECK_Y px (670) in the window. 0.4.x's picture: GUITAR_ZOOM=1 GUITAR_NUT_X=1560
+# GUITAR_NECK_Y=550.
+ZOOM = float(os.environ.get("GUITAR_ZOOM", "0.67"))
+VIEW_NUT_X = float(os.environ.get("GUITAR_NUT_X", "1090"))
+VIEW_NECK_Y = float(os.environ.get("GUITAR_NECK_Y", "670"))
+VIEW_PX_PER_M = PX_PER_M * ZOOM
+cam_data.ortho_scale = WIDTH_1X / VIEW_PX_PER_M
 cam = link(bpy.data.objects.new("camera", cam_data))
 # straight down over the stage's centre, tilted a few degrees toward the player so the sides show
 TILT = math.radians(float(os.environ.get("GUITAR_TILT", "5")))
-centre = Vector((0.5 * WIDTH_1X / PX_PER_M, (NECK_Y_1X - 0.5 * HEIGHT_1X) / PX_PER_M / math.cos(TILT), 0.0))
+centre = Vector((X_NUT - (VIEW_NUT_X - 0.5 * WIDTH_1X) / VIEW_PX_PER_M, (VIEW_NECK_Y - 0.5 * HEIGHT_1X) / VIEW_PX_PER_M / math.cos(TILT), 0.0))
 cam.location = centre + Vector((0, -math.sin(TILT), math.cos(TILT))) * 1.5
 cam.rotation_euler = (TILT, 0, 0)
 cam_data.clip_end = 10

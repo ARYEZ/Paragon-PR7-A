@@ -9,6 +9,19 @@ with a red grid. Built into the plugin as `guitar.jpg` (`process_guitar.py`: the
   window's width and nearly parallel, frets 0 to 24 across nearly the whole window, the body at its real size beside
   the neck, so mostly off the window with only its horns showing. 3000 px a metre at the plugin's 1x, the scale 91% of
   a real 26.5" so the frets fit as the reference's do.
+- **0.5.0, a third smaller:** the rack now runs across the top of the window, so the camera is pulled back
+  (`GUITAR_ZOOM` 0.67: 2000 px a metre), the nut at x 1090 (`GUITAR_NUT_X`) and the neck's centre line at y 670
+  (`GUITAR_NECK_Y`): frets 0-24 span ~920 px and the whole headstock shows. These are the defaults; 0.4's picture was
+  `GUITAR_ZOOM=1 GUITAR_NUT_X=1560 GUITAR_NECK_Y=550`. The floor's grid is in world units, so it is finer too.
+- **Headstock (0.5.0):** `headstock-outline.json`, traced off the owner's photo of a 7-string's headstock (OpenCV: the
+  dark headstock against a pale wall, the tuners taken off by erosion, the bevel stripe's slot closed, the thin pointed
+  tip put back from the unprocessed mask), in mm from where it leaves the nut (+y the low strings' side), scaled so the
+  photo's 107 px neck is our 59 mm, with the seven string posts (low A nearest the nut). Smoothed along its length as
+  the body is (3 mm). On it: a neon edge, seven tuners (posts with neon rings, buttons with neon outlines off the low
+  strings' edge: black chrome alone vanishes in the dark scene), the strings over the nut to their posts, and PARAGON
+  in the plugin's own InterDisplay Black Italic (`resources/fonts`, the rack badge's lettering), soft neon, 27 mm
+  (`GUITAR_HEAD_NAME_SIZE`), where the maker's name was. No maker's name or logo; the photo isn't committed.
+  `GUITAR_HEADSTOCK` reads another outline.
 - **View:** the owner's choice: the headstock to the right, the low A on top (as a guitar seen from the front).
 - **Body:** traced off a photo of a 7-string superstrat at the owner's ask, after two drawn bodies didn't convince
   them (no maker's name or logo used anywhere; the photo itself is not in the repository). `body-outline.json` holds

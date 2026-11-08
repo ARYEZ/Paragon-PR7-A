@@ -2,6 +2,19 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.2.0
+
+**The GUITAR page rebuilt, as PR7-I 0.5.0: a family rack unit across the top, a smaller guitar.** Everything is the same as PR7-I's new page except the guitar's shape.
+
+- **The rack.** All of the page's controls now sit on one rack unit across the top, built from the same parts as PR7-G's units: the black pearl chassis with the red glow, the PARAGON PR7-A badge, stamped lettering, orange LED screens, big knobs with their values on small screens, and small keys with neon stripes.
+- **Two pages**, switched by the PAGE keys under the badge:
+  - **PLAYING:** TONE, BITE, ATTACK, TRANSPOSE, VEL > VOL, RELEASE, POLY WINDOW and VARIATION.
+  - **FRETTING:** PICKING MODE, FRETTING MODE and PERFORMANCE; FORCE STRING and HAND POSITION; CAPO, HAND SPAN, HAND RESET and MONO (drag up or down to change one, click MONO, double-click for the default).
+- **On both pages:** the screen (the key map, what's latched with its keyswitch, and the last note), the KEY MAP and VARIATION keys, and OUTPUT (an LED meter, LEVEL, OUTPUT; the status light goes out while bypassed).
+- **NOW PLAYING is gone.** The rack's screen shows the same things.
+- **The headless guitar is a third smaller and lower**, re-rendered with the camera pulled back so the grid floor still fills the window. More of the body and the string clamp past the nut now show. It has no headstock, so PR7-I's new headstock and its PARAGON lettering aren't on this one.
+- **Nothing about the sound changed.** Presets, projects and imported renders work as before.
+
 ## 0.1.2
 
 **Smoother body edges** (as PR7-I 0.4.7). The headless body's outline is one smooth curve now: the long horn sweeps without little corners, the tips round off as a real body's do, and the straight runs are straight.
