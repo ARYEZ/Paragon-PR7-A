@@ -255,6 +255,32 @@ BOARD_END = X_BRIDGE + L * 2 ** (-24 / 12) - 0.007
 # (GUITAR_OUTLINE: another body's outline, from trace_body.py; a sibling plugin's guitar differs only in this)
 with open(os.environ.get("GUITAR_OUTLINE", os.path.join(os.path.dirname(os.path.abspath(__file__)), "body-outline.json"))) as f:
     outline = [(BOARD_END + x / 1000.0, y / 1000.0) for x, y in json.load(f)["points"]]
+# 0.4.7: the traced outline smoothed (the owner: "the edges could be much smoother and straighter"): resampled every
+# millimetre along its length, then a gaussian over GUITAR_SMOOTH_MM along it, so the ~100 straight segments of the
+# trace (and the photo's grain and JPEG raggedness) become one flowing curve; before the neck snap below.
+def smoothed(points, sigma_mm, step=0.001):
+    if sigma_mm <= 0:
+        return points
+    closed = points + points[:1]
+    dense = []
+    for (x0, y0), (x1, y1) in zip(closed, closed[1:]):
+        n = max(1, int(math.hypot(x1 - x0, y1 - y0) / step))
+        dense += [(x0 + (x1 - x0) * k / n, y0 + (y1 - y0) * k / n) for k in range(n)]
+    sigma = sigma_mm / 1000.0 / step
+    half = int(3 * sigma)
+    weights = [math.exp(-0.5 * (k / sigma) ** 2) for k in range(-half, half + 1)]
+    total = sum(weights)
+    count = len(dense)
+    out = []
+    for i in range(count):
+        sx = sy = 0.0
+        for k, w in zip(range(-half, half + 1), weights):
+            px, py = dense[(i + k) % count]
+            sx += w * px; sy += w * py
+        out.append((sx / total, sy / total))
+    return out[::2]   # every 2 mm is plenty after smoothing
+outline = smoothed(outline, float(os.environ.get("GUITAR_SMOOTH_MM", "3")))
+
 # 0.4.6: along the neck, the body follows OUR neck's edge (1.5 mm in, under the fretboard), not the photo's: a photo's
 # neck leans a little (and PR7-A's has fanned frets), so the traced edge ran at a slant beside our straight neck (the
 # owner: "not really parallel where the body meets the neck").
