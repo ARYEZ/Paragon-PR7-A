@@ -499,8 +499,8 @@ void GuitarView::paintNeck (juce::Graphics& g)
     }
     for (int s = 0; s < guitar::numStrings; ++s)
     {
-        // (just past the headstock's end: 0.5.0's smaller guitar ends inside the window)
-        const auto x = juce::jmin (1584.0f, fretX (0) + 262.0f);
+        // (past the headstock's tip, by the window's right edge: 0.5.0's smaller guitar ends inside the window)
+        const auto x = 1582.0f;
         const auto y = stringY (s, fretX (0)) + (stringY (s, fretX (0)) - stringY (3, fretX (0))) * 0.1f;
         text (g, juce::String (guitar::playerNumber (s)) + guitar::stringName (s), { x - 13.0f, y - 7.0f, 26.0f, 14.0f },
               Fretboard::stringColour (s).withAlpha (forced == s ? 1.0f : 0.8f), 9.0f, true, juce::Justification::centred);
