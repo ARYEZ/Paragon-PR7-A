@@ -649,6 +649,29 @@ TEST_CASE ("THE RACK 0.5.0: the GUITAR page's controls on a rack unit with two p
     CHECK_FALSE (rack.getPageKey (GuitarRack::Page::playing).getToggleState());
     checkLayout (page, "guitar view (fretting)");
 
+    // 0.6.3: HIDE RACK, bottom right (never under the rack): the rack hidden, saved with the project, shown again.
+    auto& rackButton = page.getRackButton();
+    CHECK (rackButton.getButtonText() == "HIDE RACK");
+    CHECK_FALSE (rack.getBounds().intersects (rackButton.getBounds()));
+    rackButton.onClick();
+    CHECK_FALSE (rack.isVisible());
+    CHECK (rackButton.isVisible());
+    CHECK (rackButton.getButtonText() == "SHOW RACK");
+    CHECK (t.p.isRackHidden());
+    {
+        juce::MemoryBlock saved;
+        t.p.getStateInformation (saved);
+        rackButton.onClick();   // shown again...
+        CHECK (rack.isVisible());
+        CHECK_FALSE (t.p.isRackHidden());
+        t.p.setStateInformation (saved.getData(), (int) saved.getSize());   // ...and the project reopened: hidden, as saved
+        CHECK (t.p.isRackHidden());
+        page.refresh();
+        CHECK_FALSE (rack.isVisible());
+        rackButton.onClick();
+        CHECK (rack.isVisible());
+    }
+
     // The screen: what's latched before anything is played.
     page.refresh();
     CHECK (rack.getScreen().articulation == "SUSTAIN");
