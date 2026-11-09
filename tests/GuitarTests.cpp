@@ -914,6 +914,23 @@ TEST_CASE ("IMPORT A RENDER 0.3.0: round-robins that are copies of earlier ones 
     // The guitar then plays the one it has.
     const auto library = Library::load (folder);
     CHECK (library->find (Articulation::sustain, 1, 3, 1, Stroke::down, 1).take == library->find (Articulation::sustain, 1, 3, 1, Stroke::down, 0).take);
+
+    // 0.6.2: re-importing a string clears its earlier takes first. Both round-robins imported, then a render with one
+    // per stroke: the second round-robins (the first import's, now left out as copies) gone, not left to play as if new;
+    // another string untouched.
+    {
+        const auto again = tempGuitar ("Reimport");
+        const auto full = fakeRender (Articulation::sustain, 1, rate, 0.01);
+        REQUIRE (renders::importAudio (full.data(), (int) full.size(), rate, Articulation::sustain, 1, again).written == 300);
+        const auto other = fakeRender (Articulation::sustain, 2, rate, 0.01);
+        REQUIRE (renders::importAudio (other.data(), (int) other.size(), rate, Articulation::sustain, 2, again).ok());
+        CHECK (again.getChildFile ("Sustain/s1_f03_l1_d_r1.wav").existsAsFile());
+        REQUIRE (renders::importAudio (audio.data(), (int) audio.size(), rate, Articulation::sustain, 1, again).written == 150);
+        CHECK_FALSE (again.getChildFile ("Sustain/s1_f03_l1_d_r1.wav").exists());
+        const auto reloaded = Library::load (again);
+        CHECK (reloaded->count (Articulation::sustain, 1) == 150);
+        CHECK (reloaded->count (Articulation::sustain, 2) == 300);
+    }
     folder.getParentDirectory().deleteRecursively();
 }
 
@@ -1165,8 +1182,16 @@ TEST_CASE ("RENDER LISTS 0.3.0: sustain's exactly as the owner rendered them; pa
     CHECK ((int) list.size() == Library::takesPerString (Articulation::mute));
     CHECK (list[15].roundRobin == 7);
     CHECK (list[16].layer == 1);
+    // 0.6.2: each note's 8 downs in a row, then its 8 ups (Jupiter plays all its palm mutes only when a stroke repeats).
+    for (int i = 0; i < 16; ++i)
+    {
+        CHECK (list[(size_t) i].stroke == (i < 8 ? Stroke::down : Stroke::up));
+        CHECK (list[(size_t) i].roundRobin == i % 8);
+        CHECK (list[(size_t) i].layer == 0);
+    }
+    CHECK (list[16].stroke == Stroke::down);
     CHECK_THAT (list[1].noteSeconds - list[0].noteSeconds, WithinAbs (1.6, 1e-9));
-    CHECK (renders::fileName (Articulation::mute, 0) == "PR7-I Mute - String 7 (low A)");
+    CHECK (renders::fileName (Articulation::mute, 0) == "PR7-I Mute v2 - String 7 (low A)");   // (0.6.2: the new order)
     const auto name = renders::takeFileName (Articulation::mute, list[15]);
     CHECK (name == "Mute/s0_f00_l0_u_r7.wav");
     const auto id = renders::parseTakeFile (juce::File ("/x").getChildFile (name));

@@ -2,6 +2,16 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.6.2
+
+**New palm-mute lists ("v2") that get about half as many again different palm mutes from your guitar instrument.**
+
+- **What your checks found:** your guitar instrument has 8 different down-stroke palm mutes and 6 up-strokes for every note, on every string. But it only plays all of them when the same stroke repeats. When down and up strokes take turns, it rotates through just 4 of each. The first palm-mute lists alternated down, up, down, up, so they captured only about 4 different palm mutes per stroke (fewer on the thin strings).
+- **The v2 lists** play each note's 8 downs in a row, then its 8 ups, the way your palm mute check did. That should capture about 6 different downs and 6 different ups per note instead of 4. PR7-I then plays them in turn, so fast chugs have more variety than before, and more than your guitar instrument itself uses when alternate-picking.
+- **Same length:** about 53 minutes per string, the same keyswitches and settings as before (the factory articulation map, DI, effects off, one guitar). They're named "PR7-I Mute v2 - String 7 (low A)" and so on, so they can't be mixed up with the first ones. **Renders of the first palm-mute lists won't import correctly against the new layout.** Render the v2 lists and import those.
+- **Re-importing a string now clears its old takes first.** Before, a re-import only wrote the takes it kept, so earlier ones could stay behind and play as if they were new. Importing the v2 palm mutes replaces the old ones cleanly.
+- Sustain lists are unchanged (byte for byte), and so are the sound and your presets.
+
 ## 0.6.1
 
 **The palm-mute rows say what's really there, and a check for the thin strings' palm mutes.**

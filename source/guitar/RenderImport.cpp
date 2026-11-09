@@ -207,6 +207,13 @@ namespace guitar::renders
             }
         }
 
+        // 0.6.2: the string's earlier takes of this articulation cleared first: a re-import keeps a different set of
+        // round-robins (another render, or the v2 palm-mute lists), and an old take left beside them would play as if
+        // it were one of the new.
+        for (const auto& old : guitarFolder.getChildFile (articulationName (articulation)).findChildFiles (juce::File::findFiles, false, "*.wav"))
+            if (const auto id = parseTakeFile (old); id && id->articulation == articulation && id->string == string)
+                old.deleteFile();
+
         juce::WavAudioFormat wav;
         for (size_t i = 0; i < cuts.size(); ++i)
         {
