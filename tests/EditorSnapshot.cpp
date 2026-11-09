@@ -4,6 +4,7 @@
 //   PARAGON_SNAPSHOT_WIDTH=n         the window's width (default 1600; 3200 for a sharp 2x look)
 //   PARAGON_SNAPSHOT_PAGE=guitar|renders|presets|settings   (guitar, the default)
 //   PARAGON_SNAPSHOT_RACK=fretting|noises                  (the GUITAR page's rack on its FRETTING or NOISES page)
+//   PARAGON_SNAPSHOT_RACKHIDDEN=1                          (0.6.3: the rack hidden, HIDE RACK pressed)
 //   PARAGON_SNAPSHOT_RENDERS=noises                        (the RENDERS page's NOISES tab)
 //   PARAGON_SNAPSHOT_PRESET=name     that factory preset loaded
 //   PARAGON_SNAPSHOT_PARAMS=id=value,...   parameters set (real units)
@@ -131,6 +132,8 @@ TEST_CASE ("Render the editor to a PNG", "[.][snapshot]")
         view->getGuitarView().getRack().setPage (GuitarRack::Page::noises);
     if (env ("PARAGON_SNAPSHOT_RENDERS") == "noises")
         view->getRendersPage().showNoises();
+    if (env ("PARAGON_SNAPSHOT_RACKHIDDEN") == "1")
+        processor.setRackHidden (true);   // (refresh shows it)
     view->getGuitarView().refresh();
     view->getFretboard().refresh();
     if (env ("PARAGON_SNAPSHOT_PROGRESS") == "1")

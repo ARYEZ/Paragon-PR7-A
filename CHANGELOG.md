@@ -2,6 +2,17 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.3.3
+
+PR7-I 0.6.3's changes, with PR7-A's own body.
+
+- **The full-size guitar is back**, as it was in 0.1: the neck across the whole window, the headless body's long horns
+  big beside it.
+- **HIDE RACK** (bottom right of the GUITAR page): slides the rack away so the whole guitar shows; **SHOW RACK** brings it
+  back when you want to change a setting. The button sits where the rack never covers it.
+- PR7-A **remembers the rack hidden or shown with your project**. Presets don't change it, and projects saved before this
+  version open with the rack shown.
+
 ## 0.3.2
 
 **As PR7-I 0.6.2: new palm-mute lists ("v2") that capture more different palm mutes, and re-imports that clear old takes.**

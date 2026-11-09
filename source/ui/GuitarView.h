@@ -41,6 +41,7 @@ public:
     bool shownMuted (int string) const noexcept { return muted[(size_t) string]; }
     juce::String getNowPlayingText() const { return rack.getScreen().line1 + "\n" + rack.getScreen().line2; }   // the rack's screen
     GuitarRack& getRack() noexcept { return rack; }
+    juce::TextButton& getRackButton() noexcept { return rackButton; }   // 0.6.3: HIDE RACK / SHOW RACK
     static juce::Image picture();                  // the guitar, its colours kept in the family's range
 
     // A small box showing a parameter's value (CAPO, HAND SPAN...): drag up or down to change it, click an on/off
@@ -51,6 +52,7 @@ private:
     void timerCallback() override { refresh(); }
     void paintNeck (juce::Graphics&);
     void showRackPage();   // the rack's page's controls shown, the other's hidden
+    void showRack (bool shown);   // 0.6.3
     float stringY (int string, float x) const;
     float boardEdge (bool upper, float x) const;
     juce::Rectangle<int> neckArea() const;
@@ -59,6 +61,7 @@ private:
     ParagonX1AudioProcessor& processor;
     ParamControl tone, bite, attack, transpose, velToVol, release, polyWindow, variation, level, output, pickMode, fretMode;
     GuitarRack rack;   // 0.5.0: the main controls on a rack unit, as PR7-G's
+    juce::TextButton rackButton { "HIDE RACK" };   // 0.6.3: bottom right, never under the rack
     juce::TextButton variationOn, splitMap, factoryMap;   // the rack's small keys (their stripes lit while on)
     ParamControl forceString, handPosition;   // the rack's FRETTING page
     ParamControl releaseNoise, scrapes, fretNoise;   // 0.6.0: the rack's NOISES page

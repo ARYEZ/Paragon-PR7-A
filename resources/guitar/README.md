@@ -13,6 +13,10 @@ with a red grid. Built into the plugin as `guitar.jpg` (`process_guitar.py`: the
   (`GUITAR_ZOOM` 0.67: 2000 px a metre), the nut at x 1090 (`GUITAR_NUT_X`) and the neck's centre line at y 670
   (`GUITAR_NECK_Y`): frets 0-24 span ~920 px and the whole headstock shows. These are the defaults; 0.4's picture was
   `GUITAR_ZOOM=1 GUITAR_NUT_X=1560 GUITAR_NECK_Y=550`. The floor's grid is in world units, so it is finer too.
+- **0.6.3, full size again** (the owner: "the bigger guitar looks a lot nicer"; the rack now hides with HIDE RACK):
+  the defaults are 0.4's again, `GUITAR_ZOOM=1 GUITAR_NUT_X=1560 GUITAR_NECK_Y=550` (the geometry identical to 0.4.7's).
+  The headstock is off the window's right edge at this size (still modelled: `GUITAR_VIEW=full` shows it). 0.5.0-0.6.2's
+  smaller guitar: `GUITAR_ZOOM=0.67 GUITAR_NUT_X=1090 GUITAR_NECK_Y=670`.
 - **Headstock (0.5.0):** `headstock-outline.json`, traced off the owner's photo of a 7-string's headstock (OpenCV: the
   dark headstock against a pale wall, the tuners taken off by erosion, the bevel stripe's slot closed, the thin pointed
   tip put back from the unprocessed mask), in mm from where it leaves the nut (+y the low strings' side), scaled so the

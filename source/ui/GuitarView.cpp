@@ -300,6 +300,19 @@ GuitarView::GuitarView (ParagonX1AudioProcessor& p)
     rack.onPageChanged = [this] { showRackPage(); };
     showRackPage();
 
+    // 0.6.3: HIDE RACK (the owner: "we're not going to need it once the settings are set, and then we can have the
+    // bigger guitar"), saved with the project.
+    rackButton.setComponentID ("rackButton");
+    rackButton.setTooltip ("Hide the rack to see the whole guitar; show it again to change the settings");
+    rackButton.setColour (juce::TextButton::buttonColourId, juce::Colour (0xe6151217));
+    rackButton.onClick = [this]
+    {
+        processor.setRackHidden (rack.isVisible());
+        showRack (! processor.isRackHidden());
+    };
+    addAndMakeVisible (rackButton);
+    showRack (! processor.isRackHidden());
+
     setMouseCursor (juce::MouseCursor::NormalCursor);
     refresh();
     startTimerHz (30);
@@ -311,6 +324,7 @@ void GuitarView::resized()
 {
     // Knob row 1 (where the reference has its tone knobs), row 2, the OUTPUT box: as the approved mock-up.
     rack.setBounds (at (8, 66, 1584, 300));
+    rackButton.setBounds (at (1462, 866, 110, 26));   // (clear of the window's resize corner)
     ParamControl* knobs[] = { &tone, &bite, &attack, &transpose, &velToVol, &release, &polyWindow, &variation };
     for (int i = 0; i < GuitarRack::numKnobs; ++i)
         knobs[i]->setBounds (rack.knobCell (i));
@@ -332,6 +346,12 @@ void GuitarView::resized()
     releaseNoise.setBounds (rack.noiseKnobCell (0));
     scrapes.setBounds (rack.noiseKnobCell (1));
     fretNoise.setBounds (rack.noiseKnobCell (2));
+}
+
+void GuitarView::showRack (bool shown)
+{
+    rack.setVisible (shown);
+    rackButton.setButtonText (shown ? "HIDE RACK" : "SHOW RACK");
 }
 
 void GuitarView::showRackPage()
@@ -470,6 +490,8 @@ void GuitarView::refresh()
         rack.setMeterDb (meterDb);
     }
 
+    if (rack.isVisible() == processor.isRackHidden())
+        showRack (! processor.isRackHidden());   // (a project loaded with the page open)
     performance.setSelectedId ((int) processor.currentPerformance() + 1, juce::dontSendNotification);
     const auto variationValue = processor.getParameters().getRawParameterValue (ParamIDs::variation)->load();
     variationOn.setToggleState (variationValue > 0.0f, juce::dontSendNotification);
@@ -529,9 +551,9 @@ void GuitarView::paintNeck (juce::Graphics& g)
     }
     for (int s = 0; s < guitar::numStrings; ++s)
     {
-        // (past the headstock's tip, by the window's right edge: 0.5.0's smaller guitar ends inside the window)
-        const auto x = 1582.0f;
-        const auto y = stringY (s, fretX (0)) + (stringY (s, fretX (0)) - stringY (3, fretX (0))) * 0.1f;
+        // (just past the nut, by the window's right edge: 0.6.3's full-size guitar, as 0.4's)
+        const auto x = 1585.0f;
+        const auto y = stringY (s, 1584.0f);
         text (g, juce::String (guitar::playerNumber (s)) + guitar::stringName (s), { x - 13.0f, y - 7.0f, 26.0f, 14.0f },
               Fretboard::stringColour (s).withAlpha (forced == s ? 1.0f : 0.8f), 9.0f, true, juce::Justification::centred);
     }

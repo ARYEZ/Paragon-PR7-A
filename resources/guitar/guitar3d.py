@@ -550,9 +550,11 @@ cam_data.ortho_scale = WIDTH / 2000.0 * (1576 / WIDTH) if WIDTH else 0.788    # 
 # 0.67, 2000 px a metre; 1 was 0.4's 3000), the nut at GUITAR_NUT_X px (1090: the whole headstock in the window) and
 # the neck's centre line at GUITAR_NECK_Y px (670) in the window. 0.4.x's picture: GUITAR_ZOOM=1 GUITAR_NUT_X=1560
 # GUITAR_NECK_Y=550.
-ZOOM = float(os.environ.get("GUITAR_ZOOM", "0.67"))
-VIEW_NUT_X = float(os.environ.get("GUITAR_NUT_X", "1090"))
-VIEW_NECK_Y = float(os.environ.get("GUITAR_NECK_Y", "670"))
+# 0.6.3: back to 0.4's full size at the owner's ask ("the bigger guitar looks a lot nicer"; the rack now hides): the
+# defaults 1 / 1560 / 550 again (0.5.0-0.6.2's smaller guitar: GUITAR_ZOOM=0.67 GUITAR_NUT_X=1090 GUITAR_NECK_Y=670).
+ZOOM = float(os.environ.get("GUITAR_ZOOM", "1"))
+VIEW_NUT_X = float(os.environ.get("GUITAR_NUT_X", "1560"))
+VIEW_NECK_Y = float(os.environ.get("GUITAR_NECK_Y", str(NECK_Y_1X)))
 VIEW_PX_PER_M = PX_PER_M * ZOOM
 cam_data.ortho_scale = WIDTH_1X / VIEW_PX_PER_M
 cam = link(bpy.data.objects.new("camera", cam_data))

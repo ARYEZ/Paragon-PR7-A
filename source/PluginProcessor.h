@@ -128,6 +128,9 @@ public:
     Performance currentPerformance() const;
     int getActiveVoices() const noexcept { return guitar.getActiveVoices(); }
     juce::ChangeBroadcaster guitarBroadcaster;   // the guitar loaded, an import finished
+    // 0.6.3: the GUITAR page's rack hidden (HIDE RACK: the whole guitar shows), saved with the project.
+    bool isRackHidden() const { return (bool) parameters.state.getProperty ("rackHidden", false); }
+    void setRackHidden (bool hidden) { parameters.state.setProperty ("rackHidden", hidden, nullptr); }
     bool waitUntilIdle (int timeoutMs);          // tests: until loading and importing are done
     void setLibraryForTest (std::shared_ptr<const guitar::Library> l) { installLibrary (std::move (l)); }   // tests, snapshots
 
