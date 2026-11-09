@@ -271,8 +271,12 @@ void RendersPage::StringRow::refresh()
         text = report;
     else
     {
-        const auto n = processor.getLibrary()->count (a, string);
-        text = n == 0 ? juce::String ("Not imported") : juce::String (n) + " of " + juce::String (guitar::Library::takesPerString (a)) + " takes";
+        // 0.6.1: the import leaves out copies (renders of the same recording as another round-robin: the reference has
+        // fewer palm mutes a stroke than the 8 the list asks for), so "494 of 2000" read as a failed load: say what's there.
+        const auto n = processor.getLibrary()->count (a, string), rendered = guitar::Library::takesPerString (a);
+        text = n == 0 ? juce::String ("Not imported")
+             : n >= rendered ? juce::String (n) + " takes"
+                             : juce::String (n) + " different takes (the other " + juce::String (rendered - n) + " notes rendered were copies of these, left out)";
     }
     if (status.getText() != text)
     {

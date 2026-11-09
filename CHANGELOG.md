@@ -2,6 +2,14 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.6.1
+
+**The palm-mute rows say what's really there, and a check for the thin strings' palm mutes.**
+
+- **"494 of 2000 takes" looked like a failed load, but it wasn't.** Each palm-mute list renders 8 takes of every stroke, more than your guitar instrument has, so that none are missed. The importer leaves out the renders that are exact copies of an earlier take (playing a copy as if it were a different take is what made 0.2.1 sound like a machine gun). The rows now say, for example, "494 different takes (the other 1506 notes rendered were copies of these, left out)". Everything you imported was loading and playing all along.
+- **The palm mute check** (`PR7-I Palm Mute Check.mid`, about 4.3 minutes): five palm-muted notes from the high E down to the low A, each played 16 times down and 16 times up. Your imports kept about 4 different palm mutes a stroke on the low A but only about 2 on the high E. Rendered once, this check shows whether your guitar instrument really has fewer on the thin strings, or whether the copy test is merging takes that are only nearly the same: it now says how alike the "copies" are (the original's true repeats are identical: 1.0000).
+- Nothing about the sound changed.
+
 ## 0.6.0
 
 **The noises: release noises, scrapes and fret noise, from your guitar instrument.** This is the biggest thing your renders were missing next to the original: the small sounds a real guitar makes between notes.

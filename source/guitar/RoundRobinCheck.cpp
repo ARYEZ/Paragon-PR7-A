@@ -7,40 +7,52 @@
 
 namespace guitar::renders::rrcheck
 {
-    const std::vector<Group>& groups()
+    const std::vector<Group>& groups (Check check)
     {
         static const std::vector<Group> g {
             { Articulation::sustain, 0, 0, 118, "Sustain, low A open, hard" },
             { Articulation::mute, 0, 0, 100, "Palm mute, low A open" },
             { Articulation::sustain, 3, 5, 85, "Sustain, D string 5th fret, medium" } };
-        return g;
+        // 0.6.1: palm mutes from the thin strings down (velocity: the degree of muting, the list's 64 = the middle one).
+        static const std::vector<Group> pm {
+            { Articulation::mute, 6, 0, 64, "Palm mute, high E open, middle" },
+            { Articulation::mute, 6, 7, 64, "Palm mute, high E 7th fret, middle" },
+            { Articulation::mute, 5, 0, 64, "Palm mute, B string open, middle" },
+            { Articulation::mute, 4, 5, 115, "Palm mute, G string 5th fret, least muted" },
+            { Articulation::mute, 0, 0, 64, "Palm mute, low A open, middle" } };
+        return check == Check::palmMute ? pm : g;
     }
 
-    std::vector<ProbeTake> takes()
+    double slotFor (Check check) noexcept { return check == Check::palmMute ? 1.6 : slotSeconds; }
+    double holdFor (Check check) noexcept { return check == Check::palmMute ? 1.0 : holdSeconds; }
+
+    juce::String fileNameFor (Check check) { return check == Check::palmMute ? juce::String ("PR7-I Palm Mute Check") : fileName; }
+
+    std::vector<ProbeTake> takes (Check check)
     {
         std::vector<ProbeTake> result;
         auto t = leadInSeconds + noteDelaySeconds;
-        for (int g = 0; g < (int) groups().size(); ++g)
+        for (int g = 0; g < (int) groups (check).size(); ++g)
             for (const auto stroke : { Stroke::down, Stroke::up })
                 for (int r = 0; r < repeats; ++r)
                 {
                     result.push_back ({ g, stroke, r, t });
-                    t += slotSeconds;
+                    t += slotFor (check);
                 }
         return result;
     }
 
-    double lengthSeconds()
+    double lengthSeconds (Check check)
     {
-        return leadInSeconds + slotSeconds * (double) takes().size();
+        return leadInSeconds + slotFor (check) * (double) takes (check).size();
     }
 
-    juce::MidiFile toMidi()
+    juce::MidiFile toMidi (Check check)
     {
         constexpr int ppq = 960;
         const auto ticks = [] (double seconds) { return seconds * bpm / 60.0 * ppq; };
         juce::MidiMessageSequence track;
-        track.addEvent (juce::MidiMessage::textMetaEvent (3, fileName));
+        track.addEvent (juce::MidiMessage::textMetaEvent (3, fileNameFor (check)));
         track.addEvent (juce::MidiMessage::tempoMetaEvent (juce::roundToInt (60.0e6 / bpm)));
         track.addEvent (juce::MidiMessage::timeSignatureMetaEvent (4, 4));
         const auto key = [&] (int note, double at)
@@ -49,18 +61,18 @@ namespace guitar::renders::rrcheck
             track.addEvent (juce::MidiMessage::noteOff (1, note).withTimeStamp (ticks (at + 0.05)));
         };
         key (keys::legatoOff, 0.75);
-        for (const auto& take : takes())
+        for (const auto& take : takes (check))
         {
-            const auto& g = groups()[(size_t) take.group];
+            const auto& g = groups (check)[(size_t) take.group];
             const auto slot = take.noteSeconds - noteDelaySeconds;
             key (keys::forceStringLowA + g.string, slot);
             key (g.articulation == Articulation::mute ? keys::mute : keys::sustain, slot + 0.05);
             key (take.stroke == Stroke::down ? keys::pickDown : keys::pickUp, slot + 0.1);
             const auto note = noteOf (g.string, g.fret);
             track.addEvent (juce::MidiMessage::noteOn (1, note, (juce::uint8) g.velocity).withTimeStamp (ticks (take.noteSeconds)));
-            track.addEvent (juce::MidiMessage::noteOff (1, note).withTimeStamp (ticks (take.noteSeconds + holdSeconds)));
+            track.addEvent (juce::MidiMessage::noteOff (1, note).withTimeStamp (ticks (take.noteSeconds + holdFor (check))));
         }
-        track.addEvent (juce::MidiMessage::endOfTrack().withTimeStamp (ticks (lengthSeconds())));
+        track.addEvent (juce::MidiMessage::endOfTrack().withTimeStamp (ticks (lengthSeconds (check))));
         track.sort();
         track.updateMatchedPairs();
         juce::MidiFile file;
@@ -119,8 +131,14 @@ namespace guitar::renders::rrcheck
         juce::StringArray o;
         for (const auto r : order)
             o.add (juce::String (r));
-        return name + ", " + (stroke == Stroke::down ? "down" : "up") + ": " + juce::String (different) + " different"
-             + (different > 1 ? (inTurn ? ", in turn" : ", not in a fixed order") : juce::String()) + " (" + o.joinIntoString (" ") + ")";
+        auto text = name + ", " + (stroke == Stroke::down ? "down" : "up") + ": " + juce::String (different) + " different"
+                  + (different > 1 ? (inTurn ? ", in turn" : ", not in a fixed order") : juce::String()) + " (" + o.joinIntoString (" ") + ")";
+        // 0.6.1: how alike its copies are (1.000: exact) and its closest different takes.
+        if (different < (int) order.size())
+            text << "; copies alike " << juce::String (copiesAlike, 4);
+        if (different > 1)
+            text << "; different ones at most " << juce::String (closestDifferent, 3) << " alike";
+        return text;
     }
 
     int Report::fewest() const
@@ -141,10 +159,10 @@ namespace guitar::renders::rrcheck
         return lines.joinIntoString ("\n");
     }
 
-    Report analyse (const float* audio, int numSamples, double sampleRate)
+    Report analyse (const float* audio, int numSamples, double sampleRate, Check check)
     {
         Report report;
-        const auto list = takes();
+        const auto list = takes (check);
         const auto at = [sampleRate] (double s) { return (int) std::lround (s * sampleRate); };
         if ((double) numSamples / sampleRate < list.back().noteSeconds + 0.5)
         {
@@ -171,7 +189,7 @@ namespace guitar::renders::rrcheck
                 }
         }
         const auto length = at (compareSeconds);
-        for (int g = 0; g < (int) groups().size(); ++g)
+        for (int g = 0; g < (int) groups (check).size(); ++g)
             for (const auto stroke : { Stroke::down, Stroke::up })
             {
                 std::vector<std::vector<float>> cuts;
@@ -187,7 +205,7 @@ namespace guitar::renders::rrcheck
                     }
                 const auto ids = sameAs (cuts, sampleRate);
                 Result r;
-                r.name = groups()[(size_t) g].name;
+                r.name = groups (check)[(size_t) g].name;
                 r.stroke = stroke;
                 r.different = ids.empty() ? 0 : *std::max_element (ids.begin(), ids.end()) + 1;
                 for (const auto id : ids)
@@ -196,12 +214,30 @@ namespace guitar::renders::rrcheck
                 r.inTurn = true;
                 for (size_t i = 0; i < ids.size(); ++i)
                     r.inTurn = r.inTurn && ids[i] == (int) (i % (size_t) std::max (1, r.different));
+                // 0.6.1: how alike the copies and the closest different recordings are.
+                {
+                    const auto maxShift = std::max (1, (int) std::lround (0.0005 * sampleRate));
+                    std::vector<size_t> firsts ((size_t) r.different, 0);
+                    std::vector<bool> seen ((size_t) r.different, false);
+                    for (size_t i = 0; i < ids.size(); ++i)
+                        if (! seen[(size_t) ids[i]])
+                        {
+                            seen[(size_t) ids[i]] = true;
+                            firsts[(size_t) ids[i]] = i;
+                        }
+                    for (size_t i = 0; i < ids.size(); ++i)
+                        if (firsts[(size_t) ids[i]] != i)
+                            r.copiesAlike = std::min (r.copiesAlike, likeness (cuts[firsts[(size_t) ids[i]]], cuts[i], maxShift));
+                    for (size_t a = 0; a < firsts.size(); ++a)
+                        for (size_t b = a + 1; b < firsts.size(); ++b)
+                            r.closestDifferent = std::max (r.closestDifferent, likeness (cuts[firsts[a]], cuts[firsts[b]], maxShift));
+                }
                 report.results.push_back (r);
             }
         return report;
     }
 
-    Report analyseFile (const juce::File& file)
+    Report analyseFile (const juce::File& file, Check check)
     {
         juce::AudioFormatManager formats;
         formats.registerBasicFormats();
@@ -220,6 +256,6 @@ namespace guitar::renders::rrcheck
             buffer.addFrom (0, 0, buffer, 1, 0, frames);
             buffer.applyGain (0, 0, frames, 0.5f);
         }
-        return analyse (buffer.getReadPointer (0), frames, reader->sampleRate);
+        return analyse (buffer.getReadPointer (0), frames, reader->sampleRate, check);
     }
 }

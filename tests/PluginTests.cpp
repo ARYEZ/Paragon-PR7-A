@@ -326,7 +326,7 @@ TEST_CASE ("THE WINDOW: GUITAR, RENDERS, PRESETS and SETTINGS tabs; the GUITAR p
     CHECK (view->getGuitarView().isVisible());
 
     // The rows of RENDERS: each string's, what's there for it.
-    CHECK (view->getRendersPage().getRow (0).getStatus() == "25 of 300 takes");
+    CHECK (view->getRendersPage().getRow (0).getStatus().startsWith ("25 different takes (the other 275"));   // (0.6.1: what's there, not "of 300")
     view->getRendersPage().refresh();
     CHECK (view->getRendersPage().getGuitarStatus().contains ("175 takes"));
 
