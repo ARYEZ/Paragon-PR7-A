@@ -61,8 +61,14 @@ jobs:
       - name: Validate with pluginval
         shell: bash
         run: |
-          curl -sSL -o pluginval.zip \
-            "https://github.com/Tracktion/pluginval/releases/download/${PLUGINVAL_VERSION}/${{ matrix.pluginval_zip }}"
+          # The download can come down broken (PR7-A 0.3.3's Windows job, November 2026: an incomplete zip, so pluginval
+          # never ran): retry it, checking the zip each time.
+          for try in 1 2 3 4 5; do
+            curl -sSL --retry 3 -o pluginval.zip \
+              "https://github.com/Tracktion/pluginval/releases/download/${PLUGINVAL_VERSION}/${{ matrix.pluginval_zip }}" \
+              && unzip -tq pluginval.zip > /dev/null && break
+            echo "pluginval download broken, try $((try + 1)) of 5"; sleep $((try * 5))
+          done
           unzip -q pluginval.zip
           PLUGIN="build/ParagonX1_artefacts/Release/VST3/Paragon PR7-A.vst3"
           RUN="${{ matrix.pluginval_bin }} --strictness-level 10 --validate-in-process --validate"
