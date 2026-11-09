@@ -19,7 +19,14 @@
 //     how alike its closest different takes are, so it shows whether the 0.99 copy test merges real takes.
 namespace guitar::renders::rrcheck
 {
-    enum class Check { roundRobin, palmMute };
+    // 0.6.2, THE ORDER CHECK (Check::order): the palm mute check found 8 different downs and 6 ups on every string (exact
+    //     copies 1.0000, different takes at most 0.988 alike), yet the palm-mute lists' imports kept ~2 a stroke on the
+    //     high E. The lists alternate down, up, down, up with a picking keyswitch (C7 / C#7) before every note; the check
+    //     played each stroke's 16 in a row, and every new note's pattern there began again at take 1, after a picking
+    //     change. So: the high E open palm-muted in the lists' order; the same strokes with the reference's ALTERNATE
+    //     picking mode (D7) set once and no picking keys; the low A open in the lists' order. If the first gives few
+    //     different takes and the second all of them, the picking keys restart the reference's cycle.
+    enum class Check { roundRobin, palmMute, order };
     inline constexpr int repeats = 16;
     inline constexpr double slotSeconds = 2.5, holdSeconds = 2.0;   // (the round-robin check's; palm mute: slotFor / holdFor)
     double slotFor (Check) noexcept;
@@ -27,7 +34,9 @@ namespace guitar::renders::rrcheck
     inline constexpr double compareSeconds = 0.25;
     inline constexpr double sameAbove = 0.99;
 
-    struct Group { Articulation articulation; int string, fret, velocity; juce::String name; };
+    // style (0.6.2): 0 each stroke's repeats in a row (downs, then ups); 1 down, up, down, up with a picking key before
+    // each (as the render lists); 2 the same strokes with ALTERNATE picking set once, no picking keys.
+    struct Group { Articulation articulation; int string, fret, velocity; juce::String name; int style = 0; };
     const std::vector<Group>& groups (Check = Check::roundRobin);
 
     struct ProbeTake { int group = 0; Stroke stroke = Stroke::down; int repeat = 0; double noteSeconds = 0.0; };

@@ -512,7 +512,7 @@ TEST_CASE ("Write the render lists", "[.][render-lists]")
 {
     const auto folder = juce::File (juce::SystemStats::getEnvironmentVariable ("PARAGON_RENDER_LISTS", "render-lists"));
     folder.createDirectory();
-    for (const auto check : { renders::rrcheck::Check::roundRobin, renders::rrcheck::Check::palmMute })
+    for (const auto check : { renders::rrcheck::Check::roundRobin, renders::rrcheck::Check::palmMute, renders::rrcheck::Check::order })
     {
         const auto file = folder.getChildFile (renders::rrcheck::fileNameFor (check) + ".mid");
         file.deleteFile();
@@ -991,6 +991,32 @@ TEST_CASE ("THE PALM MUTE CHECK 0.6.1: its list; how alike its copies and differ
     CHECK (notes == 160);
     CHECK (mutes == 160);
     CHECK (highE == 64);
+    // 0.6.2, the order check: the high E open in the lists' order (down, up..., a picking key before each), the same
+    // with ALTERNATE picking set once (no picking keys), the low A in the lists' order.
+    {
+        constexpr auto oc = Check::order;
+        const auto orderTakes = takes (oc);
+        REQUIRE (orderTakes.size() == 3 * 2 * repeats);
+        CHECK (orderTakes[0].stroke == Stroke::down);
+        CHECK (orderTakes[1].stroke == Stroke::up);
+        CHECK (orderTakes[1].group == 0);
+        CHECK_THAT (lengthSeconds (oc) / 60.0, WithinAbs ((2.0 + 96 * 1.6) / 60.0, 1e-9));
+        CHECK (fileNameFor (oc) == "PR7-I Order Check");
+        auto f = toMidi (oc);
+        juce::MidiMessageSequence orderSeq (*f.getTrack (0));
+        auto pickKeys = 0, alternateKeys = 0, played = 0;
+        for (int i = 0; i < orderSeq.getNumEvents(); ++i)
+            if (const auto& m = orderSeq.getEventPointer (i)->message; m.isNoteOn())
+            {
+                pickKeys += m.getNoteNumber() == renders::keys::pickDown || m.getNoteNumber() == renders::keys::pickUp ? 1 : 0;
+                alternateKeys += m.getNoteNumber() == 110 ? 1 : 0;
+                played += m.getNoteNumber() >= lowestNote && m.getNoteNumber() <= highestNote ? 1 : 0;
+            }
+        CHECK (played == 96);
+        CHECK (pickKeys == 64);       // the two sections in the lists' order: one before each note
+        CHECK (alternateKeys == 1);   // the ALTERNATE section: set once
+    }
+
     // The round-robin check is just as it was (the owner's render of it still analyses the same).
     CHECK (takes().size() == 3 * 2 * repeats);
     CHECK_THAT (lengthSeconds() / 60.0, WithinAbs (4.03, 0.01));
@@ -1030,11 +1056,14 @@ TEST_CASE ("THE PALM MUTE CHECK 0.6.1: its list; how alike its copies and differ
     CHECK (report.results[4].copiesAlike > 0.99);
 }
 
-// PARAGON_PM_CHECK=<render of the palm mute check list> ./GuitarCoreTests "[pm-check]": what it says about the palm mutes.
+// PARAGON_PM_CHECK=<render of the palm mute check list> ./GuitarCoreTests "[pm-check]": what it says about the palm mutes
+// (PARAGON_ORDER_CHECK=<render of the order check> instead: that one's).
 TEST_CASE ("Analyse a render of the palm mute check list", "[.][pm-check]")
 {
-    const auto report = renders::rrcheck::analyseFile (juce::File (juce::SystemStats::getEnvironmentVariable ("PARAGON_PM_CHECK", "")),
-                                                       renders::rrcheck::Check::palmMute);
+    const auto order = juce::SystemStats::getEnvironmentVariable ("PARAGON_ORDER_CHECK", "");
+    const auto report = order.isNotEmpty() ? renders::rrcheck::analyseFile (juce::File (order), renders::rrcheck::Check::order)
+                                           : renders::rrcheck::analyseFile (juce::File (juce::SystemStats::getEnvironmentVariable ("PARAGON_PM_CHECK", "")),
+                                                                            renders::rrcheck::Check::palmMute);
     std::cout << report.summary() << std::endl;
 }
 
