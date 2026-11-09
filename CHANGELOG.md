@@ -2,6 +2,14 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.3.1
+
+**As PR7-I 0.6.1: the palm-mute rows say what's really there, and a palm mute check for the thin strings.**
+
+- **The rows no longer say "N of 2000 takes".** Each palm-mute list renders 8 takes of every stroke, more than your guitar instrument has, and the importer leaves out exact copies. The rows now say, for example, "494 different takes (the other 1506 notes rendered were copies of these, left out)". Everything imported was loading all along.
+- **The palm mute check** (`PR7-A Palm Mute Check.mid`, about 4.3 minutes): five palm-muted notes from the high E down to the low A, 16 downs and 16 ups each, to show how many different palm mutes Rogue has on the thin strings.
+- Nothing about the sound changed.
+
 ## 0.3.0
 
 **The noises, as PR7-I 0.6.0: release noises, scrapes and fret noise, from your guitar instrument.** Everything works exactly as in PR7-I's new version, with PR7-A's own list names.

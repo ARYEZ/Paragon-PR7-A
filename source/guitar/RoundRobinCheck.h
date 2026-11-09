@@ -12,21 +12,30 @@
 //     whose shapes match (a normalised correlation of `sameAbove` or more, the best within a few samples' shift) are the
 //     same recording. Groups of matching takes are the instrument's round-robins; the order they came in shows how it
 //     cycles them (in turn: "1 2 3 4 1 2 3 4"; at random otherwise).
+//   - 0.6.1, THE PALM MUTE CHECK (Check::palmMute): the owner's palm-mute imports kept fewer different takes on the thin
+//     strings (about 4 a stroke on the low A, 2 on the high E, of the 8 rendered): five palm-muted notes from the high E
+//     down to the low A, each 16 downs then 16 ups (the factory C#-1, velocity choosing the degree), 1 s in 1.6 s slots.
+//     Each result also says how alike its "copies" are (the reference's own repeats measured 1.000: bit-identical) and
+//     how alike its closest different takes are, so it shows whether the 0.99 copy test merges real takes.
 namespace guitar::renders::rrcheck
 {
+    enum class Check { roundRobin, palmMute };
     inline constexpr int repeats = 16;
-    inline constexpr double slotSeconds = 2.5, holdSeconds = 2.0;
+    inline constexpr double slotSeconds = 2.5, holdSeconds = 2.0;   // (the round-robin check's; palm mute: slotFor / holdFor)
+    double slotFor (Check) noexcept;
+    double holdFor (Check) noexcept;
     inline constexpr double compareSeconds = 0.25;
     inline constexpr double sameAbove = 0.99;
 
     struct Group { Articulation articulation; int string, fret, velocity; juce::String name; };
-    const std::vector<Group>& groups();
+    const std::vector<Group>& groups (Check = Check::roundRobin);
 
     struct ProbeTake { int group = 0; Stroke stroke = Stroke::down; int repeat = 0; double noteSeconds = 0.0; };
-    std::vector<ProbeTake> takes();
-    double lengthSeconds();
-    juce::MidiFile toMidi();
+    std::vector<ProbeTake> takes (Check = Check::roundRobin);
+    double lengthSeconds (Check = Check::roundRobin);
+    juce::MidiFile toMidi (Check = Check::roundRobin);
     inline const juce::String fileName = "PR7-A Round-Robin Check";
+    juce::String fileNameFor (Check);   // "PR7-A Round-Robin Check", "PR7-A Palm Mute Check"
 
     // Which takes are the same recording: 0, 1, 2... by first appearance, one per take given.
     std::vector<int> sameAs (const std::vector<std::vector<float>>& takes, double sampleRate);
@@ -38,6 +47,8 @@ namespace guitar::renders::rrcheck
         int different = 0;        // of `repeats`
         std::vector<int> order;   // each take's recording (1-based)
         bool inTurn = false;      // the recordings come round in a fixed cycle
+        double copiesAlike = 1.0;     // 0.6.1: the least alike a take is to the first of its recording (1.000: an exact copy)
+        double closestDifferent = 0.0;   // 0.6.1: the most alike two different recordings are
         juce::String describe() const;   // "Sustain, low A open, hard, down: 4 different, in turn (1 2 3 4 1 2 3 4 ...)"
     };
     struct Report
@@ -48,6 +59,6 @@ namespace guitar::renders::rrcheck
         juce::String summary() const;
     };
     // Analyses a render of the check list (mono, at `sampleRate`).
-    Report analyse (const float* audio, int numSamples, double sampleRate);
-    Report analyseFile (const juce::File&);
+    Report analyse (const float* audio, int numSamples, double sampleRate, Check = Check::roundRobin);
+    Report analyseFile (const juce::File&, Check = Check::roundRobin);
 }

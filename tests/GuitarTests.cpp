@@ -512,11 +512,12 @@ TEST_CASE ("Write the render lists", "[.][render-lists]")
 {
     const auto folder = juce::File (juce::SystemStats::getEnvironmentVariable ("PARAGON_RENDER_LISTS", "render-lists"));
     folder.createDirectory();
+    for (const auto check : { renders::rrcheck::Check::roundRobin, renders::rrcheck::Check::palmMute })
     {
-        const auto file = folder.getChildFile (renders::rrcheck::fileName + ".mid");
+        const auto file = folder.getChildFile (renders::rrcheck::fileNameFor (check) + ".mid");
         file.deleteFile();
         juce::FileOutputStream out (file);
-        REQUIRE (renders::rrcheck::toMidi().writeTo (out));
+        REQUIRE (renders::rrcheck::toMidi (check).writeTo (out));
     }
     for (const auto a : { Articulation::sustain, Articulation::mute })
         for (int s = 0; s < numStrings; ++s)
@@ -965,6 +966,76 @@ TEST_CASE ("THE ROUND-ROBIN CHECK: its list; how many different takes each strok
     CHECK (report.fewest() == 3);
     std::vector<float> silence (audio.size(), 0.0f);
     CHECK (analyse (silence.data(), (int) silence.size(), rate).error.isNotEmpty());
+}
+
+TEST_CASE ("THE PALM MUTE CHECK 0.6.1: its list; how alike its copies and different takes are", "[guitar][renders]")
+{
+    using namespace renders::rrcheck;
+    constexpr auto pm = Check::palmMute;
+    const auto list = takes (pm);
+    REQUIRE (list.size() == 5 * 2 * repeats);
+    CHECK_THAT (lengthSeconds (pm), WithinAbs (2.0 + 160 * 1.6, 1e-9));
+    CHECK (fileNameFor (pm) == "PR7-A Palm Mute Check");
+    // Its MIDI: every note palm-muted (C#-1 before it), the high E's first.
+    auto file = toMidi (pm);
+    file.convertTimestampTicksToSeconds();
+    juce::MidiMessageSequence seq (*file.getTrack (0));
+    auto notes = 0, mutes = 0, highE = 0;
+    for (int i = 0; i < seq.getNumEvents(); ++i)
+        if (const auto& m = seq.getEventPointer (i)->message; m.isNoteOn())
+        {
+            notes += m.getNoteNumber() >= lowestNote && m.getNoteNumber() <= highestNote ? 1 : 0;
+            mutes += m.getNoteNumber() == renders::keys::mute ? 1 : 0;
+            highE += m.getNoteNumber() == renders::keys::forceStringLowA + 6 ? 1 : 0;
+        }
+    CHECK (notes == 160);
+    CHECK (mutes == 160);
+    CHECK (highE == 64);
+    // The round-robin check is just as it was (the owner's render of it still analyses the same).
+    CHECK (takes().size() == 3 * 2 * repeats);
+    CHECK_THAT (lengthSeconds() / 60.0, WithinAbs (4.03, 0.01));
+
+    // A made-up render. The high E open's downs: 2 recordings in turn (the rest exact copies); its ups: 6. The B
+    // string's downs: 2 recordings that differ very slightly (0.995 alike: merged as one by the 0.99 test, which its
+    // copies' likeness gives away). The rest: 4 each.
+    constexpr double rate = 16000.0;
+    std::vector<float> audio ((size_t) (lengthSeconds (pm) * rate), 0.0f);
+    for (const auto& t : list)
+    {
+        const auto& g = groups (pm)[(size_t) t.group];
+        const auto recordings = t.group == 0 ? (t.stroke == Stroke::down ? 2 : 6) : 4;
+        const auto recording = t.repeat % recordings;
+        const auto nearCopy = t.group == 2 && t.stroke == Stroke::down;
+        const auto hz = guitar::frequencyOf (noteOf (g.string, g.fret));
+        const auto start = (int) ((t.noteSeconds + 0.01) * rate);
+        for (int i = 0; i < (int) (holdFor (pm) * rate); ++i)
+        {
+            const auto w = juce::MathConstants<double>::twoPi * i / rate;
+            const auto over = nearCopy ? 0.4 * std::sin (w * hz * 3.0) + (recording == 1 ? 0.05 * std::sin (w * hz * 5.0) : 0.0)
+                                       : 0.4 * std::sin (w * hz * (2.0 + recording) + recording);
+            audio[(size_t) (start + i)] += 0.5f * std::exp (-8.0f * (float) i / (float) rate) * (float) (std::sin (w * hz) + over);
+        }
+    }
+    const auto report = analyse (audio.data(), (int) audio.size(), rate, pm);
+    INFO (report.summary());
+    REQUIRE (report.error.isEmpty());
+    REQUIRE (report.results.size() == 10);
+    CHECK (report.results[0].different == 2);
+    CHECK (report.results[0].copiesAlike > 0.9999);                  // exact copies
+    CHECK (report.results[0].closestDifferent < 0.99);
+    CHECK (report.results[0].describe().contains ("copies alike 1.0000"));
+    CHECK (report.results[1].different == 6);
+    CHECK (report.results[4].different == 1);                        // the near copies merged...
+    CHECK (report.results[4].copiesAlike < 0.999);                   // ...but not exact: said
+    CHECK (report.results[4].copiesAlike > 0.99);
+}
+
+// PARAGON_PM_CHECK=<render of the palm mute check list> ./GuitarCoreTests "[pm-check]": what it says about the palm mutes.
+TEST_CASE ("Analyse a render of the palm mute check list", "[.][pm-check]")
+{
+    const auto report = renders::rrcheck::analyseFile (juce::File (juce::SystemStats::getEnvironmentVariable ("PARAGON_PM_CHECK", "")),
+                                                       renders::rrcheck::Check::palmMute);
+    std::cout << report.summary() << std::endl;
 }
 
 // PARAGON_RR_CHECK=<render of the check list> ./GuitarCoreTests "[rr-check]": what it says about the instrument.
