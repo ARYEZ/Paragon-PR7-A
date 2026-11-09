@@ -2,6 +2,14 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.3.2
+
+**As PR7-I 0.6.2: new palm-mute lists ("v2") that capture more different palm mutes, and re-imports that clear old takes.**
+
+- **The v2 lists** play each note's 8 down strokes in a row, then its 8 ups. The first lists alternated down, up, and your guitar instrument only rotates through about 4 palm mutes per stroke when strokes alternate; when a stroke repeats it plays them all. They're named "PR7-A Mute v2 - String 7 (low A)" and so on, about 53 minutes per string, the same settings as before. Renders of the first palm-mute lists won't import correctly: render the v2 lists through Rogue.
+- **Re-importing a string now clears its old takes first**, so earlier ones can't stay behind and play as if they were new.
+- Sustain lists, the sound and your presets are unchanged.
+
 ## 0.3.1
 
 **As PR7-I 0.6.1: the palm-mute rows say what's really there, and a palm mute check for the thin strings.**

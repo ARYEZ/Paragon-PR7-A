@@ -28,12 +28,28 @@ namespace guitar::renders
         auto t = leadInSeconds + noteDelaySeconds;
         for (int fret = 0; fret <= numFrets; ++fret)
             for (int layer = 0; layer < s.layers; ++layer)
+            {
+                if (a == Articulation::mute)
+                {
+                    // 0.6.2 (the "v2" lists): each note's downs in a row, then its ups. The owner's palm mute and order
+                    // checks: Jupiter has 8 down / 6 up palm mutes a note, but plays only ~4 of each when the strokes
+                    // alternate (as the first lists did: down, up, down, up), all of them when a stroke repeats.
+                    for (const auto stroke : { Stroke::down, Stroke::up })
+                        for (int rr = 0; rr < s.roundRobins; ++rr)
+                        {
+                            result.push_back ({ string, fret, layer, stroke, rr, t, a });
+                            t += s.slotSeconds;
+                        }
+                    continue;
+                }
+                // SUSTAIN (fixed: the owner rendered these): down, up, down, up.
                 for (int rr = 0; rr < s.roundRobins; ++rr)
                     for (const auto stroke : { Stroke::down, Stroke::up })
                     {
                         result.push_back ({ string, fret, layer, stroke, rr, t, a });
                         t += s.slotSeconds;
                     }
+            }
         return result;
     }
 
@@ -79,7 +95,10 @@ namespace guitar::renders
     juce::String fileName (Articulation a, int string)
     {
         const auto which = string == 0 ? juce::String ("low A") : string == numStrings - 1 ? juce::String ("high E") : stringName (string);
-        return "PR7-A " + articulationName (a) + " - String " + juce::String (playerNumber (string)) + " (" + which + ")";
+        // (0.6.2: the palm-mute lists in their new order are "v2", so a render of the first ones, whose strokes alternate,
+        // can't be taken for one of these.)
+        return "PR7-A " + articulationName (a) + (a == Articulation::mute ? " v2" : "") + " - String " + juce::String (playerNumber (string))
+             + " (" + which + ")";
     }
 
     juce::String takeFileName (Articulation a, const Take& t)

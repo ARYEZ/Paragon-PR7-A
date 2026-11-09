@@ -512,7 +512,7 @@ TEST_CASE ("Write the render lists", "[.][render-lists]")
 {
     const auto folder = juce::File (juce::SystemStats::getEnvironmentVariable ("PARAGON_RENDER_LISTS", "render-lists"));
     folder.createDirectory();
-    for (const auto check : { renders::rrcheck::Check::roundRobin, renders::rrcheck::Check::palmMute })
+    for (const auto check : { renders::rrcheck::Check::roundRobin, renders::rrcheck::Check::palmMute, renders::rrcheck::Check::order })
     {
         const auto file = folder.getChildFile (renders::rrcheck::fileNameFor (check) + ".mid");
         file.deleteFile();
@@ -914,6 +914,23 @@ TEST_CASE ("IMPORT A RENDER 0.3.0: round-robins that are copies of earlier ones 
     // The guitar then plays the one it has.
     const auto library = Library::load (folder);
     CHECK (library->find (Articulation::sustain, 1, 3, 1, Stroke::down, 1).take == library->find (Articulation::sustain, 1, 3, 1, Stroke::down, 0).take);
+
+    // 0.6.2: re-importing a string clears its earlier takes first. Both round-robins imported, then a render with one
+    // per stroke: the second round-robins (the first import's, now left out as copies) gone, not left to play as if new;
+    // another string untouched.
+    {
+        const auto again = tempGuitar ("Reimport");
+        const auto full = fakeRender (Articulation::sustain, 1, rate, 0.01);
+        REQUIRE (renders::importAudio (full.data(), (int) full.size(), rate, Articulation::sustain, 1, again).written == 300);
+        const auto other = fakeRender (Articulation::sustain, 2, rate, 0.01);
+        REQUIRE (renders::importAudio (other.data(), (int) other.size(), rate, Articulation::sustain, 2, again).ok());
+        CHECK (again.getChildFile ("Sustain/s1_f03_l1_d_r1.wav").existsAsFile());
+        REQUIRE (renders::importAudio (audio.data(), (int) audio.size(), rate, Articulation::sustain, 1, again).written == 150);
+        CHECK_FALSE (again.getChildFile ("Sustain/s1_f03_l1_d_r1.wav").exists());
+        const auto reloaded = Library::load (again);
+        CHECK (reloaded->count (Articulation::sustain, 1) == 150);
+        CHECK (reloaded->count (Articulation::sustain, 2) == 300);
+    }
     folder.getParentDirectory().deleteRecursively();
 }
 
@@ -991,6 +1008,32 @@ TEST_CASE ("THE PALM MUTE CHECK 0.6.1: its list; how alike its copies and differ
     CHECK (notes == 160);
     CHECK (mutes == 160);
     CHECK (highE == 64);
+    // 0.6.2, the order check: the high E open in the lists' order (down, up..., a picking key before each), the same
+    // with ALTERNATE picking set once (no picking keys), the low A in the lists' order.
+    {
+        constexpr auto oc = Check::order;
+        const auto orderTakes = takes (oc);
+        REQUIRE (orderTakes.size() == 3 * 2 * repeats);
+        CHECK (orderTakes[0].stroke == Stroke::down);
+        CHECK (orderTakes[1].stroke == Stroke::up);
+        CHECK (orderTakes[1].group == 0);
+        CHECK_THAT (lengthSeconds (oc) / 60.0, WithinAbs ((2.0 + 96 * 1.6) / 60.0, 1e-9));
+        CHECK (fileNameFor (oc) == "PR7-A Order Check");
+        auto f = toMidi (oc);
+        juce::MidiMessageSequence orderSeq (*f.getTrack (0));
+        auto pickKeys = 0, alternateKeys = 0, played = 0;
+        for (int i = 0; i < orderSeq.getNumEvents(); ++i)
+            if (const auto& m = orderSeq.getEventPointer (i)->message; m.isNoteOn())
+            {
+                pickKeys += m.getNoteNumber() == renders::keys::pickDown || m.getNoteNumber() == renders::keys::pickUp ? 1 : 0;
+                alternateKeys += m.getNoteNumber() == 110 ? 1 : 0;
+                played += m.getNoteNumber() >= lowestNote && m.getNoteNumber() <= highestNote ? 1 : 0;
+            }
+        CHECK (played == 96);
+        CHECK (pickKeys == 64);       // the two sections in the lists' order: one before each note
+        CHECK (alternateKeys == 1);   // the ALTERNATE section: set once
+    }
+
     // The round-robin check is just as it was (the owner's render of it still analyses the same).
     CHECK (takes().size() == 3 * 2 * repeats);
     CHECK_THAT (lengthSeconds() / 60.0, WithinAbs (4.03, 0.01));
@@ -1030,11 +1073,14 @@ TEST_CASE ("THE PALM MUTE CHECK 0.6.1: its list; how alike its copies and differ
     CHECK (report.results[4].copiesAlike > 0.99);
 }
 
-// PARAGON_PM_CHECK=<render of the palm mute check list> ./GuitarCoreTests "[pm-check]": what it says about the palm mutes.
+// PARAGON_PM_CHECK=<render of the palm mute check list> ./GuitarCoreTests "[pm-check]": what it says about the palm mutes
+// (PARAGON_ORDER_CHECK=<render of the order check> instead: that one's).
 TEST_CASE ("Analyse a render of the palm mute check list", "[.][pm-check]")
 {
-    const auto report = renders::rrcheck::analyseFile (juce::File (juce::SystemStats::getEnvironmentVariable ("PARAGON_PM_CHECK", "")),
-                                                       renders::rrcheck::Check::palmMute);
+    const auto order = juce::SystemStats::getEnvironmentVariable ("PARAGON_ORDER_CHECK", "");
+    const auto report = order.isNotEmpty() ? renders::rrcheck::analyseFile (juce::File (order), renders::rrcheck::Check::order)
+                                           : renders::rrcheck::analyseFile (juce::File (juce::SystemStats::getEnvironmentVariable ("PARAGON_PM_CHECK", "")),
+                                                                            renders::rrcheck::Check::palmMute);
     std::cout << report.summary() << std::endl;
 }
 
@@ -1136,8 +1182,16 @@ TEST_CASE ("RENDER LISTS 0.3.0: sustain's exactly as the owner rendered them; pa
     CHECK ((int) list.size() == Library::takesPerString (Articulation::mute));
     CHECK (list[15].roundRobin == 7);
     CHECK (list[16].layer == 1);
+    // 0.6.2: each note's 8 downs in a row, then its 8 ups (Jupiter plays all its palm mutes only when a stroke repeats).
+    for (int i = 0; i < 16; ++i)
+    {
+        CHECK (list[(size_t) i].stroke == (i < 8 ? Stroke::down : Stroke::up));
+        CHECK (list[(size_t) i].roundRobin == i % 8);
+        CHECK (list[(size_t) i].layer == 0);
+    }
+    CHECK (list[16].stroke == Stroke::down);
     CHECK_THAT (list[1].noteSeconds - list[0].noteSeconds, WithinAbs (1.6, 1e-9));
-    CHECK (renders::fileName (Articulation::mute, 0) == "PR7-A Mute - String 7 (low A)");
+    CHECK (renders::fileName (Articulation::mute, 0) == "PR7-A Mute v2 - String 7 (low A)");   // (0.6.2: the new order)
     const auto name = renders::takeFileName (Articulation::mute, list[15]);
     CHECK (name == "Mute/s0_f00_l0_u_r7.wav");
     const auto id = renders::parseTakeFile (juce::File ("/x").getChildFile (name));

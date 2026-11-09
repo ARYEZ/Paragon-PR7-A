@@ -20,25 +20,46 @@ namespace guitar::renders::rrcheck
             { Articulation::mute, 5, 0, 64, "Palm mute, B string open, middle" },
             { Articulation::mute, 4, 5, 115, "Palm mute, G string 5th fret, least muted" },
             { Articulation::mute, 0, 0, 64, "Palm mute, low A open, middle" } };
-        return check == Check::palmMute ? pm : g;
+        // 0.6.2: the order check.
+        static const std::vector<Group> order {
+            { Articulation::mute, 6, 0, 64, "Palm mute, high E open, in the lists' order (a picking key before each note)", 1 },
+            { Articulation::mute, 6, 0, 64, "Palm mute, high E open, ALTERNATE picking set once", 2 },
+            { Articulation::mute, 0, 0, 64, "Palm mute, low A open, in the lists' order", 1 } };
+        return check == Check::palmMute ? pm : check == Check::order ? order : g;
     }
 
-    double slotFor (Check check) noexcept { return check == Check::palmMute ? 1.6 : slotSeconds; }
-    double holdFor (Check check) noexcept { return check == Check::palmMute ? 1.0 : holdSeconds; }
+    double slotFor (Check check) noexcept { return check == Check::roundRobin ? slotSeconds : 1.6; }
+    double holdFor (Check check) noexcept { return check == Check::roundRobin ? holdSeconds : 1.0; }
 
-    juce::String fileNameFor (Check check) { return check == Check::palmMute ? juce::String ("PR7-A Palm Mute Check") : fileName; }
+    juce::String fileNameFor (Check check)
+    {
+        return check == Check::palmMute ? juce::String ("PR7-A Palm Mute Check") : check == Check::order ? juce::String ("PR7-A Order Check") : fileName;
+    }
 
     std::vector<ProbeTake> takes (Check check)
     {
         std::vector<ProbeTake> result;
         auto t = leadInSeconds + noteDelaySeconds;
         for (int g = 0; g < (int) groups (check).size(); ++g)
-            for (const auto stroke : { Stroke::down, Stroke::up })
-                for (int r = 0; r < repeats; ++r)
+        {
+            if (groups (check)[(size_t) g].style == 0)
+            {
+                for (const auto stroke : { Stroke::down, Stroke::up })
+                    for (int r = 0; r < repeats; ++r)
+                    {
+                        result.push_back ({ g, stroke, r, t });
+                        t += slotFor (check);
+                    }
+                continue;
+            }
+            // down, up, down, up (as the render lists play each note's round-robins)
+            for (int r = 0; r < repeats; ++r)
+                for (const auto stroke : { Stroke::down, Stroke::up })
                 {
                     result.push_back ({ g, stroke, r, t });
                     t += slotFor (check);
                 }
+        }
         return result;
     }
 
@@ -67,7 +88,10 @@ namespace guitar::renders::rrcheck
             const auto slot = take.noteSeconds - noteDelaySeconds;
             key (keys::forceStringLowA + g.string, slot);
             key (g.articulation == Articulation::mute ? keys::mute : keys::sustain, slot + 0.05);
-            key (take.stroke == Stroke::down ? keys::pickDown : keys::pickUp, slot + 0.1);
+            if (g.style != 2)
+                key (take.stroke == Stroke::down ? keys::pickDown : keys::pickUp, slot + 0.1);
+            else if (take.repeat == 0 && take.stroke == Stroke::down)
+                key (110, slot + 0.1);   // D7: ALTERNATE picking, once (the first note then down, as the reference starts)
             const auto note = noteOf (g.string, g.fret);
             track.addEvent (juce::MidiMessage::noteOn (1, note, (juce::uint8) g.velocity).withTimeStamp (ticks (take.noteSeconds)));
             track.addEvent (juce::MidiMessage::noteOff (1, note).withTimeStamp (ticks (take.noteSeconds + holdFor (check))));

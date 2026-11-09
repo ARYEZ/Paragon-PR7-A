@@ -149,7 +149,9 @@ void RendersPage::showArticulation (guitar::Articulation a)
     renderHelp.setText ("Render each string's " + listName (a) + " list through your guitar instrument as a DI (its FACTORY articulation "
                         "map, effects off, one guitar, no anti-repetition, ringing or release noises), then import the audio. Each "
                         "string: 25 frets x " + juce::String (spec.layers) + (a == guitar::Articulation::mute ? " degrees of muting" : " dynamics")
-                        + " x " + juce::String (spec.roundRobins) + " takes of each stroke, about " + juce::String (minutes) + " minutes.",
+                        + " x " + juce::String (spec.roundRobins) + " takes of each stroke, about " + juce::String (minutes) + " minutes."
+                        + (a == guitar::Articulation::mute ? juce::String (" Use the v2 lists (each note's downs in a row, then its ups: more different palm mutes); "
+                                                                          "renders of the first lists won't import right.") : juce::String()),
                         juce::dontSendNotification);
     for (auto& row : rows)
         row->refresh();
