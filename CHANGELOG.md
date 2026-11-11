@@ -2,6 +2,16 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.3.4
+
+PR7-I 0.6.4's change.
+
+- When it imports a render, PR7-A leaves out takes that are copies of one it already has. It counted two takes as copies
+  when they were **99% alike**; now it takes **99.9%**. On PR7-I's Jupiter imports the thin strings kept far fewer
+  different palm mutes than the thick ones, and the reference's most alike *different* takes measured 98.8%, right under
+  the old line: some real, different takes were likely being thrown away. Real copies (100% alike) are still left out.
+- Import your Rogue renders with this version or later, so they keep every different take.
+
 ## 0.3.3
 
 PR7-I 0.6.3's changes, with PR7-A's own body.

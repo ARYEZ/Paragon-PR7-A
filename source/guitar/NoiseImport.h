@@ -17,7 +17,7 @@
 //   - CHECKED, so a render made the wrong way never fills the guitar with the wrong sounds: the notes heard (over 40% of
 //     the render loud: the notes' Volume wasn't down) refuses it; so do most releases (or fret noises) silent, and the
 //     unpitched list with a noise on most hits (the pitched releases weren't turned down).
-//   - COPIES left out (rrcheck::sameAs: 0.99 alike): each fret's repeats for the releases, all the hits for the unpitched
+//   - COPIES left out (rrcheck::sameAs: 0.999 alike): each fret's repeats for the releases, all the hits for the unpitched
 //     noises and fret noise; what's left numbered in the order it came (fret noise: the reference's 13 in turn).
 // Saving replaces what that list imported before.
 namespace guitar::noises
