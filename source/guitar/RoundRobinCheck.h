@@ -16,7 +16,7 @@
 //     strings (about 4 a stroke on the low A, 2 on the high E, of the 8 rendered): five palm-muted notes from the high E
 //     down to the low A, each 16 downs then 16 ups (the factory C#-1, velocity choosing the degree), 1 s in 1.6 s slots.
 //     Each result also says how alike its "copies" are (the reference's own repeats measured 1.000: bit-identical) and
-//     how alike its closest different takes are, so it shows whether the 0.99 copy test merges real takes.
+//     how alike its closest different takes are, so it shows whether the copy test merges real takes.
 namespace guitar::renders::rrcheck
 {
     // 0.6.2, THE ORDER CHECK (Check::order): the palm mute check found 8 different downs and 6 ups on every string (exact
@@ -32,7 +32,10 @@ namespace guitar::renders::rrcheck
     double slotFor (Check) noexcept;
     double holdFor (Check) noexcept;
     inline constexpr double compareSeconds = 0.25;
-    inline constexpr double sameAbove = 0.99;
+    // 0.6.4: 0.999 (was 0.99). The reference's copies measured 1.000 (bit-identical), but its closest DIFFERENT palm
+    // mutes 0.988, just under the old line, and the thin strings' v2 imports kept far fewer takes (high E 806, low A
+    // 1531): real takes over 0.99 were likely merged. 0.999 still catches every copy.
+    inline constexpr double sameAbove = 0.999;
 
     // style (0.6.2): 0 each stroke's repeats in a row (downs, then ups); 1 down, up, down, up with a picking key before
     // each (as the render lists); 2 the same strokes with ALTERNATE picking set once, no picking keys.

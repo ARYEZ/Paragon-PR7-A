@@ -528,6 +528,17 @@ TEST_CASE ("Write the render lists", "[.][render-lists]")
             REQUIRE (out.openedOk());
             REQUIRE (renders::toMidi (a, s).writeTo (out));
         }
+    // 0.6.4: the noise lists too (pitched releases per string, power chords, unpitched, fret noise), so one run writes
+    // every list there is.
+    for (int row = 0; row < noises::numRows; ++row)
+    {
+        const auto [list, string] = noises::rowList (row);
+        const auto file = folder.getChildFile (noises::fileName (list, string) + ".mid");
+        file.deleteFile();
+        juce::FileOutputStream out (file);
+        REQUIRE (out.openedOk());
+        REQUIRE (noises::toMidi (list, string).writeTo (out));
+    }
 }
 
 TEST_CASE ("THE NOISE LISTS 0.6.0: their layouts (fixed once sent), notes, keyswitches and times", "[guitar][noises]")
@@ -1039,8 +1050,8 @@ TEST_CASE ("THE PALM MUTE CHECK 0.6.1: its list; how alike its copies and differ
     CHECK_THAT (lengthSeconds() / 60.0, WithinAbs (4.03, 0.01));
 
     // A made-up render. The high E open's downs: 2 recordings in turn (the rest exact copies); its ups: 6. The B
-    // string's downs: 2 recordings that differ very slightly (0.995 alike: merged as one by the 0.99 test, which its
-    // copies' likeness gives away). The rest: 4 each.
+    // string's downs: 2 recordings that differ very slightly (about 0.995 alike: 0.6.4 keeps them apart, where the old
+    // 0.99 line merged them; the reference's own copies are 1.000). The rest: 4 each.
     constexpr double rate = 16000.0;
     std::vector<float> audio ((size_t) (lengthSeconds (pm) * rate), 0.0f);
     for (const auto& t : list)
@@ -1054,7 +1065,7 @@ TEST_CASE ("THE PALM MUTE CHECK 0.6.1: its list; how alike its copies and differ
         for (int i = 0; i < (int) (holdFor (pm) * rate); ++i)
         {
             const auto w = juce::MathConstants<double>::twoPi * i / rate;
-            const auto over = nearCopy ? 0.4 * std::sin (w * hz * 3.0) + (recording == 1 ? 0.05 * std::sin (w * hz * 5.0) : 0.0)
+            const auto over = nearCopy ? 0.4 * std::sin (w * hz * 3.0) + (recording % 2 == 1 ? 0.06 * std::sin (w * hz * 5.0) : 0.0)
                                        : 0.4 * std::sin (w * hz * (2.0 + recording) + recording);
             audio[(size_t) (start + i)] += 0.5f * std::exp (-8.0f * (float) i / (float) rate) * (float) (std::sin (w * hz) + over);
         }
@@ -1068,9 +1079,10 @@ TEST_CASE ("THE PALM MUTE CHECK 0.6.1: its list; how alike its copies and differ
     CHECK (report.results[0].closestDifferent < 0.99);
     CHECK (report.results[0].describe().contains ("copies alike 1.0000"));
     CHECK (report.results[1].different == 6);
-    CHECK (report.results[4].different == 1);                        // the near copies merged...
-    CHECK (report.results[4].copiesAlike < 0.999);                   // ...but not exact: said
-    CHECK (report.results[4].copiesAlike > 0.99);
+    CHECK (report.results[4].different == 2);                        // 0.6.4: the near copies kept apart...
+    CHECK (report.results[4].closestDifferent > 0.99);               // ...though over the old 0.99 line
+    CHECK (report.results[4].closestDifferent < renders::rrcheck::sameAbove);
+    CHECK (report.results[4].copiesAlike > 0.9999);                  // their own repeats exact copies
 }
 
 // PARAGON_PM_CHECK=<render of the palm mute check list> ./GuitarCoreTests "[pm-check]": what it says about the palm mutes

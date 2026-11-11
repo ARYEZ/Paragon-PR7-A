@@ -2,6 +2,19 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.6.4
+
+**More of the different palm mutes kept, on the thin strings especially.**
+
+- When it imports a render, PR7-I leaves out takes that are copies of one it already has (the reference repeats its
+  recordings). It counted two takes as copies when they were **99% alike**; now it takes **99.9%**. Your v2 imports
+  showed why: the low A kept 1531 palm mutes but the high E only 806, and the reference's real copies measure 100% alike
+  while its most alike *different* takes measured 98.8%, right under the old line. On the thin strings some real,
+  different takes were likely being thrown away as copies. Real copies are still left out.
+- **Re-import your palm-mute renders** (the G, B and high E strings at least) to get the takes the old line dropped.
+  Re-importing clears that string's old takes first. Sustain and the noises can stay as they are, but re-importing them
+  does no harm.
+
 ## 0.6.3
 
 **The guitar back to full size, and a HIDE RACK button.**
