@@ -2,6 +2,28 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.4.0
+
+PR7-I 0.7.0's changes: **two finishes for the rack, OBSIDIAN and AURORA**, your choice, as the other PR7s have them.
+SETTINGS > FINISH has the two buttons.
+
+- **OBSIDIAN** is the pearl black rack you've had since 0.2.0, and the default. Every page looks the same as 0.3.4's
+  (apart from the grain fix below, and the new FINISH card on SETTINGS).
+- **AURORA** is a pearl white rack. It's drawn **10% less bright than full white** (pure white becomes 230 out of 255),
+  the same softer white the other PR7s settled on, so it doesn't glare against the dark guitar page. The lettering,
+  the keys and knobs, their neon rings and the orange screens keep their own colours.
+- On both, the keys and knobs are black in neon pink-to-orange rings.
+- **What happens to an old setting:** PR7-A had three finishes in its settings file but no button to choose one, and
+  the rack was always pearl black. If that file says Pearl White, Pearl Black, or nothing at all, PR7-A opens in
+  Obsidian. If it says White + Neon, it opens in Aurora. The choice is saved on this computer, so every PR7-A you open
+  uses it (PR7-A keeps its own setting, apart from PR7-I's).
+- **One change from before:** until now the rack stayed pearl black whatever the finish was. It now follows your
+  choice. If you prefer it always black, stay on Obsidian (nothing changes) and tell me.
+- Also fixed: unless a finish had been saved (and there was no button to save one), the black rack's fine pearl grain
+  was the white finish's speckle. It's now always the one for the finish shown. The difference is tiny (a couple of
+  brightness steps out of 255 on the grain), but it's why the rack can look very slightly different from 0.3.4.
+- The sound, your presets and your imported takes are unchanged.
+
 ## 0.3.4
 
 PR7-I 0.6.4's change.

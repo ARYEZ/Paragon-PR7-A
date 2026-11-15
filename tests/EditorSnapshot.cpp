@@ -13,7 +13,7 @@
 //                                    held, lit on the fretboard; =2 an open power chord and a note up the neck; =3 a
 //                                    palm-muted D5 (rings) and an open high E (a dot)
 //   PARAGON_SNAPSHOT_RENDERS=mute    RENDERS on PALM MUTE
-//   PARAGON_SNAPSHOT_FINISH=0|1|2    the plugin's finish (pearl white, pearl black, pearl white + neon)
+//   PARAGON_SNAPSHOT_FINISH=aurora   the AURORA finish (also =neon or =white); otherwise OBSIDIAN, the default
 //   PARAGON_SNAPSHOT_PROGRESS=1      the progress box: a render import 62% done, with CANCEL
 //   PARAGON_SNAPSHOT_MIDI=1          demo MIDI links and a knob learning (with PAGE=settings: the links list)
 #include <catch2/catch_test_macros.hpp>
@@ -112,8 +112,11 @@ TEST_CASE ("Render the editor to a PNG", "[.][snapshot]")
         processor.startMidiLearn (ParamIDs::handPosition);
     }
 
-    if (const auto f = env ("PARAGON_SNAPSHOT_FINISH"); f.isNotEmpty())
-        Finish::set ((Finish::Type) juce::jlimit (0, 2, f.getIntValue()), false);
+    {
+        // Not saved as the preference.
+        const auto f = env ("PARAGON_SNAPSHOT_FINISH");
+        Finish::set (f == "aurora" || f == "neon" || f == "white" ? Finish::Type::aurora : Finish::Type::obsidian, false);
+    }
     std::unique_ptr<juce::AudioProcessorEditor> editor (processor.createEditor());
     auto* view = dynamic_cast<MainView*> (editor->getChildComponent (0));
     REQUIRE (view != nullptr);

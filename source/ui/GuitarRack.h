@@ -6,8 +6,8 @@
 // "use the rack images from the PR7-G line ... so they look in line with the rest of the family"), drawn with PR7-G's
 // own parts: the pearl black chassis with the red light round it (PedalBody::paintUnit), the PARAGON PR7-I badge,
 // stamped lettering and printed red lines, the orange LED screens, the big knobs with their values on small screens,
-// the small keys with neon stripes, a neon status bar. Always pearl black (PR7-G's Obsidian), whatever the finish, as
-// it sits on the dark guitar page.
+// the small keys with neon stripes, a neon status bar. In the plugin's finish (0.7.0: SETTINGS > FINISH, OBSIDIAN or
+// AURORA; until 0.6.4 it was always pearl black, and there was no choice).
 //
 // Two pages, as PR7-G's units have, chosen by the PAGE keys under the badge: PLAYING (TONE ... VARIATION) and
 // FRETTING (the picking, fretting and performance menus, FORCE STRING, HAND POSITION, CAPO, HAND SPAN, HAND RESET,
@@ -16,10 +16,12 @@
 //
 // Only the unit's face and its page keys: the controls on it (GuitarView's) are its children, laid out in the areas
 // it gives, shown and hidden by GuitarView as the page changes (onPageChanged).
-class GuitarRack final : public juce::Component
+class GuitarRack final : public juce::Component,
+                         private juce::ChangeListener
 {
 public:
     GuitarRack();
+    ~GuitarRack() override;
 
     void paint (juce::Graphics&) override;
     void paintOverChildren (juce::Graphics&) override;
@@ -68,6 +70,7 @@ private:
     juce::Rectangle<int> pageKeyCell (int index) const;
     void paintScreen (juce::Graphics&);
     void paintMeter (juce::Graphics&);
+    void changeListenerCallback (juce::ChangeBroadcaster*) override;   // the finish changed
 
     juce::Image satin;
     Screen screen;

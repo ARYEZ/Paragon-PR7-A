@@ -48,7 +48,8 @@ public:
         float glow = 1.0f;          // how far the light round it spreads (1: the main unit's)
     };
     static void paintUnit (juce::Graphics&, juce::Rectangle<float> chassis, juce::Rectangle<float> face,
-                           const std::function<void (juce::Graphics&)>& drawSatin, Shape);
+                           const std::function<void (juce::Graphics&)>& drawSatin, Shape,
+                           bool dim = true);   // Aurora's pearl less bright, by Finish::auroraDimming (off: the caller dims it once, with what it draws over the face)
     // PARAGON over the PR7 mark, stamped into the face, with the caption printed in red under it (PR7-G's badge;
     // PR7-K: static, the caption passed in).
     static void paintBadge (juce::Graphics&, juce::Rectangle<float> area, const juce::String& caption);

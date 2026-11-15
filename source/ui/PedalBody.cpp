@@ -53,7 +53,7 @@ void PedalBody::paint (juce::Graphics& g)
     using Finish::pick;
 
     auto chassis = getLocalBounds().toFloat().reduced (glowMargin).withTrimmedBottom (glowMarginBelow - glowMargin);
-    paintUnit (g, chassis, geometry.face, [this] (juce::Graphics& gg) { drawSatin (gg); }, {});
+    paintUnit (g, chassis, geometry.face, [this] (juce::Graphics& gg) { drawSatin (gg); }, {}, false);   // dimmed once below, with the panels
 
     // 4. Section panels (the slot row and the footswitch row), set down into
     //    the face: the face's edge casts a shadow along their top, the
@@ -100,6 +100,25 @@ void PedalBody::paint (juce::Graphics& g)
         g.drawRoundedRectangle (bay, 22.0f, 1.0f);
     }
 
+    // Aurora's pearl, all of it (rim, face, panels, insets, the pedal's bay),
+    // 10% less bright (auroraDimming), in one go so no edge is darkened twice; the printing
+    // goes on after, in its own colours.
+    {
+        juce::Path unit;
+        unit.addRoundedRectangle (chassis, Shape{}.chassisRadius);
+        Finish::dimPearl (g, unit);
+
+        // The pedal's bay is its own housing beside the chassis.
+        if (const auto bay = geometry.pedalBay; ! bay.isEmpty())
+        {
+            juce::Graphics::ScopedSaveState state (g);
+            g.excludeClipRegion (chassis.getSmallestIntegerContainer());   // never darken the chassis twice
+            juce::Path bayPath;
+            bayPath.addRoundedRectangle (bay, 22.0f);
+            Finish::dimPearl (g, bayPath);
+        }
+    }
+
     g.setColour (black ? Finish::printedRed() : ParagonColours::glow.darker (0.1f));
     g.strokePath (geometry.printedRed, juce::PathStrokeType (1.2f));
     g.setColour (Finish::ink().withAlpha (0.8f));
@@ -110,7 +129,7 @@ void PedalBody::paint (juce::Graphics& g)
 }
 
 void PedalBody::paintUnit (juce::Graphics& g, juce::Rectangle<float> chassis, juce::Rectangle<float> face,
-                           const std::function<void (juce::Graphics&)>& drawSatin, Shape shape)
+                           const std::function<void (juce::Graphics&)>& drawSatin, Shape shape, bool dim)
 {
     // Every colour has its pearl white and its pearl black version.
     const auto black = Finish::isBlack();
@@ -239,6 +258,8 @@ void PedalBody::paintUnit (juce::Graphics& g, juce::Rectangle<float> chassis, ju
         g.fillRect (face.withTop (face.getBottom() - 26.0f));
     }
 
+    if (dim)
+        Finish::dimPearl (g, chassisPath);   // Aurora 10% less bright (auroraDimming)
 }
 
 void PedalBody::paintSection (juce::Graphics& g, juce::Rectangle<float> section, const std::function<void (juce::Graphics&)>& drawSatin)

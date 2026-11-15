@@ -3,6 +3,7 @@
 
 #include "Parameters.h"
 #include "guitar/Tuning.h"
+#include "ui/Finish.h"
 #include "ui/ParagonLookAndFeel.h"
 
 namespace DockStyle
@@ -49,7 +50,14 @@ SettingsPage::SettingsPage (ParagonX1AudioProcessor& p)
         processor.getRigLibrary().getFolder().startAsProcess();
     };
 
-    for (auto* component : std::initializer_list<juce::Component*> { &openFolder })
+    obsidian.setTooltip ("OBSIDIAN: a pearl black unit, with black keys and knobs in neon pink-to-orange rings");
+    aurora.setTooltip ("AURORA: a pearl white unit, with black keys and knobs in neon pink-to-orange rings");
+    obsidian.onClick = [] { Finish::set (Finish::Type::obsidian); };
+    aurora.onClick = [] { Finish::set (Finish::Type::aurora); };
+    Finish::changes().addChangeListener (this);
+    showFinish();
+
+    for (auto* component : std::initializer_list<juce::Component*> { &openFolder, &obsidian, &aurora })
         addAndMakeVisible (component);
     processor.rigBroadcaster.addChangeListener (this);
 
@@ -140,6 +148,15 @@ SettingsPage::~SettingsPage()
 {
     stopTimer();
     processor.rigBroadcaster.removeChangeListener (this);
+    Finish::changes().removeChangeListener (this);
+}
+
+void SettingsPage::showFinish()
+{
+    // The chosen finish is lit like the primary buttons.
+    styleButton (obsidian, Finish::get() == Finish::Type::obsidian);
+    styleButton (aurora, Finish::get() == Finish::Type::aurora);
+    repaint();
 }
 
 void SettingsPage::paint (juce::Graphics& g)
@@ -180,6 +197,9 @@ void SettingsPage::paint (juce::Graphics& g)
             g.drawFittedText (what, row, juce::Justification::centredLeft, 1, 0.8f);
         }
     }
+    section (finishArea, "FINISH",
+             "The rack's colour: OBSIDIAN (pearl black) or AURORA (pearl white), both with black keys and knobs in neon pink-to-orange rings. "
+             "Saved on this computer, so every Paragon PR7-A you open uses it.");
     section (rigsArea, "PRESETS", "Your presets are files in this folder, so you can back them up or share them:\n"
                                   + processor.getRigLibrary().getFolder().getFullPathName());
     section (midiArea, "MIDI LINKS", shownLinks.isEmpty()
@@ -198,7 +218,10 @@ void SettingsPage::resized()
 {
     auto area = getLocalBounds();
     // THE KEYSWITCHES (and NOTE NAMES) down the left; PRESETS, MIDI LINKS and ABOUT down the right.
+    // FINISH under them on the left.
     keysArea = area.removeFromLeft (area.getWidth() / 2 - 6);
+    finishArea = keysArea.removeFromBottom (170);
+    keysArea.removeFromBottom (12);
     area.removeFromLeft (12);
     rigsArea = area.removeFromTop (170);
     area.removeFromTop (12);
@@ -221,4 +244,8 @@ void SettingsPage::resized()
         linkRows[i]->setBounds (0, (int) i * 26, linkList.getWidth(), 24);
 
     openFolder.setBounds (rigsArea.reduced (24, 18).withTrimmedTop (98).removeFromTop (32).withWidth (220));
+    auto finishButtons = finishArea.reduced (24, 18).withTrimmedTop (98).removeFromTop (32);
+    const auto buttonWidth = juce::jmin (150, (finishButtons.getWidth() - 12) / 2);
+    obsidian.setBounds (finishButtons.removeFromLeft (buttonWidth));
+    aurora.setBounds (finishButtons.withTrimmedLeft (12).removeFromLeft (buttonWidth));
 }
