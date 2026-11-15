@@ -54,8 +54,10 @@ private:
 
     ParagonX1AudioProcessor& processor;
     juce::TextButton openFolder { "OPEN PRESETS FOLDER" };
-    juce::Rectangle<int> keysArea, rigsArea, aboutArea;
+    juce::TextButton obsidian { "OBSIDIAN" }, aurora { "AURORA" };   // FINISH (0.7.0)
+    juce::Rectangle<int> keysArea, finishArea, rigsArea, aboutArea;
+    void showFinish();
     ParamControl namesChoice;
 
-    void changeListenerCallback (juce::ChangeBroadcaster*) override { repaint(); }
+    void changeListenerCallback (juce::ChangeBroadcaster*) override { showFinish(); }
 };

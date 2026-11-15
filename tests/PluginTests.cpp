@@ -6,6 +6,9 @@
 #include "Parameters.h"
 #include "PluginEditor.h"
 #include "PluginProcessor.h"
+#include "ui/Finish.h"
+#include "ui/ParagonLookAndFeel.h"
+#include "ui/PedalBody.h"
 
 #include <juce_audio_formats/juce_audio_formats.h>
 
@@ -766,4 +769,145 @@ TEST_CASE ("0.4.1: clicking a tab lights only that tab (the old page's stayed li
         for (int i = 0; i < 4; ++i)
             CHECK (tabs[(size_t) i]->getToggleState() == (i == to));
     }
+}
+
+TEST_CASE ("0.7.0: OBSIDIAN and AURORA; SETTINGS offers only those two; the rack follows the finish", "[ui]")
+{
+    // The saved numbers stay: Pearl Black (1) is Obsidian, Pearl White + Neon (2) Aurora; 0, the retired Pearl White,
+    // is only read from an old settings file (and opens as Obsidian).
+    CHECK ((int) Finish::Type::obsidian == 1);
+    CHECK ((int) Finish::Type::aurora == 2);
+
+    Plugin t;
+    Finish::set (Finish::Type::obsidian, false);
+    std::unique_ptr<juce::AudioProcessorEditor> editor (t.p.createEditor());
+    editor->setSize (1600, 900);
+    auto* view = dynamic_cast<MainView*> (editor->getChildComponent (0));
+    REQUIRE (view != nullptr);
+
+    // SETTINGS > FINISH: two buttons, OBSIDIAN and AURORA; clicking one sets the finish.
+    std::vector<juce::TextButton*> buttons;
+    findAll (view->getSettingsPage(), buttons);
+    juce::StringArray finishes;
+    juce::TextButton* auroraButton = nullptr;
+    juce::TextButton* obsidianButton = nullptr;
+    for (auto* b : buttons)
+    {
+        const auto text = b->getButtonText();
+        if (text == "OBSIDIAN" || text == "AURORA" || text.containsIgnoreCase ("PEARL") || text.containsIgnoreCase ("NEON"))
+            finishes.add (text);
+        if (text == "AURORA") auroraButton = b;
+        if (text == "OBSIDIAN") obsidianButton = b;
+    }
+    CHECK (finishes.joinIntoString (",") == "OBSIDIAN,AURORA");
+    REQUIRE (auroraButton != nullptr);
+    REQUIRE (obsidianButton != nullptr);
+
+    // The rack in each: its knobs' names in the finish's ink, its face dark on Obsidian and light on Aurora.
+    auto& page = view->getGuitarView();
+    auto& rack = page.getRack();
+    const auto toneLabelColour = [&rack]
+    {
+        std::vector<juce::Label*> labels;
+        findAll (rack, labels);
+        for (auto* l : labels)
+            if (l->getText() == "TONE")
+                return l->findColour (juce::Label::textColourId);
+        return juce::Colour();
+    };
+    const auto faceBrightness = [&rack]
+    {
+        const auto image = rack.createComponentSnapshot (rack.getLocalBounds(), true, 1.0f);
+        double sum = 0.0;
+        int n = 0;
+        for (int y = image.getHeight() / 4; y < image.getHeight() * 3 / 4; y += 2)
+            for (int x = 20; x < 180; x += 2)   // the badge column's pearl, beside the lettering
+            {
+                sum += image.getPixelAt (x, y).getBrightness();
+                ++n;
+            }
+        return sum / n;
+    };
+    CHECK (toneLabelColour() == Finish::ink());
+    const auto dark = faceBrightness();
+
+    auroraButton->onClick();   // (as clicked)
+    CHECK (Finish::get() == Finish::Type::aurora);
+    CHECK (toneLabelColour() == Finish::ink());
+    CHECK (toneLabelColour() == ParagonColours::ink);   // dark lettering on the white pearl
+    const auto light = faceBrightness();
+    INFO ("obsidian " << dark << ", aurora " << light);
+    CHECK (dark < 0.25);
+    CHECK (light > 0.7);
+    CHECK (light < 0.92);   // 10% less bright than full white
+
+    // AURORA's GUITAR page in the family's colours too (pearl white counts: it's one of them).
+    {
+        const auto image = page.createComponentSnapshot (page.getLocalBounds(), true, 1.0f);
+        auto coloured = 0, outside = 0;
+        for (int y = 0; y < image.getHeight(); y += 3)
+            for (int x = 0; x < image.getWidth(); x += 3)
+            {
+                const auto c = image.getPixelAt (x, y);
+                if (c.getSaturation() < 0.25f || c.getBrightness() < 0.15f)
+                    continue;
+                ++coloured;
+                const auto hue = c.getHue() * 360.0f;
+                if (hue > 44.0f && hue < 316.0f)
+                    ++outside;
+            }
+        INFO (outside << " of " << coloured);
+        CHECK (outside * 2000 <= coloured);
+    }
+
+    obsidianButton->onClick();
+    CHECK (Finish::get() == Finish::Type::obsidian);
+    CHECK (toneLabelColour() == Finish::ink());
+    CHECK (std::abs (faceBrightness() - dark) < 0.01);
+}
+
+TEST_CASE ("AURORA's pearl is 10% less bright; OBSIDIAN is unchanged", "[ui]")
+{
+    // The unit's chassis and face drawn with and without the dimming: on Aurora every pixel of the pearl comes out at
+    // 90% (to within rounding), so pure white is about 230; on Obsidian the two are identical.
+    const auto draw = [] (bool dim)
+    {
+        juce::Image image (juce::Image::ARGB, 400, 300, true, juce::SoftwareImageType());
+        juce::Graphics g (image);
+        g.fillAll (juce::Colours::black);
+        const auto grain = Finish::makeSatinGrain (400, 300, 99);
+        PedalBody::paintUnit (g, { 40.0f, 40.0f, 320.0f, 220.0f }, { 70.0f, 70.0f, 260.0f, 150.0f },
+                              [&grain] (juce::Graphics& gg) { gg.drawImageAt (grain, 0, 0); }, {}, dim);
+        return image;
+    };
+    const auto brightness = [] (juce::Colour c) { return juce::jmax (c.getRed(), c.getGreen(), c.getBlue()); };
+
+    Finish::set (Finish::Type::aurora, false);
+    const auto bright = draw (false), dimmed = draw (true);
+    int worst = 0, brightest = 0;
+    juce::Path inside;   // the chassis, 2 px in from its edge (outside it is the glow, which isn't pearl)
+    inside.addRoundedRectangle (juce::Rectangle<float> (40.0f, 40.0f, 320.0f, 220.0f).reduced (2.0f), PedalBody::Shape{}.chassisRadius - 2.0f);
+    for (int y = 40; y < 260; ++y)
+        for (int x = 40; x < 360; ++x)
+        {
+            if (! inside.contains ((float) x + 0.5f, (float) y + 0.5f))
+                continue;
+            const auto before = bright.getPixelAt (x, y), after = dimmed.getPixelAt (x, y);
+            for (const auto [b, a] : { std::pair { before.getRed(), after.getRed() }, { before.getGreen(), after.getGreen() }, { before.getBlue(), after.getBlue() } })
+                worst = juce::jmax (worst, std::abs ((int) a - juce::roundToInt ((1.0f - Finish::auroraDimming) * (float) b)));
+            brightest = juce::jmax (brightest, (int) brightness (after));
+        }
+    CHECK (worst <= 1);
+    CHECK (Finish::auroraDimming == 0.10f);
+    CHECK (brightest <= 231);
+    CHECK (brightest >= 215);   // still a white unit, not grey: the brightest pearl near 230
+
+    Finish::set (Finish::Type::obsidian, false);
+    const auto blackPlain = draw (false), blackDimmed = draw (true);
+    int blackDifference = 0;
+    for (int y = 0; y < 300; ++y)
+        for (int x = 0; x < 400; ++x)
+            if (blackPlain.getPixelAt (x, y) != blackDimmed.getPixelAt (x, y))
+                ++blackDifference;
+    CHECK (blackDifference == 0);
 }

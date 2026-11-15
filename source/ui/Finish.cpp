@@ -6,7 +6,7 @@ namespace Finish
 {
     namespace
     {
-        constexpr auto settingKey = "chassisFinish", machineKey = "machineFinish";
+        constexpr auto settingKey = "chassisFinish";
 
         juce::PropertiesFile::Options settingsOptions()
         {
@@ -24,13 +24,12 @@ namespace Finish
             {
                 // Read once, the first time anything is drawn.
                 juce::PropertiesFile file (settingsOptions());
-                const auto saved = file.getIntValue (settingKey, 0);
-                type = saved == (int) Type::pearlBlack || saved == (int) Type::pearlWhiteNeon ? (Type) saved : Type::pearlWhite;
-                const auto machineSaved = file.getIntValue (machineKey, (int) Type::pearlBlack);
-                machine = machineSaved >= 0 && machineSaved <= (int) Type::pearlWhiteNeon ? (Type) machineSaved : Type::pearlBlack;
+                // Aurora if chosen (it was Pearl White + Neon); otherwise (nothing saved
+                // yet, the retired Pearl White, or Pearl Black) Obsidian, the default.
+                type = file.getIntValue (settingKey, (int) Type::obsidian) == (int) Type::aurora ? Type::aurora : Type::obsidian;
             }
 
-            Type type = Type::pearlWhite, machine = Type::pearlBlack;
+            Type type = Type::obsidian;
             std::optional<Type> painting;   // a component's own finish while it and its controls paint
             juce::ChangeBroadcaster broadcaster;
         };
@@ -62,28 +61,28 @@ namespace Finish
         }
     }
 
-    Type getMachine() { return state().machine; }
-
-    void setMachine (Type type, bool remember)
-    {
-        if (remember)
-        {
-            juce::PropertiesFile file (settingsOptions());
-            file.setValue (machineKey, (int) type);
-            file.saveIfNeeded();
-        }
-        if (state().machine != type)
-        {
-            state().machine = type;
-            state().broadcaster.sendSynchronousChangeMessage();
-        }
-    }
-
     juce::ChangeBroadcaster& changes() { return state().broadcaster; }
 
     juce::Colour ink() { return isBlack() ? juce::Colour (0xfff1eaee) : ParagonColours::ink; }
     juce::Colour inkDim() { return isBlack() ? juce::Colour (0xff9a8f96) : ParagonColours::inkDim; }
-    juce::Colour stampEdge() { return isBlack() ? juce::Colours::black.withAlpha (0.75f) : juce::Colours::white.withAlpha (0.7f); }
+    juce::Colour stampEdge() { return isBlack() ? juce::Colours::black.withAlpha (0.75f) : pearl (juce::Colours::white).withAlpha (0.7f); }
+
+    void dimPearl (juce::Graphics& g, const juce::Path& area)
+    {
+        if (isBlack())
+            return;
+        g.setColour (juce::Colours::black.withAlpha (auroraDimming));
+        g.fillPath (area);
+    }
+
+    juce::Colour pearl (juce::Colour colour)
+    {
+        if (isBlack())
+            return colour;
+        const auto scale = [] (juce::uint8 c) { return (juce::uint8) juce::roundToInt ((float) c * (1.0f - auroraDimming)); };
+        return juce::Colour (scale (colour.getRed()), scale (colour.getGreen()), scale (colour.getBlue()), colour.getAlpha());
+    }
+
     juce::Colour printedRed() { return isBlack() ? ParagonColours::glow.brighter (0.15f) : ParagonColours::glow.darker (0.15f); }
 
     juce::ColourGradient neonGradient (float left, float right)

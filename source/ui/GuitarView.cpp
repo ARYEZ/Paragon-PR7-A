@@ -229,7 +229,6 @@ GuitarView::GuitarView (ParagonX1AudioProcessor& p)
                  "The level of the fret noise F#0 plays (its velocity sets how loud too). Off at the bottom")
 {
     addAndMakeVisible (rack);
-    Finish::paintAs (Finish::Type::pearlBlack);   // (the rack is always pearl black: its lettering's ink)
     for (auto* c : { &tone, &bite, &attack, &transpose, &velToVol, &release, &polyWindow, &variation, &level, &output,
                      &forceString, &handPosition, &releaseNoise, &scrapes, &fretNoise })
     {
@@ -242,7 +241,6 @@ GuitarView::GuitarView (ParagonX1AudioProcessor& p)
         c->setRack (true);
         rack.addAndMakeVisible (*c);
     }
-    Finish::paintAs (std::nullopt);
 
     performance.addItemList (ParagonX1AudioProcessor::performanceNames, 1);
     performance.setColour (juce::ComboBox::backgroundColourId, juce::Colours::transparentBlack);   // on the rack's screen

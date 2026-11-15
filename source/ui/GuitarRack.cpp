@@ -4,6 +4,7 @@
 #include "ui/LedDisplay.h"
 #include "ui/ParagonLookAndFeel.h"
 #include "ui/PedalBody.h"
+#include "ui/SynthControls.h"
 
 namespace
 {
@@ -60,6 +61,22 @@ GuitarRack::GuitarRack()
     playingKey.onClick = [this] { setPage (Page::playing); };
     frettingKey.onClick = [this] { setPage (Page::fretting); };
     setPage (Page::playing);
+    Finish::changes().addChangeListener (this);
+}
+
+GuitarRack::~GuitarRack()
+{
+    Finish::changes().removeChangeListener (this);
+}
+
+void GuitarRack::changeListenerCallback (juce::ChangeBroadcaster*)
+{
+    // The finish changed: the grain is made for it, and the knobs' names are printed in its ink.
+    satin = Finish::makeSatinGrain (juce::jmax (1, getWidth() * 2), juce::jmax (1, getHeight() * 2), 1234);
+    for (auto* child : getChildren())
+        if (auto* control = dynamic_cast<ParamControl*> (child))
+            control->setRack (true);
+    repaint();
 }
 
 void GuitarRack::resized()
@@ -215,9 +232,7 @@ juce::Rectangle<int> GuitarRack::sideKnobCell (int index) const
 //==============================================================================
 void GuitarRack::paint (juce::Graphics& g)
 {
-    // The unit, and everything on it (its knobs and keys too, till paintOverChildren), in pearl black.
-    Finish::paintAs (Finish::Type::pearlBlack);
-
+    // The unit in the plugin's finish (Obsidian or Aurora; Aurora's pearl dimmed by paintUnit, before the printing).
     const auto chassis = getLocalBounds().toFloat().reduced (glowRoom);
     PedalBody::paintUnit (g, chassis, face(), [this] (juce::Graphics& gg) { gg.drawImage (satin, getLocalBounds().toFloat()); }, unitShape);
 
@@ -366,5 +381,4 @@ void GuitarRack::paintOverChildren (juce::Graphics& g)
     if (page == Page::fretting)
         for (int i = 0; i < 3; ++i)
             LedDisplay::paintGlassOverlay (g, menuCell (i).toFloat().reduced (3.0f), screenSize);
-    Finish::paintAs (std::nullopt);
 }
