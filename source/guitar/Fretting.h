@@ -46,11 +46,14 @@ namespace guitar
     // AUTO hand (`handFollows`), each note placed moves the hand before the next, as a player's hand goes to the lowest
     // note's fret first: drop A's D5 (D2 A2 D3) is a barre at the 5th fret, not the open A and D strings.
     // `places` gets one Position per note, in the notes' order. Nothing allocated (the audio thread calls it).
+    // A FORCED STRING takes a single note, not a whole chord; with `forceLowest` (0.7.1: a power chord, one key with its
+    // fifth and octave added) it takes the chord's lowest note, the root, as the reference's force-string keys do, and
+    // the rest is fretted from there (drop A's E5 forced onto the low A: a barre at the 7th fret, not the open E string).
     inline constexpr int maxChord = 16;
     void chooseChord (const int* notes, int count, std::array<bool, numStrings> busy, int hand, const FretSettings&, Position* places,
-                      bool handFollows = true) noexcept;
+                      bool handFollows = true, bool forceLowest = false) noexcept;
     std::vector<Position> chooseChord (const std::vector<int>& notes, std::array<bool, numStrings> busy, int hand, const FretSettings&,
-                                       bool handFollows = true);
+                                       bool handFollows = true, bool forceLowest = false);
 
     // AUTO hand: where the hand goes after playing at `fret` (it moves just enough to reach it; open strings don't move it).
     int followHand (int hand, int fret, FretMode, int span = 0, int capo = 0) noexcept;

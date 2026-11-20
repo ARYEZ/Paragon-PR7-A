@@ -196,6 +196,12 @@ TEST_CASE ("FRETTING: open strings low on the neck, the hand's reach, busy strin
     // (not the open A and D strings); with the hand held at the 1st fret (not AUTO), the open strings.
     CHECK (chooseChord ({ 38, 45, 50 }, none(), 1, natural) == std::vector<Position> { { 0, 5 }, { 1, 5 }, { 2, 5 } });
     CHECK (chooseChord ({ 38, 45, 50 }, none(), 1, natural, false) == std::vector<Position> { { 0, 5 }, { 2, 0 }, { 3, 0 } });
+    // 0.7.1: a power chord forced onto the low A (E5: E2 B2 E3) takes it for its root, a barre at the 7th fret, where a
+    // chord without forceLowest ignores the forced string (the open E string's E5).
+    FretSettings forcedLowA = natural;
+    forcedLowA.forceString = 0;
+    CHECK (chooseChord ({ 40, 47, 52 }, none(), 1, forcedLowA, true, true) == std::vector<Position> { { 0, 7 }, { 1, 7 }, { 2, 7 } });
+    CHECK (chooseChord ({ 40, 47, 52 }, none(), 1, forcedLowA, true, false)[0] == Position { 1, 0 });
 
     // AUTO hand: moves just enough to reach a fret; open strings don't move it.
     CHECK (followHand (1, 7, FretMode::natural) == 4);
@@ -1747,4 +1753,82 @@ TEST_CASE ("0.4.3: a note's pick lands 15 ms after its note-on (takes keep 30 ms
     // nothing loud before it: the lead-in faded in, no click
     for (int i = noteAt; i < noteAt + (int) (takeStartSeconds * rate) - 2; ++i)
         CHECK (std::abs (l[(size_t) i]) < 0.01f);
+}
+
+// PARAGON_AB_SUITE_MIDI=<tools/ab-suite's MIDI file> ./GuitarCoreTests "[ab-suite]": plays the A/B suite through the
+// engine (the made-up tone guitar, the FACTORY key map as the suite asks) and writes, for every note played, what PR7-I
+// did with it (PARAGON_AB_SUITE_CSV: time, note, velocity, string, fret, articulation, stroke, power chord), and the audio
+// (PARAGON_AB_SUITE_WAV). ab_suite.py's "check" compares the CSV with what the suite meant.
+TEST_CASE ("Play the A/B suite through the engine", "[.][ab-suite]")
+{
+    const juce::File midiFile (juce::SystemStats::getEnvironmentVariable ("PARAGON_AB_SUITE_MIDI", {}));
+    REQUIRE (midiFile.existsAsFile());
+    juce::MidiFile mf;
+    {
+        juce::FileInputStream in (midiFile);
+        REQUIRE (mf.readFrom (in));
+    }
+    mf.convertTimestampTicksToSeconds();
+    juce::MidiMessageSequence seq;
+    for (int t = 0; t < mf.getNumTracks(); ++t)
+        seq.addSequence (*mf.getTrack (t), 0.0);
+    seq.sort();
+
+    Player p (true);
+    juce::StringArray csv { "seconds,note,velocity,string,fret,articulation,stroke,power" };
+    double end = 0.0;
+    for (int i = 0; i < seq.getNumEvents(); ++i)
+        end = std::max (end, seq.getEventPointer (i)->message.getTimeStamp());
+    const auto total = (int) ((end + 1.0) * sampleRate);
+    int done = 0, next = 0;
+    while (done < total)
+    {
+        // Up to the next event (or a block), so a note-on's choice can be read just after it.
+        auto n = std::min (blockSize, total - done);
+        juce::MidiBuffer midi;
+        std::vector<juce::MidiMessage> playedNow;
+        while (next < seq.getNumEvents())
+        {
+            const auto& m = seq.getEventPointer (next)->message;
+            const auto at = (int) std::lround (m.getTimeStamp() * sampleRate);
+            if (at >= done + n)
+                break;
+            midi.addEvent (m, std::max (0, at - done));
+            if (m.isNoteOn() && ((m.getNoteNumber() >= lowestNote && m.getNoteNumber() <= highestNote) || m.getNoteNumber() == keyswitch::fretNoise))
+            {
+                playedNow.push_back (m);
+                n = std::max (1, at - done + 1);   // stop just after it
+                ++next;
+                break;
+            }
+            ++next;
+        }
+        std::vector<float> l ((size_t) n, 0.0f), r ((size_t) n, 0.0f);
+        p.guitar.process (l.data(), r.data(), n, midi, 0, p.settings);
+        p.left.insert (p.left.end(), l.begin(), l.end());
+        for (const auto& m : playedNow)
+        {
+            const auto now = p.guitar.getNowPlaying();
+            const auto fret = m.getNoteNumber() == keyswitch::fretNoise;
+            csv.add (juce::String (m.getTimeStamp(), 4) + "," + juce::String (m.getNoteNumber()) + "," + juce::String (m.getVelocity()) + ","
+                     + (fret ? juce::String ("-1,0,fret noise,-,0")
+                             : juce::String (now.string) + "," + juce::String (now.fret) + ","
+                                   + (now.articulation == Articulation::mute ? "mute" : "sustain") + ","
+                                   + (now.stroke == Stroke::down ? "down" : "up") + "," + (now.powerChord ? "1" : "0")));
+        }
+        done += n;
+    }
+    if (const auto out = juce::SystemStats::getEnvironmentVariable ("PARAGON_AB_SUITE_CSV", {}); out.isNotEmpty())
+        juce::File (out).replaceWithText (csv.joinIntoString ("\n") + "\n");
+    if (const auto out = juce::SystemStats::getEnvironmentVariable ("PARAGON_AB_SUITE_WAV", {}); out.isNotEmpty())
+    {
+        juce::File (out).deleteFile();
+        juce::AudioBuffer<float> buffer (1, (int) p.left.size());
+        buffer.copyFrom (0, 0, p.left.data(), (int) p.left.size());
+        juce::WavAudioFormat wav;
+        std::unique_ptr<juce::AudioFormatWriter> w (wav.createWriterFor (new juce::FileOutputStream (juce::File (out)), sampleRate, 1, 24, {}, 0));
+        REQUIRE (w != nullptr);
+        w->writeFromAudioSampleBuffer (buffer, 0, buffer.getNumSamples());
+    }
+    CHECK (csv.size() > 400);
 }

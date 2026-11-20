@@ -209,7 +209,11 @@ namespace guitar
         FretSettings fs { s.fretMode, getForcedString (s), s.capo, s.handSpan };
         std::array<Position, maxChord> places {};
         const auto handIsAuto = (ksHand >= 0 ? ksHand : s.hand) == 0;
-        chooseChord (chord.notes.data(), chord.count, busy, handNow (s), fs, places.data(), handIsAuto);
+        // 0.7.1: one power chord (every note from one key, a power chord's): the forced string takes its root.
+        auto onePowerChord = chord.count > 1;
+        for (int k = 0; k < chord.count && onePowerChord; ++k)
+            onePowerChord = chord.power[(size_t) k] && chord.sources[(size_t) k] == chord.sources[0];
+        chooseChord (chord.notes.data(), chord.count, busy, handNow (s), fs, places.data(), handIsAuto, onePowerChord);
 
         const auto pick = ksPick >= 0 ? (PickMode) ksPick : s.pick;
         auto stroke = pick == PickMode::down ? Stroke::down : pick == PickMode::up ? Stroke::up : nextStroke;

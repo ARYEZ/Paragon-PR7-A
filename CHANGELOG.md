@@ -2,6 +2,17 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.4.1
+
+PR7-I 0.7.1's changes.
+
+- **Power chords now go on the forced string.** With a force-string keyswitch held on the low A, an E5 (the E key with
+  power chords on) was played on the open E string instead of at the 7th fret of the low A. A power chord is one key, so
+  now its root goes on the forced string and the fifth and octave are fretted from there, as on the reference. Ordinary
+  chords are unchanged.
+- **The A/B suite** (`tools/ab-suite`): one 6-minute MIDI file to render through the reference guitar (Rogue for PR7-A)
+  and through PR7-A, then compared section by section to find what still differs.
+
 ## 0.4.0
 
 PR7-I 0.7.0's changes: **two finishes for the rack, OBSIDIAN and AURORA**, your choice, as the other PR7s have them.
