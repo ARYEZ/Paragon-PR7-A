@@ -2,6 +2,18 @@
 
 Each version's notes appear on its GitHub Release page.
 
+## 0.4.2
+
+**A new body, and the guitar a little smaller so more of it shows.**
+
+- **The body is new**: traced off the 7-string you picked, with its long pointed upper horn, the short hooked lower horn
+  and the angular back end, so PR7-A no longer looks like a bass beside PR7-I. Only the outline is used, no maker's name
+  or logo; PR7-A stays headless.
+- **Sharp horn tips**: the trace keeps the points (the strap button and jack are cut off along the edge instead of
+  rounding every corner), smoothed just 1.5 mm.
+- **85% size** (you chose it from the mock-ups): more of the body shows beside the neck. The nut stays where it was; the
+  frets sit a little closer together than in PR7-I, and notes still light on the right ones.
+
 ## 0.4.1
 
 PR7-I 0.7.1's changes.

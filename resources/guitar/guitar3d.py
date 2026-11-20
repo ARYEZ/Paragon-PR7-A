@@ -279,7 +279,8 @@ def smoothed(points, sigma_mm, step=0.001):
             sx += w * px; sy += w * py
         out.append((sx / total, sy / total))
     return out[::2]   # every 2 mm is plenty after smoothing
-outline = smoothed(outline, float(os.environ.get("GUITAR_SMOOTH_MM", "3")))
+# (PR7-A 0.4.2: 1.5 mm, its own default, for the new body's sharp horn tips; PR7-I's is 3)
+outline = smoothed(outline, float(os.environ.get("GUITAR_SMOOTH_MM", "1.5")))
 
 # 0.4.6: along the neck, the body follows OUR neck's edge (1.5 mm in, under the fretboard), not the photo's: a photo's
 # neck leans a little (and PR7-A's has fanned frets), so the traced edge ran at a slant beside our straight neck (the
@@ -552,7 +553,9 @@ cam_data.ortho_scale = WIDTH / 2000.0 * (1576 / WIDTH) if WIDTH else 0.788    # 
 # GUITAR_NECK_Y=550.
 # 0.6.3: back to 0.4's full size at the owner's ask ("the bigger guitar looks a lot nicer"; the rack now hides): the
 # defaults 1 / 1560 / 550 again (0.5.0-0.6.2's smaller guitar: GUITAR_ZOOM=0.67 GUITAR_NUT_X=1090 GUITAR_NECK_Y=670).
-ZOOM = float(os.environ.get("GUITAR_ZOOM", "1"))
+# PR7-A 0.4.2: 85%, its own default (the owner, after mock-ups at 75 / 85 / 100%), so more of its body shows beside the
+# neck; PR7-I stays at 1. The nut stays at x 1560: the fret map (guitar-geometry.json) is PR7-A's own from here on.
+ZOOM = float(os.environ.get("GUITAR_ZOOM", "0.85"))
 VIEW_NUT_X = float(os.environ.get("GUITAR_NUT_X", "1560"))
 VIEW_NECK_Y = float(os.environ.get("GUITAR_NECK_Y", str(NECK_Y_1X)))
 VIEW_PX_PER_M = PX_PER_M * ZOOM

@@ -47,3 +47,7 @@ with a red grid. Built into the plugin as `guitar.jpg` (`process_guitar.py`: the
 2. `GUITAR_OUTLINE=<out.json> blender -b -P guitar3d.py -- guitar.png 64 3200 1800` (~8 min), then
    `python3 process_guitar.py guitar.png guitar.jpg`. The neck, strings and frets don't move, so
    `guitar-geometry.json` stays the same.
+
+- **PR7-A 0.4.2:** a new body (`trace_body_photo2.py`, off a straight-on product photo the owner chose) and PR7-A's own
+  camera and smoothing defaults: `GUITAR_ZOOM` 0.85, `GUITAR_SMOOTH_MM` 1.5 (sharp horn tips), headless. Its fret map
+  (`guitar-geometry.json`) is its own from here on; PR7-I keeps zoom 1 and 3 mm.

@@ -45,6 +45,14 @@ plus the body tracer (commit `9c0dc39`), as PR7-I started from PR7-D.
 - **0.4.1 (PR7-I 0.7.1's A/B suite and forced power chords):** `tools/ab-suite/ab_suite.py` says PR7-A (its MIDI file "PR7-A
   AB Suite.mid", the report's labels); the suite's notes are PR7-I's exactly. The owner renders it through Rogue and
   PR7-A (KEY MAP Factory).
+- **0.4.2, a new body at 85%** (the owner: the headless body "looks too much like a bass guitar"; a first try traced off
+  an angled photo of another headless 7-string, straightened by its fretboard (frets 12 and 24, 26.5" assumed: the
+  other frets landed within 3 mm), was turned down: at full size only its horns showed; mock-ups at 75 / 85 / 100%;
+  then a straight-on product photo of another 7-string, "85% with the 1.5mm smoothing"). `body-outline.json` from
+  `trace_body_photo2.py` (that photo's own tracer, reproduces the outline exactly; photo not committed; no name or logo);
+  **`guitar3d.py`'s PR7-A defaults: `GUITAR_ZOOM` 0.85 (PR7-I 1) and `GUITAR_SMOOTH_MM` 1.5 (PR7-I 3)**, `GUITAR_HEADLESS`
+  1; nut still x 1560, so **`guitar-geometry.json` is PR7-A's own** (frets 0-24 ~1170 px, PR7-I's ~1380). Snapshots: the
+  notes on the right frets at 85%.
 - **Release workflow:** `Paragon PR7-A.vst3`, `ParagonPR7-A-${TAG}-...` zips, "Paragon PR7-A ${TAG}" (the seed commit
   switched the release job off; 0.1.0 switched it back on).
 - **README, CHANGELOG** (from 0.1.0).
@@ -53,7 +61,8 @@ plus the body tracer (commit `9c0dc39`), as PR7-I started from PR7-D.
 
 Features land in PR7-I first. To bring them here: `git remote add pr7i https://github.com/ARYEZ/Paragon-PR7-I`,
 `git fetch pr7i <branch>`, merge, and keep PR7-A's side for its identity (the files above: CMakeLists' names and
-version, the string literals, `Logo.cpp`, `resources/guitar/body-outline.json`, `guitar.jpg`, the headless default,
+version, the string literals, `Logo.cpp`, `resources/guitar/body-outline.json`, `guitar.jpg`, `guitar-geometry.json` (PR7-A's
+own since 0.4.2), `guitar3d.py`'s PR7-A defaults (headless 1, zoom 0.85, smoothing 1.5),
 README, CHANGELOG, this section). If PR7-I re-renders its guitar (a look change), re-render PR7-A's the same way with
 its own outline and `GUITAR_HEADLESS=1`. Each PR7-A release gets its own version and CHANGELOG section saying which
 PR7-I version it matches.
